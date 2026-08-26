@@ -113,8 +113,9 @@ class CreateOrderAction
                     'min_order_value_snapshot' => $restaurant->min_order_value,
                     'commission_rate_snapshot' => $restaurant->commission_rate,
                     'commission_amount' => round($groupQuote['subtotal'] * ((float) $restaurant->commission_rate / 100), 2),
+                    // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
+                    // at picked_up, so the customer's code cannot leak before the driver has the food.
                     'pickup_otp' => (string) random_int(1000, 9999),
-                    'delivery_otp' => (string) random_int(1000, 9999),
                     'business_date' => now()->toDateString(),
                     'customer_note' => $data['customer_note'] ?? null,
                     'delivery_instructions' => $data['delivery_instructions'] ?? null,

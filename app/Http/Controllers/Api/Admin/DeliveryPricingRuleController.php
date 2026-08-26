@@ -9,6 +9,7 @@ use App\Models\DeliveryPricingRule;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Geo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -73,7 +74,7 @@ class DeliveryPricingRuleController extends Controller
 
         $restaurant = Restaurant::query()->findOrFail($validated['restaurant_id']);
 
-        $distanceKm = $this->haversineKm(
+        $distanceKm = Geo::haversineKm(
             (float) $restaurant->latitude,
             (float) $restaurant->longitude,
             (float) $validated['lat'],
@@ -104,14 +105,4 @@ class DeliveryPricingRuleController extends Controller
         );
     }
 
-    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $earthRadiusKm = 6371;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLng = deg2rad($lng2 - $lng1);
-
-        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
-
-        return $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
-    }
 }

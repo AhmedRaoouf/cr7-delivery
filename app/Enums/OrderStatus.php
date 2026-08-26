@@ -80,4 +80,42 @@ enum OrderStatus: string
     {
         return "order_status.{$this->value}";
     }
+
+    /** Static Arabic label (doc 04 §5) — the config/enum listing form, without the dynamic {mm:ss}/{code} suffix. */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Pending, self::RestaurantTimeout => 'بانتظار موافقة المطعم',
+            self::Accepted => 'وافق المطعم — بانتظار باقي المطاعم',
+            self::AwaitingCustomerConfirmation => 'بانتظار تأكيد الطلب',
+            self::AwaitingPayment => 'بانتظار الدفع',
+            self::Confirmed => 'تم تأكيد الطلب',
+            self::Preparing => 'جاري التحضير',
+            self::Ready => 'الطلب جاهز',
+            self::SearchingDriver, self::WaitingForDriver => 'جارٍ البحث عن كابتن',
+            self::DriverAssigned => 'الكابتن في طريقه إلى المطعم',
+            self::ArrivedRestaurant, self::WaitingAtRestaurant => 'وصل الكابتن إلى المطعم',
+            self::PickedUp => 'استلم الكابتن الطلب',
+            self::OnTheWay => 'الطلب في طريقه إليك',
+            self::ArrivedCustomer => 'وصل الكابتن',
+            self::Delivered => 'تم التوصيل',
+            self::Cancelled => 'تم إلغاء الطلب',
+            self::DeliveryIssue => 'توجد مشكلة في الطلب',
+        };
+    }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Pending, self::RestaurantTimeout => '#9E9E9E',
+            self::Accepted, self::AwaitingCustomerConfirmation, self::AwaitingPayment => '#FFA000',
+            self::Confirmed, self::Preparing => '#FFC300',
+            self::Ready, self::SearchingDriver, self::WaitingForDriver => '#FF7A00',
+            self::DriverAssigned, self::ArrivedRestaurant, self::WaitingAtRestaurant,
+            self::PickedUp, self::OnTheWay, self::ArrivedCustomer => '#1976D2',
+            self::Delivered => '#2E7D32',
+            self::Cancelled => '#C62828',
+            self::DeliveryIssue => '#B71C1C',
+        };
+    }
 }

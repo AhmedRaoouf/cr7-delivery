@@ -14,6 +14,14 @@ use App\Http\Controllers\Api\Admin\ServiceZoneController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
+use App\Http\Controllers\Api\Shared\BannerController;
+use App\Http\Controllers\Api\Shared\CityController as SharedCityController;
+use App\Http\Controllers\Api\Shared\ConfigController;
+use App\Http\Controllers\Api\Shared\CuisineController as SharedCuisineController;
+use App\Http\Controllers\Api\Shared\DeviceController;
+use App\Http\Controllers\Api\Shared\FaqController;
+use App\Http\Controllers\Api\Shared\GeoController;
+use App\Http\Controllers\Api\Shared\PageController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,6 +31,20 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+
+    // §2 Public / shared — no auth.
+    Route::get('/config', [ConfigController::class, 'index']);
+    Route::get('/cities', [SharedCityController::class, 'index']);
+    Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
+    Route::post('/geo/resolve', [GeoController::class, 'resolve']);
+    Route::get('/cuisines', [SharedCuisineController::class, 'index']);
+    Route::get('/banners', [BannerController::class, 'index']);
+    Route::get('/pages/{slug}', [PageController::class, 'show']);
+    Route::get('/faqs', [FaqController::class, 'index']);
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/devices', [DeviceController::class, 'store']);
+        Route::delete('/devices', [DeviceController::class, 'destroy']);
+    });
 
     // §3 Auth
     Route::prefix('auth')->group(function () {

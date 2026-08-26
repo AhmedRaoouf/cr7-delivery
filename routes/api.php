@@ -5,17 +5,27 @@ use App\Http\Controllers\Api\Admin\CuisineController;
 use App\Http\Controllers\Api\Admin\DeliveryPricingRuleController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\DriverDocumentController;
+use App\Http\Controllers\Api\Admin\AuditLogController;
+use App\Http\Controllers\Api\Admin\BannerController as AdminBannerController;
 use App\Http\Controllers\Api\Admin\ComplaintController as AdminComplaintController;
+use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
+use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
+use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
 use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
+use App\Http\Controllers\Api\Admin\PromoCodeController;
 use App\Http\Controllers\Api\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
+use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
+use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\Admin\SettlementController as AdminSettlementController;
+use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
@@ -416,5 +426,68 @@ Route::prefix('v1')->group(function () {
         Route::patch('/complaints/{complaint}', [AdminComplaintController::class, 'update'])->middleware('permission:complaints.update');
         Route::post('/complaints/{complaint}/assign', [AdminComplaintController::class, 'assign'])->middleware('permission:complaints.assign');
         Route::post('/complaints/{complaint}/escalate', [AdminComplaintController::class, 'escalate'])->middleware('permission:complaints.update');
+
+        // Marketing — promo codes, banners, pages, faqs
+        Route::get('/promo-codes', [PromoCodeController::class, 'index'])->middleware('permission:promos.view');
+        Route::get('/promo-codes/{promoCode}', [PromoCodeController::class, 'show'])->middleware('permission:promos.view');
+        Route::get('/promo-codes/{promoCode}/usages', [PromoCodeController::class, 'usages'])->middleware('permission:promos.view');
+        Route::post('/promo-codes', [PromoCodeController::class, 'store']);
+        Route::patch('/promo-codes/{promoCode}', [PromoCodeController::class, 'update']);
+        Route::delete('/promo-codes/{promoCode}', [PromoCodeController::class, 'destroy'])->middleware('permission:promos.manage');
+
+        Route::get('/banners', [AdminBannerController::class, 'index']);
+        Route::get('/banners/{banner}', [AdminBannerController::class, 'show']);
+        Route::post('/banners', [AdminBannerController::class, 'store']);
+        Route::patch('/banners/{banner}', [AdminBannerController::class, 'update']);
+        Route::delete('/banners/{banner}', [AdminBannerController::class, 'destroy'])->middleware('permission:banners.manage');
+
+        Route::get('/pages', [AdminPageController::class, 'index']);
+        Route::get('/pages/{slug}', [AdminPageController::class, 'show']);
+        Route::post('/pages', [AdminPageController::class, 'store']);
+        Route::patch('/pages/{slug}', [AdminPageController::class, 'update']);
+        Route::delete('/pages/{slug}', [AdminPageController::class, 'destroy'])->middleware('permission:content.manage');
+
+        Route::get('/faqs', [AdminFaqController::class, 'index']);
+        Route::post('/faqs', [AdminFaqController::class, 'store']);
+        Route::patch('/faqs/{faq}', [AdminFaqController::class, 'update']);
+        Route::delete('/faqs/{faq}', [AdminFaqController::class, 'destroy'])->middleware('permission:content.manage');
+
+        Route::post('/notifications/broadcast', [NotificationBroadcastController::class, 'store'])->middleware('permission:notifications.broadcast');
+
+        // System — users, roles, permissions, settings, audit log (doc 08 §7 note: global-scope admins only)
+        Route::middleware('permission:users.view')->group(function () {
+            Route::get('/users', [AdminUserController::class, 'index']);
+            Route::get('/users/{user}', [AdminUserController::class, 'show']);
+        });
+        Route::middleware('permission:users.invite')->group(function () {
+            Route::post('/users', [AdminUserController::class, 'store']);
+        });
+        Route::middleware('permission:users.manage')->group(function () {
+            Route::patch('/users/{user}', [AdminUserController::class, 'update']);
+            Route::post('/users/{user}/reset-password', [AdminUserController::class, 'resetPassword']);
+            Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
+        });
+        Route::post('/users/{user}/suspend', [AdminUserController::class, 'suspend'])->middleware('permission:users.suspend');
+        Route::post('/users/{user}/restore', [AdminUserController::class, 'restore'])->middleware('permission:users.suspend');
+        Route::post('/users/{user}/roles', [AdminUserController::class, 'updateRoles'])->middleware('permission:roles.manage');
+        Route::post('/users/{user}/permissions', [AdminUserController::class, 'updatePermissions'])->middleware('permission:roles.manage');
+        Route::post('/users/{user}/scope', [AdminUserController::class, 'updateScope'])->middleware('permission:scope.manage');
+
+        Route::middleware('permission:roles.manage')->group(function () {
+            Route::get('/roles', [RoleController::class, 'index']);
+            Route::get('/roles/{role}', [RoleController::class, 'show']);
+            Route::patch('/roles/{role}', [RoleController::class, 'update']);
+            Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
+            Route::post('/roles/{role}/clone', [RoleController::class, 'clone']);
+        });
+        Route::post('/roles', [RoleController::class, 'store'])->middleware('permission:roles.create');
+        Route::get('/permissions', [AdminPermissionController::class, 'index'])->middleware('permission:roles.manage');
+
+        Route::middleware('permission:settings.view')->group(function () {
+            Route::get('/settings', [AdminSettingController::class, 'index']);
+        });
+        Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware('permission:settings.manage');
+
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('permission:audit.view');
     });
 });

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
+use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\FavoriteController;
 use App\Http\Controllers\Api\Customer\ProductController as CustomerProductController;
 use App\Http\Controllers\Api\Customer\RestaurantController as CustomerRestaurantController;
@@ -90,6 +91,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/favorites', [FavoriteController::class, 'index']);
         Route::post('/favorites', [FavoriteController::class, 'store']);
         Route::delete('/favorites', [FavoriteController::class, 'destroy']);
+
+        Route::get('/cart', [CartController::class, 'index']);
+        Route::post('/cart/items', [CartController::class, 'addItem']);
+        Route::patch('/cart/items/{item}', [CartController::class, 'updateItem']);
+        Route::delete('/cart/items/{item}', [CartController::class, 'removeItem']);
+        Route::delete('/cart/restaurants/{restaurant}', [CartController::class, 'removeRestaurant']);
+        Route::delete('/cart', [CartController::class, 'clear']);
+        Route::post('/cart/validate', [CartController::class, 'validateCart']);
     });
 
     // Catalog browsing — public within the customer app, no auth required (matches doc 08 §4 grouping).

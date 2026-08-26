@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDriverRequest;
 use App\Http\Requests\Admin\UpdateDriverRequest;
 use App\Models\Driver;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class DriverController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $drivers = Driver::query()
+        $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->with(['user', 'city'])
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->when($request->has('is_online'), fn ($q) => $q->where('is_online', $request->boolean('is_online')))
@@ -30,8 +31,10 @@ class DriverController extends Controller
         ]);
     }
 
-    public function show(Driver $driver): JsonResponse
+    public function show(Request $request, Driver $driver): JsonResponse
     {
+        $this->ensureInScope($request, $driver);
+
         return ApiResponse::success($driver->load(['user', 'city', 'assignedZones', 'documents']));
     }
 
@@ -47,6 +50,8 @@ class DriverController extends Controller
 
     public function update(UpdateDriverRequest $request, Driver $driver): JsonResponse
     {
+        $this->ensureInScope($request, $driver);
+
         $data = $request->validated();
         $driver->update(collect($data)->except('zone_ids')->all());
 
@@ -57,15 +62,20 @@ class DriverController extends Controller
         return ApiResponse::success($driver->fresh(['assignedZones']), 'تم تحديث بيانات الكابتن بنجاح');
     }
 
-    public function toggleStatus(Driver $driver): JsonResponse
+    public function status(Request $request, Driver $driver): JsonResponse
     {
-        $driver->update(['is_active' => ! $driver->is_active]);
+        $this->ensureInScope($request, $driver);
+
+        $validated = $request->validate(['is_active' => ['required', 'boolean']]);
+        $driver->update($validated);
 
         return ApiResponse::success($driver, 'تم تحديث حالة الكابتن بنجاح');
     }
 
-    public function setEarningRule(Request $request, Driver $driver): JsonResponse
+    public function earningRule(Request $request, Driver $driver): JsonResponse
     {
+        $this->ensureInScope($request, $driver);
+
         $validated = $request->validate([
             'earning_type' => ['required', 'in:fixed,per_km,percent_of_delivery_fee'],
             'earning_value' => ['required', 'numeric', 'min:0'],
@@ -75,30 +85,53 @@ class DriverController extends Controller
         return ApiResponse::success($driver, 'تم تحديث قاعدة الأرباح بنجاح');
     }
 
-    public function adjustBalance(Request $request, Driver $driver): JsonResponse
+    public function transactions(Request $request, Driver $driver): JsonResponse
     {
+        $this->ensureInScope($request, $driver);
+
         $validated = $request->validate([
-            'amount' => ['required', 'numeric'],
+            'type' => ['required', 'in:bonus,deduction'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $driver->increment('wallet_balance', $validated['amount']);
+        $signedAmount = $validated['type'] === 'deduction' ? -$validated['amount'] : $validated['amount'];
+        $driver->increment('wallet_balance', $signedAmount);
 
-        $driver->transactions()->create([
-            'type' => $validated['amount'] >= 0 ? 'bonus' : 'deduction',
-            'amount' => $validated['amount'],
+        $transaction = $driver->transactions()->create([
+            'type' => $validated['type'],
+            'amount' => $signedAmount,
             'balance_after' => $driver->fresh()->wallet_balance,
             'note' => $validated['note'] ?? null,
             'created_by' => $request->user()->id,
         ]);
 
-        return ApiResponse::success($driver->fresh(), 'تم تعديل الرصيد بنجاح');
+        return ApiResponse::success($transaction, 'تم تسجيل الحركة المالية بنجاح', status: 201);
     }
 
-    public function resetPassword(Driver $driver, ResetUserPasswordAction $action): JsonResponse
+    public function resetPassword(Request $request, Driver $driver, ResetUserPasswordAction $action): JsonResponse
     {
+        $this->ensureInScope($request, $driver);
+
         $tempPassword = $action->execute($driver->user);
 
         return ApiResponse::success(['temp_password' => $tempPassword], 'تم إعادة تعيين كلمة المرور بنجاح');
+    }
+
+    public function destroy(Request $request, Driver $driver): JsonResponse
+    {
+        $this->ensureInScope($request, $driver);
+
+        $driver->delete();
+
+        return ApiResponse::success(message: 'تم حذف الكابتن بنجاح');
+    }
+
+    private function ensureInScope(Request $request, Driver $driver): void
+    {
+        abort_unless(
+            AdminScope::applyToDrivers(Driver::query(), $request->user())->whereKey($driver->id)->exists(),
+            404,
+        );
     }
 }

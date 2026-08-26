@@ -6,14 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCityRequest;
 use App\Http\Requests\Admin\UpdateCityRequest;
 use App\Models\City;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CityController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $cities = City::query()->orderBy('sort_order')->paginate(request()->integer('per_page', 20));
+        $cities = AdminScope::applyToCities(City::query(), $request->user())
+            ->orderBy('sort_order')
+            ->paginate($request->integer('per_page', 20));
 
         return ApiResponse::success($cities->items(), meta: [
             'current_page' => $cities->currentPage(),
@@ -23,8 +27,10 @@ class CityController extends Controller
         ]);
     }
 
-    public function show(City $city): JsonResponse
+    public function show(Request $request, City $city): JsonResponse
     {
+        $this->ensureInScope($request, $city);
+
         return ApiResponse::success($city->load(['serviceZones', 'deliveryPricingRules']));
     }
 
@@ -37,15 +43,37 @@ class CityController extends Controller
 
     public function update(UpdateCityRequest $request, City $city): JsonResponse
     {
+        $this->ensureInScope($request, $city);
+
         $city->update($request->validated());
 
         return ApiResponse::success($city, 'تم تحديث المدينة بنجاح');
     }
 
-    public function destroy(City $city): JsonResponse
+    public function pricingType(Request $request, City $city): JsonResponse
     {
+        $this->ensureInScope($request, $city);
+
+        $validated = $request->validate(['pricing_type' => ['required', 'in:fixed_zone,distance_based']]);
+        $city->update($validated);
+
+        return ApiResponse::success($city, 'تم تحديث نظام التسعير بنجاح');
+    }
+
+    public function destroy(Request $request, City $city): JsonResponse
+    {
+        $this->ensureInScope($request, $city);
+
         $city->delete();
 
         return ApiResponse::success(message: 'تم حذف المدينة بنجاح');
+    }
+
+    private function ensureInScope(Request $request, City $city): void
+    {
+        abort_unless(
+            AdminScope::applyToCities(City::query(), $request->user())->whereKey($city->id)->exists(),
+            404,
+        );
     }
 }

@@ -40,6 +40,10 @@ class AdminUserSeeder extends Seeder
             'must_change_password' => true,
         ]);
 
+        // doc 24 §1.8: no admin account exists without at least one admin_scopes row;
+        // super_admin is global by construction (doc 12 §2, doc 24 §1.2).
+        $admin->adminScopes()->firstOrCreate(['scope_type' => \App\Enums\AdminScopeType::Global]);
+
         $this->command?->info("Seeded super_admin login -> phone: {$admin->phone} / password: {$password}");
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreDriverDocumentRequest;
+use App\Models\Driver;
 use App\Models\DriverDocument;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -10,36 +12,30 @@ use Illuminate\Http\Request;
 
 class DriverDocumentController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Driver $driver): JsonResponse
     {
-        $documents = DriverDocument::query()
-            ->with('driver.user')
-            ->when($request->integer('driver_id'), fn ($q, $driverId) => $q->where('driver_id', $driverId))
-            ->when($request->string('status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('status')))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        return ApiResponse::success($driver->documents()->latest()->get());
+    }
 
-        return ApiResponse::success($documents->items(), meta: [
-            'current_page' => $documents->currentPage(),
-            'per_page' => $documents->perPage(),
-            'total' => $documents->total(),
-            'last_page' => $documents->lastPage(),
+    public function store(StoreDriverDocumentRequest $request, Driver $driver): JsonResponse
+    {
+        $document = $driver->documents()->create($request->validated());
+
+        return ApiResponse::success($document, 'تم رفع المستند بنجاح', status: 201);
+    }
+
+    public function review(Request $request, DriverDocument $driverDocument): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:approved,rejected'],
+            'note' => ['nullable', 'string', 'max:255', 'required_if:status,rejected'],
         ]);
-    }
 
-    public function approve(DriverDocument $document): JsonResponse
-    {
-        $document->update(['status' => 'approved', 'note' => null]);
+        $driverDocument->update([
+            'status' => $validated['status'],
+            'note' => $validated['note'] ?? null,
+        ]);
 
-        return ApiResponse::success($document, 'تم اعتماد المستند بنجاح');
-    }
-
-    public function reject(Request $request, DriverDocument $document): JsonResponse
-    {
-        $validated = $request->validate(['note' => ['required', 'string', 'max:255']]);
-
-        $document->update(['status' => 'rejected', 'note' => $validated['note']]);
-
-        return ApiResponse::success($document, 'تم رفض المستند');
+        return ApiResponse::success($driverDocument, 'تم تحديث حالة المستند بنجاح');
     }
 }

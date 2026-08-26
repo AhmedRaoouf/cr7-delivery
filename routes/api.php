@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\ProductOptionController;
 use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
+use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use Illuminate\Support\Facades\Route;
@@ -23,28 +24,27 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
 
-    // §3 Auth — customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
+    // §3 Auth
     Route::prefix('auth')->group(function () {
-        Route::post('/send-otp', [CustomerAuthController::class, 'sendOtp']);
-        Route::post('/verify-otp', [CustomerAuthController::class, 'verifyOtp']);
-        Route::post('/logout', [CustomerAuthController::class, 'logout'])->middleware('auth:sanctum');
-        Route::post('/logout-all', [CustomerAuthController::class, 'logoutAll'])->middleware('auth:sanctum');
-    });
+        // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
+        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp']);
+        Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp']);
 
-    // §3 Auth — driver / restaurant / admin: Admin-created accounts, phone|email + password (FR-AUTH-04).
-    Route::prefix('driver/auth')->group(function () {
-        Route::post('/login', [PasswordAuthController::class, 'loginDriver']);
-        Route::post('/logout', [PasswordAuthController::class, 'logout'])->middleware('auth:sanctum');
-    });
+        // driver / restaurant / admin — Admin-created accounts, phone|email + password (FR-AUTH-04).
+        // X-App decides the expected users.type (doc 12 §1.1).
+        Route::post('/login', [PasswordAuthController::class, 'login']);
 
-    Route::prefix('restaurant/auth')->group(function () {
-        Route::post('/login', [PasswordAuthController::class, 'loginRestaurant']);
-        Route::post('/logout', [PasswordAuthController::class, 'logout'])->middleware('auth:sanctum');
-    });
+        Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+        Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
-    Route::prefix('admin/auth')->group(function () {
-        Route::post('/login', [PasswordAuthController::class, 'loginAdmin']);
-        Route::post('/logout', [PasswordAuthController::class, 'logout'])->middleware('auth:sanctum');
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/me', [AuthController::class, 'me']);
+            Route::patch('/me', [AuthController::class, 'updateMe']);
+            Route::post('/password/change', [AuthController::class, 'changePassword']);
+            Route::post('/logout', [AuthController::class, 'logout']);
+            Route::post('/logout-all', [AuthController::class, 'logoutAll']);
+            Route::delete('/account', [AuthController::class, 'deleteAccount']);
+        });
     });
 
     /*

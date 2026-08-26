@@ -16,6 +16,7 @@ class VerifyOtpRequest extends FormRequest
         return [
             'phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/'],
             'code' => ['required', 'digits:6'],
+            'purpose' => ['nullable', 'in:login,register,reset,verify'],
         ];
     }
 }

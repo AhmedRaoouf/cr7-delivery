@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
  */
 class VerifyOtpAction
 {
-    /** @return array{user: User, token: string} */
+    /** @return array{user: User, token: string, is_new_user: bool} */
     public function execute(string $phone, string $code, OtpPurpose $purpose): array
     {
         return DB::transaction(function () use ($phone, $code, $purpose) {
@@ -52,6 +52,7 @@ class VerifyOtpAction
                 ['phone' => $phone],
                 ['type' => UserType::Customer, 'is_active' => true, 'locale' => 'ar', 'theme' => 'dark'],
             );
+            $isNewUser = $user->wasRecentlyCreated;
 
             if (! $user->isCustomer()) {
                 throw new ApiException('wrong_client', 'هذا الرقم مسجل بنوع حساب مختلف', 403);
@@ -65,7 +66,7 @@ class VerifyOtpAction
 
             $token = $user->createToken('customer', [$user->type->value])->plainTextToken;
 
-            return ['user' => $user, 'token' => $token];
+            return ['user' => $user, 'token' => $token, 'is_new_user' => $isNewUser];
         });
     }
 }

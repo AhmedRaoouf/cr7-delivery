@@ -20,6 +20,7 @@ class UserResource extends JsonResource
             'theme' => $this->theme,
             'must_change_password' => $this->must_change_password,
             'phone_verified_at' => $this->phone_verified_at,
+            'default_address_id' => $this->default_address_id,
         ];
     }
 }

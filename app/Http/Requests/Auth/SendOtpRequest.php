@@ -15,6 +15,7 @@ class SendOtpRequest extends FormRequest
     {
         return [
             'phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/'],
+            'purpose' => ['nullable', 'in:login,register,reset,verify'],
         ];
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Driver extends Model
@@ -82,6 +83,11 @@ class Driver extends Model
     public function driverAttempts(): HasMany
     {
         return $this->hasMany(OrderDriverAttempt::class);
+    }
+
+    public function ratings(): MorphMany
+    {
+        return $this->morphMany(Rating::class, 'rateable');
     }
 
     /** doc 05 §2 / FR-DRV-20: online, available and a fresh-enough location ping. */

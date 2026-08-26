@@ -1,0 +1,271 @@
+<?php
+
+namespace App\Support;
+
+use App\Exceptions\ApiException;
+use App\Models\Cart;
+use App\Models\DeliveryPricingRule;
+use App\Models\PromoCode;
+use App\Models\Setting;
+use App\Models\User;
+use App\Models\UserAddress;
+use Illuminate\Support\Collection;
+
+/**
+ * doc 08 §4 — POST /checkout/quote. Also the pricing core CreateOrderAction reuses
+ * so the numbers placed on an order are exactly the numbers the customer was quoted.
+ * doc 16 §9 — multi-restaurant delivery fee = farthest restaurant's fee + extra_stop_fee
+ * per extra stop; discount and delivery fee split pro-rata by subtotal, remainder to
+ * the largest subtotal (doc 08 §4 checkout/quote note).
+ */
+class CheckoutPricer
+{
+    public function price(User $user, Cart $cart, UserAddress $address, ?string $promoCode, string $paymentMethod): array
+    {
+        $items = $cart->items()->with(['product', 'restaurant.serviceZone'])->get();
+        $byRestaurant = $items->groupBy('restaurant_id');
+
+        $blockers = [];
+
+        $restaurantSubtotals = $byRestaurant->map(function (Collection $lines) {
+            return $lines->sum(function ($item) {
+                $unitPrice = (float) ($item->product->discount_price ?? $item->product->price);
+                $optionsTotal = $item->options->sum(fn ($o) => (float) $o->productOption->price_delta);
+
+                return ($unitPrice + $optionsTotal) * $item->quantity;
+            });
+        });
+
+        $subtotal = round($restaurantSubtotals->sum(), 2);
+        $city = $address->city;
+
+        $distances = $byRestaurant->keys()->mapWithKeys(function ($restaurantId) use ($byRestaurant, $address) {
+            $restaurant = $byRestaurant[$restaurantId]->first()->restaurant;
+            $distance = Geo::haversineKm((float) $restaurant->latitude, (float) $restaurant->longitude, (float) $address->latitude, (float) $address->longitude);
+
+            return [$restaurantId => $distance];
+        });
+
+        $maxDistanceKm = $distances->max() ?? 0;
+        $restaurantCount = $byRestaurant->count();
+
+        $pricingRule = null;
+        if ($city->pricing_type->value === 'distance_based') {
+            $pricingRule = DeliveryPricingRule::query()
+                ->where('city_id', $city->id)
+                ->where('is_active', true)
+                ->where(fn ($q) => $q->whereNull('service_zone_id')->orWhere('service_zone_id', $address->service_zone_id))
+                ->where('min_distance_km', '<=', $maxDistanceKm)
+                ->where('max_distance_km', '>=', $maxDistanceKm)
+                ->orderByDesc('service_zone_id')
+                ->first();
+            $deliveryBaseFee = (float) ($pricingRule->fee ?? $address->serviceZone->delivery_fee ?? 0);
+        } else {
+            $deliveryBaseFee = (float) ($address->serviceZone->delivery_fee ?? 0);
+        }
+
+        $extraStopFee = (float) (Setting::query()->where('key', 'delivery.extra_stop_fee')->value('value') ?? 10);
+        $extraStopFeeTotal = round($extraStopFee * max(0, $restaurantCount - 1), 2);
+
+        $freeDeliveryOver = $pricingRule->free_delivery_over ?? $address->serviceZone->free_delivery_over ?? null;
+        $freeDeliveryApplied = $freeDeliveryOver !== null && $subtotal >= (float) $freeDeliveryOver;
+
+        $deliveryFee = $freeDeliveryApplied ? 0.0 : round($deliveryBaseFee + $extraStopFeeTotal, 2);
+
+        $promo = null;
+        $discountAmount = 0.0;
+        $promoModel = null;
+
+        if ($promoCode) {
+            [$promoModel, $promoValid, $promoReason] = $this->resolvePromo($promoCode, $user, $address, $subtotal, $byRestaurant->keys()->all());
+
+            if ($promoModel && $promoValid) {
+                if ($promoModel->type->value === 'free_delivery') {
+                    $deliveryFee = 0.0;
+                } else {
+                    $discountAmount = $promoModel->type->value === 'percent'
+                        ? round($subtotal * ((float) $promoModel->value / 100), 2)
+                        : round((float) $promoModel->value, 2);
+
+                    if ($promoModel->max_discount !== null) {
+                        $discountAmount = min($discountAmount, (float) $promoModel->max_discount);
+                    }
+                    $discountAmount = min($discountAmount, $subtotal);
+                }
+
+                $promo = ['code' => $promoModel->code, 'title' => $promoModel->title_ar, 'valid' => true];
+            } else {
+                $promo = ['code' => $promoCode, 'title' => null, 'valid' => false, 'reason' => $promoReason];
+            }
+        }
+
+        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $deliveryFee, $distances) {
+            $restaurant = $lines->first()->restaurant;
+            $lineSubtotal = round($restaurantSubtotals[$restaurantId], 2);
+            $share = $subtotal > 0 ? $lineSubtotal / $subtotal : 0;
+
+            return [
+                'restaurant_id' => $restaurant->id,
+                'restaurant_name' => $restaurant->name_ar,
+                'distance_km' => round($distances[$restaurantId], 2),
+                'subtotal' => $lineSubtotal,
+                'discount_share' => round($discountAmount * $share, 2),
+                'delivery_fee_share' => round($deliveryFee * $share, 2),
+                'meets_min_order' => $lineSubtotal >= (float) $restaurant->min_order_value,
+                'eta_minutes_min' => $restaurant->serviceZone ? max(5, $restaurant->serviceZone->avg_delivery_minutes - 10) : null,
+                'eta_minutes_max' => $restaurant->serviceZone ? $restaurant->serviceZone->avg_delivery_minutes + 10 : null,
+                'is_open_now' => $restaurant->isOpenNow(),
+            ];
+        })->values();
+
+        // Rounding remainder goes to the largest subtotal (doc 08 §4).
+        $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount);
+        $groups = $this->assignRoundingRemainder($groups, 'delivery_fee_share', $deliveryFee);
+
+        foreach ($groups as $group) {
+            if (! $group['meets_min_order']) {
+                $blockers[] = ['code' => 'below_min_order', 'message' => 'الحد الأدنى للطلب لم يتحقق', 'restaurant_id' => $group['restaurant_id']];
+            }
+            if (! $group['is_open_now']) {
+                $blockers[] = ['code' => 'restaurant_closed', 'message' => 'المطعم مغلق حاليًا', 'restaurant_id' => $group['restaurant_id']];
+            }
+        }
+
+        if ($restaurantCount === 0) {
+            $blockers[] = ['code' => 'cart_empty', 'message' => 'السلة فارغة'];
+        }
+
+        if ($paymentMethod !== 'cash' && $user->cash_only_until && $user->cash_only_until->isFuture()) {
+            $blockers[] = ['code' => 'cash_only_restricted', 'message' => 'حسابك مقيّد بالدفع نقدًا فقط حاليًا'];
+        }
+
+        $total = round($subtotal - $discountAmount + $deliveryFee, 2);
+
+        return [
+            'restaurant_count' => $restaurantCount,
+            'groups' => $groups,
+            'max_distance_km' => round($maxDistanceKm, 3),
+            'delivery_base_fee' => round($deliveryBaseFee, 2),
+            'extra_stop_fee' => $extraStopFee,
+            'extra_stop_fee_total' => $extraStopFeeTotal,
+            'delivery_fee' => $deliveryFee,
+            'delivery_pricing_rule_id' => $pricingRule?->id,
+            'free_delivery_applied' => $freeDeliveryApplied,
+            'subtotal' => $subtotal,
+            'discount_amount' => $discountAmount,
+            'promo' => $promo,
+            'promo_code_id' => $promoModel?->id,
+            'total' => $total,
+            'dispatch_mode' => 'driver_per_restaurant',
+            'separate_deliveries_warning' => $restaurantCount > 1,
+            'eta_minutes_min' => $groups->min('eta_minutes_min'),
+            'eta_minutes_max' => $groups->max('eta_minutes_max'),
+            'payment_methods' => [
+                ['value' => 'cash', 'label' => 'الدفع عند الاستلام', 'enabled' => true],
+                ['value' => 'vodafone_cash', 'label' => 'فودافون كاش', 'enabled' => true],
+                ['value' => 'instapay', 'label' => 'إنستا باي', 'enabled' => true],
+            ],
+            'blockers' => $blockers,
+        ];
+    }
+
+    /** doc 08 §4 — POST /promo/validate: strict, throws on any invalidity. */
+    public function validatePromo(User $user, Cart $cart, UserAddress $address, string $code): PromoCode
+    {
+        $items = $cart->items()->with('product')->get();
+        $subtotal = round($items->sum(fn ($item) => (float) ($item->product->discount_price ?? $item->product->price) * $item->quantity), 2);
+        $restaurantIds = $items->pluck('restaurant_id')->unique()->values()->all();
+
+        [$promo, $valid, $reason] = $this->resolvePromo($code, $user, $address, $subtotal, $restaurantIds);
+
+        if (! $promo) {
+            throw new ApiException('promo_invalid', 'كود الخصم غير صحيح', 422);
+        }
+
+        if (! $valid) {
+            $messages = [
+                'promo_expired' => 'انتهت صلاحية كود الخصم',
+                'promo_usage_exceeded' => 'تم استخدام كود الخصم للحد الأقصى المسموح',
+                'promo_no_longer_applicable' => 'كود الخصم لا ينطبق على مطاعم السلة الحالية',
+                'below_min_order' => 'السلة لم تصل بعد للحد الأدنى لاستخدام الكود',
+                'promo_invalid' => 'كود الخصم غير صالح لهذا الطلب',
+            ];
+
+            throw new ApiException($reason, $messages[$reason] ?? 'كود الخصم غير صالح', 422);
+        }
+
+        return $promo;
+    }
+
+    /** @return array{0: ?PromoCode, 1: bool, 2: ?string} */
+    private function resolvePromo(string $code, User $user, UserAddress $address, float $subtotal, array $restaurantIds): array
+    {
+        $promo = PromoCode::query()->where('code', $code)->where('is_active', true)->first();
+
+        if (! $promo) {
+            return [null, false, 'promo_invalid'];
+        }
+
+        if (($promo->starts_at && $promo->starts_at->isFuture()) || ($promo->ends_at && $promo->ends_at->isPast())) {
+            return [$promo, false, 'promo_expired'];
+        }
+
+        if ($subtotal < (float) $promo->min_order_value) {
+            return [$promo, false, 'below_min_order'];
+        }
+
+        if ($promo->usage_limit_total !== null && $promo->used_count >= $promo->usage_limit_total) {
+            return [$promo, false, 'promo_usage_exceeded'];
+        }
+
+        if ($promo->usage_limit_per_user !== null) {
+            $usedByUser = $promo->usages()->where('user_id', $user->id)->count();
+            if ($usedByUser >= $promo->usage_limit_per_user) {
+                return [$promo, false, 'promo_usage_exceeded'];
+            }
+        }
+
+        if ($promo->first_order_only && $user->orderGroups()->exists()) {
+            return [$promo, false, 'promo_usage_exceeded'];
+        }
+
+        if ($promo->restrict_city_ids && ! in_array($address->city_id, $promo->restrict_city_ids, true)) {
+            return [$promo, false, 'promo_invalid'];
+        }
+
+        if ($promo->restrict_zone_ids && ! in_array($address->service_zone_id, $promo->restrict_zone_ids, true)) {
+            return [$promo, false, 'promo_invalid'];
+        }
+
+        if ($promo->restrict_restaurant_ids && array_diff($restaurantIds, $promo->restrict_restaurant_ids) === $restaurantIds) {
+            // none of the basket restaurants are in the allow-list
+            return [$promo, false, 'promo_no_longer_applicable'];
+        }
+
+        return [$promo, true, null];
+    }
+
+    private function assignRoundingRemainder(Collection $groups, string $field, float $total): Collection
+    {
+        if ($groups->isEmpty()) {
+            return $groups;
+        }
+
+        $sum = round($groups->sum($field), 2);
+        $remainder = round($total - $sum, 2);
+
+        if (abs($remainder) < 0.01) {
+            return $groups;
+        }
+
+        $largestId = $groups->sortByDesc('subtotal')->first()['restaurant_id'];
+
+        return $groups->map(function ($group) use ($largestId, $field, $remainder) {
+            if ($group['restaurant_id'] === $largestId) {
+                $group[$field] = round($group[$field] + $remainder, 2);
+            }
+
+            return $group;
+        });
+    }
+}

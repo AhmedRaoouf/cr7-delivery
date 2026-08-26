@@ -1,0 +1,191 @@
+<?php
+
+namespace App\Actions\Customer;
+
+use App\Enums\OrderStatus;
+use App\Enums\OrderStatusActorType;
+use App\Exceptions\ApiException;
+use App\Models\Order;
+use App\Models\OrderGroup;
+use App\Models\User;
+use App\Models\UserAddress;
+use App\Support\CheckoutPricer;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * doc 08 §4 — POST /orders. doc 04 §7 — every order is created `pending`, cash or
+ * online alike; the payment gate stays closed until every restaurant answers.
+ */
+class CreateOrderAction
+{
+    public function __construct(private readonly CheckoutPricer $pricer)
+    {
+    }
+
+    public function execute(User $user, array $data, string $idempotencyKey): OrderGroup
+    {
+        $existing = OrderGroup::query()->where('idempotency_key', $idempotencyKey)->where('user_id', $user->id)->first();
+        if ($existing) {
+            return $existing->load(['orders.restaurant', 'payment']);
+        }
+
+        $cart = $user->cart()->firstOrCreate([]);
+        if ($cart->items()->count() === 0) {
+            throw new ApiException('cart_empty', 'السلة فارغة', 422);
+        }
+
+        $address = UserAddress::query()->where('user_id', $user->id)->findOrFail($data['address_id']);
+
+        $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
+
+        if ($quote['blockers'] !== []) {
+            $first = $quote['blockers'][0];
+            throw new ApiException($first['code'], $first['message'], 422, meta: ['blockers' => $quote['blockers']]);
+        }
+
+        return DB::transaction(function () use ($user, $cart, $data, $idempotencyKey, $address, $quote) {
+            $group = OrderGroup::create([
+                'group_number' => 'CR7-pending-'.$idempotencyKey,
+                'idempotency_key' => $idempotencyKey,
+                'origin' => 'app',
+                'user_id' => $user->id,
+                'address_id' => $address->id,
+                'city_id' => $address->city_id,
+                'service_zone_id' => $address->service_zone_id,
+                'payment_method' => $data['payment_method'],
+                'restaurant_count' => $quote['restaurant_count'],
+                'dispatch_mode' => $quote['dispatch_mode'],
+                'delivery_address_text' => $this->composeAddressText($address),
+                'delivery_contact_phone' => $address->contact_phone ?? $user->phone,
+                'delivery_latitude' => $address->latitude,
+                'delivery_longitude' => $address->longitude,
+                'max_distance_km' => $quote['max_distance_km'],
+                'delivery_pricing_rule_id' => $quote['delivery_pricing_rule_id'],
+                'subtotal' => $quote['subtotal'],
+                'discount_amount' => $quote['discount_amount'],
+                'promo_code_id' => $quote['promo_code_id'],
+                'delivery_base_fee' => $quote['delivery_base_fee'],
+                'extra_stop_fee_total' => $quote['extra_stop_fee_total'],
+                'delivery_fee' => $quote['delivery_fee'],
+                'total' => $quote['total'],
+                'rollup_status' => 'pending',
+                'customer_note' => $data['customer_note'] ?? null,
+                'delivery_instructions' => $data['delivery_instructions'] ?? null,
+                'placed_at' => now(),
+            ]);
+
+            $groupNumber = 'CR7-'.now()->format('ymd').'-'.$group->id;
+            $group->update(['group_number' => $groupNumber]);
+
+            $cartItemsByRestaurant = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get()->groupBy('restaurant_id');
+
+            foreach ($quote['groups'] as $sequence => $groupQuote) {
+                $restaurantId = $groupQuote['restaurant_id'];
+                $lines = $cartItemsByRestaurant[$restaurantId];
+                $restaurant = $lines->first()->restaurant;
+
+                $groupSequence = $sequence + 1;
+                $orderNumber = "{$groupNumber}-{$groupSequence}";
+
+                $subOrder = Order::create([
+                    'order_group_id' => $group->id,
+                    'origin' => 'app',
+                    'order_number' => $orderNumber,
+                    'group_sequence' => $groupSequence,
+                    'idempotency_key' => $idempotencyKey.'-'.$groupSequence,
+                    'user_id' => $user->id,
+                    'restaurant_id' => $restaurant->id,
+                    'city_id' => $address->city_id,
+                    'service_zone_id' => $address->service_zone_id,
+                    'status' => OrderStatus::Pending,
+                    'payment_method' => $data['payment_method'],
+                    'restaurant_name_snapshot' => $restaurant->name_ar,
+                    'delivery_address_text' => $this->composeAddressText($address),
+                    'delivery_contact_phone' => $address->contact_phone ?? $user->phone,
+                    'delivery_latitude' => $address->latitude,
+                    'delivery_longitude' => $address->longitude,
+                    'distance_km' => $groupQuote['distance_km'],
+                    'delivery_pricing_rule_id' => $quote['delivery_pricing_rule_id'],
+                    'subtotal' => $groupQuote['subtotal'],
+                    'discount_share' => $groupQuote['discount_share'],
+                    'delivery_fee_share' => $groupQuote['delivery_fee_share'],
+                    'total' => round($groupQuote['subtotal'] - $groupQuote['discount_share'] + $groupQuote['delivery_fee_share'], 2),
+                    'min_order_value_snapshot' => $restaurant->min_order_value,
+                    'commission_rate_snapshot' => $restaurant->commission_rate,
+                    'commission_amount' => round($groupQuote['subtotal'] * ((float) $restaurant->commission_rate / 100), 2),
+                    'pickup_otp' => (string) random_int(1000, 9999),
+                    'delivery_otp' => (string) random_int(1000, 9999),
+                    'business_date' => now()->toDateString(),
+                    'customer_note' => $data['customer_note'] ?? null,
+                    'delivery_instructions' => $data['delivery_instructions'] ?? null,
+                    'placed_at' => now(),
+                ]);
+
+                foreach ($lines as $item) {
+                    $unitPrice = (float) ($item->product->discount_price ?? $item->product->price);
+                    $optionsTotal = $item->options->sum(fn ($o) => (float) $o->productOption->price_delta);
+
+                    $orderItem = $subOrder->items()->create([
+                        'product_id' => $item->product->id,
+                        'product_name_ar_snapshot' => $item->product->name_ar,
+                        'product_name_en_snapshot' => $item->product->name_en,
+                        'product_image_snapshot' => $item->product->image,
+                        'unit_price_snapshot' => $unitPrice,
+                        'options_total' => $optionsTotal,
+                        'quantity' => $item->quantity,
+                        'line_total' => ($unitPrice + $optionsTotal) * $item->quantity,
+                        'note' => $item->note,
+                    ]);
+
+                    foreach ($item->options as $option) {
+                        $orderItem->options()->create([
+                            'product_option_id' => $option->productOption->id,
+                            'group_name_snapshot' => $option->productOption->group->name_ar,
+                            'option_name_ar_snapshot' => $option->productOption->name_ar,
+                            'option_name_en_snapshot' => $option->productOption->name_en,
+                            'price_delta_snapshot' => $option->productOption->price_delta,
+                        ]);
+                    }
+                }
+
+                $subOrder->statusHistory()->create([
+                    'from_status' => null,
+                    'to_status' => OrderStatus::Pending->value,
+                    'actor_type' => OrderStatusActorType::Customer,
+                    'actor_id' => $user->id,
+                ]);
+
+                if ($group->promo_code_id) {
+                    $group->promoCode->usages()->create([
+                        'user_id' => $user->id,
+                        'order_id' => $subOrder->id,
+                        'discount_amount' => $groupQuote['discount_share'],
+                    ]);
+                }
+            }
+
+            if ($group->promo_code_id) {
+                $group->promoCode->increment('used_count');
+            }
+
+            $group->payment()->create([
+                'user_id' => $user->id,
+                'method' => $data['payment_method'],
+                'provider' => 'manual',
+                'status' => 'pending',
+                'amount' => 0,
+            ]);
+
+            $cart->items()->delete();
+
+            return $group->load(['orders.restaurant', 'payment']);
+        });
+    }
+
+    private function composeAddressText(UserAddress $address): string
+    {
+        return collect([$address->street, $address->building, $address->floor, $address->apartment, $address->landmark])
+            ->filter()
+            ->implode('، ');
+    }
+}

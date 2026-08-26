@@ -16,8 +16,12 @@ use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Customer\CartController;
+use App\Http\Controllers\Api\Customer\CheckoutController;
 use App\Http\Controllers\Api\Customer\FavoriteController;
+use App\Http\Controllers\Api\Customer\OrderController;
+use App\Http\Controllers\Api\Customer\PaymentController;
 use App\Http\Controllers\Api\Customer\ProductController as CustomerProductController;
+use App\Http\Controllers\Api\Customer\PromoController;
 use App\Http\Controllers\Api\Customer\RestaurantController as CustomerRestaurantController;
 use App\Http\Controllers\Api\Customer\SearchController;
 use App\Http\Controllers\Api\Shared\BannerController;
@@ -99,6 +103,24 @@ Route::prefix('v1')->group(function () {
         Route::delete('/cart/restaurants/{restaurant}', [CartController::class, 'removeRestaurant']);
         Route::delete('/cart', [CartController::class, 'clear']);
         Route::post('/cart/validate', [CartController::class, 'validateCart']);
+
+        Route::post('/checkout/quote', [CheckoutController::class, 'quote']);
+        Route::post('/promo/validate', [PromoController::class, 'validate']);
+
+        Route::post('/orders', [OrderController::class, 'store']);
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/orders/{orderGroup}', [OrderController::class, 'show']);
+        Route::get('/orders/{orderGroup}/tracking', [OrderController::class, 'tracking']);
+        Route::get('/orders/{orderGroup}/confirmation', [OrderController::class, 'confirmation']);
+        Route::post('/orders/{orderGroup}/confirm', [OrderController::class, 'confirm']);
+        Route::post('/orders/{orderGroup}/delivery-code/resend', [OrderController::class, 'resendDeliveryCode']);
+        Route::post('/orders/{orderGroup}/cancel', [OrderController::class, 'cancel']);
+        Route::post('/orders/{orderGroup}/reorder', [OrderController::class, 'reorder']);
+        Route::post('/orders/{orderGroup}/ratings', [OrderController::class, 'ratings']);
+
+        Route::get('/orders/{orderGroup}/payment', [PaymentController::class, 'show']);
+        Route::post('/orders/{orderGroup}/payment/proof', [PaymentController::class, 'submitProof']);
+        Route::post('/orders/{orderGroup}/payment/method', [PaymentController::class, 'switchToCash']);
     });
 
     // Catalog browsing — public within the customer app, no auth required (matches doc 08 §4 grouping).

@@ -5,12 +5,17 @@ use App\Http\Controllers\Api\Admin\CuisineController;
 use App\Http\Controllers\Api\Admin\DeliveryPricingRuleController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\DriverDocumentController;
+use App\Http\Controllers\Api\Admin\ComplaintController as AdminComplaintController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
+use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
 use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
+use App\Http\Controllers\Api\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
+use App\Http\Controllers\Api\Admin\SettlementController as AdminSettlementController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
@@ -363,5 +368,53 @@ Route::prefix('v1')->group(function () {
             Route::patch('/cuisines/{cuisine}', [CuisineController::class, 'update']);
             Route::delete('/cuisines/{cuisine}', [CuisineController::class, 'destroy']);
         });
+
+        // Orders — doc 12 §3, the intervention console (doc 24 §3)
+        Route::middleware('permission:orders.view')->group(function () {
+            Route::get('/orders', [AdminOrderController::class, 'index']);
+            Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
+            Route::get('/orders/{order}/attempts', [AdminOrderController::class, 'attempts']);
+            Route::get('/orders/{order}/eligible-drivers', [AdminOrderController::class, 'eligibleDrivers']);
+            Route::get('/orders/{order}/notes', [AdminOrderController::class, 'notes']);
+        });
+        Route::post('/orders/{order}/cancel', [AdminOrderController::class, 'cancel'])->middleware('permission:orders.cancel');
+        Route::post('/orders/{order}/reassign-driver', [AdminOrderController::class, 'reassignDriver'])->middleware('permission:orders.reassign_driver');
+        Route::post('/orders/{order}/unassign-driver', [AdminOrderController::class, 'unassignDriver'])->middleware('permission:orders.unassign_driver');
+        Route::post('/orders/{order}/redispatch', [AdminOrderController::class, 'redispatch'])->middleware('permission:orders.redispatch');
+        Route::post('/orders/{order}/force-pickup', [AdminOrderController::class, 'forcePickup'])->middleware('permission:orders.force_pickup');
+        Route::post('/orders/{order}/force-status', [AdminOrderController::class, 'forceStatus'])->middleware('permission:orders.force_status');
+        Route::post('/orders/{order}/renotify-restaurant', [AdminOrderController::class, 'renotifyRestaurant'])->middleware('permission:orders.renotify');
+        Route::post('/orders/{order}/extend-prep', [AdminOrderController::class, 'extendPrep'])->middleware('permission:orders.extend_prep');
+        Route::post('/orders/{order}/notes', [AdminOrderController::class, 'addNote'])->middleware('permission:orders.note');
+
+        // Money
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('/payments', [AdminPaymentController::class, 'index']);
+            Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
+        });
+        Route::middleware('permission:payments.verify')->group(function () {
+            Route::post('/payments/{payment}/approve', [AdminPaymentController::class, 'approve']);
+            Route::post('/payments/{payment}/reject', [AdminPaymentController::class, 'reject']);
+        });
+
+        Route::get('/refunds', [AdminRefundController::class, 'index'])->middleware('permission:refunds.view');
+        Route::post('/refunds', [AdminRefundController::class, 'store'])->middleware('permission:refunds.create');
+        Route::post('/refunds/{refund}/process', [AdminRefundController::class, 'process'])->middleware('permission:refunds.process');
+
+        Route::get('/settlements', [AdminSettlementController::class, 'index'])->middleware('permission:settlements.view');
+        Route::get('/settlements/{settlement}', [AdminSettlementController::class, 'show'])->middleware('permission:settlements.view');
+        Route::post('/settlements/generate', [AdminSettlementController::class, 'generate'])->middleware('permission:settlements.generate');
+        Route::post('/settlements/{settlement}/pay', [AdminSettlementController::class, 'pay'])->middleware('permission:settlements.pay');
+
+        // Complaints
+        Route::middleware('permission:complaints.view')->group(function () {
+            Route::get('/complaints', [AdminComplaintController::class, 'index']);
+            Route::get('/complaints/{complaint}', [AdminComplaintController::class, 'show']);
+            Route::get('/complaints/sla', [AdminComplaintController::class, 'sla']);
+        });
+        Route::post('/complaints/{complaint}/messages', [AdminComplaintController::class, 'addMessage'])->middleware('permission:complaints.reply');
+        Route::patch('/complaints/{complaint}', [AdminComplaintController::class, 'update'])->middleware('permission:complaints.update');
+        Route::post('/complaints/{complaint}/assign', [AdminComplaintController::class, 'assign'])->middleware('permission:complaints.assign');
+        Route::post('/complaints/{complaint}/escalate', [AdminComplaintController::class, 'escalate'])->middleware('permission:complaints.update');
     });
 });

@@ -92,6 +92,30 @@ class DispatchService
         $group->update(['rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status'))]);
     }
 
+    /** doc 08 §7 — GET /admin/orders/{id}/eligible-drivers: same ranking, read-only, no round/TTL side effects. */
+    public function eligibleDrivers(Order $order, float $radiusKm): \Illuminate\Support\Collection
+    {
+        $staleSeconds = (int) (Setting::query()->where('key', 'driver.location_stale_seconds')->value('value') ?? 60);
+
+        return Driver::query()
+            ->where('is_active', true)
+            ->whereNotNull('location_updated_at')
+            ->get()
+            ->map(function (Driver $driver) use ($order, $staleSeconds) {
+                $isLive = $driver->is_online
+                    && $driver->location_updated_at->diffInSeconds(now()) < $staleSeconds;
+
+                return [
+                    'driver' => $driver,
+                    'distance_km' => Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
+                    'state' => $isLive ? 'live' : ($driver->is_online ? 'stale' : 'offline'),
+                ];
+            })
+            ->filter(fn ($c) => $c['distance_km'] <= $radiusKm && $c['state'] !== 'offline')
+            ->sortBy('distance_km')
+            ->values();
+    }
+
     /** doc 05 §3 round-outcome table — call when a round's offers are all answered or expired. */
     public function advanceIfRoundExhausted(Order $order): void
     {

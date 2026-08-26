@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Restaurant extends Model
@@ -87,5 +88,34 @@ class Restaurant extends Model
     public function complaints(): HasMany
     {
         return $this->hasMany(Complaint::class);
+    }
+
+    public function ratings(): MorphMany
+    {
+        return $this->morphMany(Rating::class, 'rateable');
+    }
+
+    /** doc 08 §4 — is_open_now = the manual switch AND (no hours set, or today's window covers now). */
+    public function isOpenNow(): bool
+    {
+        if (! $this->is_open_manual || ! $this->is_active) {
+            return false;
+        }
+
+        $today = $this->relationLoaded('openingHours')
+            ? $this->openingHours->firstWhere('weekday', now()->dayOfWeek)
+            : $this->openingHours()->where('weekday', now()->dayOfWeek)->first();
+
+        if (! $today) {
+            return true;
+        }
+
+        if ($today->is_closed || ! $today->opens_at || ! $today->closes_at) {
+            return false;
+        }
+
+        $now = now()->format('H:i:s');
+
+        return $now >= $today->opens_at && $now <= $today->closes_at;
     }
 }

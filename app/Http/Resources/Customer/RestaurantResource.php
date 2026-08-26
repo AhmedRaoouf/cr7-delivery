@@ -1,0 +1,42 @@
+<?php
+
+namespace App\Http\Resources\Customer;
+
+use App\Support\Geo;
+use App\Support\Locale;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** doc 08 §4 — GET /restaurants item shape. */
+class RestaurantResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        $locale = Locale::current($request);
+        $lat = $request->float('lat') ?: null;
+        $lng = $request->float('lng') ?: null;
+
+        $zone = $this->serviceZone;
+
+        return [
+            'id' => $this->id,
+            'name' => $this->{"name_{$locale}"},
+            'slug' => $this->slug,
+            'logo' => $this->logo,
+            'cover' => $this->cover,
+            'cuisines' => $this->whenLoaded('cuisines', fn () => $this->cuisines->pluck("name_{$locale}")),
+            'rating_avg' => (float) $this->rating_avg,
+            'rating_count' => $this->rating_count,
+            'delivery_fee' => $zone?->delivery_fee !== null ? (float) $zone->delivery_fee : null,
+            'free_delivery_over' => $zone?->free_delivery_over !== null ? (float) $zone->free_delivery_over : null,
+            'delivery_time_min' => $zone ? max(5, $zone->avg_delivery_minutes - 10) : null,
+            'delivery_time_max' => $zone ? $zone->avg_delivery_minutes + 10 : null,
+            'min_order_value' => (float) $this->min_order_value,
+            'distance_km' => ($lat && $lng) ? round(Geo::haversineKm((float) $this->latitude, (float) $this->longitude, $lat, $lng), 2) : null,
+            'is_open_now' => $this->isOpenNow(),
+            'next_open_at' => null,
+            'is_busy' => false,
+            'has_offers' => false,
+        ];
+    }
+}

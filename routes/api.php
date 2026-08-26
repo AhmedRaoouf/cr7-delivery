@@ -15,6 +15,10 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
+use App\Http\Controllers\Api\Customer\FavoriteController;
+use App\Http\Controllers\Api\Customer\ProductController as CustomerProductController;
+use App\Http\Controllers\Api\Customer\RestaurantController as CustomerRestaurantController;
+use App\Http\Controllers\Api\Customer\SearchController;
 use App\Http\Controllers\Api\Shared\BannerController;
 use App\Http\Controllers\Api\Shared\CityController as SharedCityController;
 use App\Http\Controllers\Api\Shared\ConfigController;
@@ -82,7 +86,21 @@ Route::prefix('v1')->group(function () {
         Route::patch('/addresses/{address}', [AddressController::class, 'update']);
         Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
         Route::post('/addresses/{address}/default', [AddressController::class, 'makeDefault']);
+
+        Route::get('/favorites', [FavoriteController::class, 'index']);
+        Route::post('/favorites', [FavoriteController::class, 'store']);
+        Route::delete('/favorites', [FavoriteController::class, 'destroy']);
     });
+
+    // Catalog browsing — public within the customer app, no auth required (matches doc 08 §4 grouping).
+    Route::get('/restaurants', [CustomerRestaurantController::class, 'index']);
+    Route::get('/restaurants/{restaurant}', [CustomerRestaurantController::class, 'show']);
+    Route::get('/restaurants/{restaurant}/categories', [CustomerRestaurantController::class, 'categories']);
+    Route::get('/restaurants/{restaurant}/products', [CustomerRestaurantController::class, 'products']);
+    Route::get('/restaurants/{restaurant}/best-sellers', [CustomerRestaurantController::class, 'bestSellers']);
+    Route::get('/restaurants/{restaurant}/reviews', [CustomerRestaurantController::class, 'reviews']);
+    Route::get('/products/{product}', [CustomerProductController::class, 'show']);
+    Route::get('/search', [SearchController::class, 'index']);
 
     /*
     |----------------------------------------------------------------------

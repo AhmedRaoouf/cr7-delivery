@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\ServiceZoneController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
+use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Shared\BannerController;
 use App\Http\Controllers\Api\Shared\CityController as SharedCityController;
 use App\Http\Controllers\Api\Shared\ConfigController;
@@ -41,7 +42,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/banners', [BannerController::class, 'index']);
     Route::get('/pages/{slug}', [PageController::class, 'show']);
     Route::get('/faqs', [FaqController::class, 'index']);
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type'])->group(function () {
         Route::post('/devices', [DeviceController::class, 'store']);
         Route::delete('/devices', [DeviceController::class, 'destroy']);
     });
@@ -59,7 +60,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
         Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
-        Route::middleware('auth:sanctum')->group(function () {
+        Route::middleware(['auth:sanctum', 'client.type'])->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::patch('/me', [AuthController::class, 'updateMe']);
             Route::post('/password/change', [AuthController::class, 'changePassword']);
@@ -71,12 +72,26 @@ Route::prefix('v1')->group(function () {
 
     /*
     |----------------------------------------------------------------------
+    | §4 Customer — auth:sanctum + type:customer. Every row is scoped to the
+    | caller (doc 12 §5): user_id = auth.id, enforced inside the controller.
+    |----------------------------------------------------------------------
+    */
+    Route::middleware(['auth:sanctum', 'client.type', 'type:customer'])->group(function () {
+        Route::get('/addresses', [AddressController::class, 'index']);
+        Route::post('/addresses', [AddressController::class, 'store']);
+        Route::patch('/addresses/{address}', [AddressController::class, 'update']);
+        Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
+        Route::post('/addresses/{address}/default', [AddressController::class, 'makeDefault']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
     | §7 Admin — every route is auth:sanctum + a permission check (doc 12 §7.1).
     | Geographic scope (doc 12 §10 / doc 24 §1.2) is enforced inside each
     | controller via App\Support\AdminScope — out-of-scope resolves as 404.
     |----------------------------------------------------------------------
     */
-    Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'type:admin'])->group(function () {
 
         // Locations & pricing
         Route::middleware('permission:locations.view')->group(function () {

@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureClientMatchesUserType;
+use App\Http\Middleware\EnsureUserType;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -27,14 +28,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'client.type' => EnsureClientMatchesUserType::class,
+            'type' => EnsureUserType::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
         ]);
 
-        $middleware->api(prepend: [
-            EnsureClientMatchesUserType::class,
-        ]);
+        // NOTE: EnsureClientMatchesUserType reads $request->user(), so it must run
+        // AFTER auth:sanctum resolves the token — never as global/prepended API
+        // middleware, which always runs before route-level middleware regardless
+        // of prepend/append. It is applied per-route instead, as 'client.type'.
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (ApiException $e, Request $request) {

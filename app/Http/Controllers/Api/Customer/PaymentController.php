@@ -7,12 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\SubmitPaymentProofRequest;
 use App\Models\OrderGroup;
 use App\Support\ApiResponse;
+use App\Support\FileUploader;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/** doc 08 §4 — payments (customer side). */
+/** doc 08 §4 — payments (customer side). doc 12 §5 — the proof image is "Admin only", stored on the private disk. */
 class PaymentController extends Controller
 {
     public function show(Request $request, OrderGroup $orderGroup): JsonResponse
@@ -52,8 +53,11 @@ class PaymentController extends Controller
             throw new ApiException('payment_deadline_passed', 'انتهت مهلة الدفع', 422);
         }
 
-        $proof = DB::transaction(function () use ($request, $payment) {
-            $proof = $payment->proofs()->create($request->validated());
+        $data = $request->validated();
+        $data['image'] = FileUploader::storePrivate($request->file('image'), 'payment-proofs');
+
+        $proof = DB::transaction(function () use ($data, $payment) {
+            $proof = $payment->proofs()->create($data);
             $payment->update(['status' => 'under_review']);
 
             return $proof;

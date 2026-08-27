@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Api\Driver;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Driver\StoreDocumentRequest;
 use App\Support\ApiResponse;
+use App\Support\FileUploader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** doc 08 §5 — GET/POST /driver/documents: upload/replace, always re-enters review as pending. */
+/**
+ * doc 08 §5 — GET/POST /driver/documents: upload/replace, always re-enters review as pending.
+ * doc 12 §5 — "Admin only": stored on the private disk, never a public URL.
+ */
 class DocumentController extends Controller
 {
     public function index(Request $request): JsonResponse
@@ -25,7 +29,7 @@ class DocumentController extends Controller
         $document = $driver->documents()->updateOrCreate(
             ['type' => $request->string('type')->value()],
             [
-                'file' => $request->string('file')->value(),
+                'file' => FileUploader::storePrivate($request->file('file'), 'driver-documents'),
                 'expires_at' => $request->date('expires_at'),
                 'status' => 'pending',
                 'note' => null,

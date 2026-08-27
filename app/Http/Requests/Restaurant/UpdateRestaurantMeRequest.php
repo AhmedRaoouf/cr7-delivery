@@ -18,8 +18,8 @@ class UpdateRestaurantMeRequest extends FormRequest
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
-            'logo' => ['nullable', 'string'],
-            'cover' => ['nullable', 'string'],
+            'logo' => ['nullable', 'image', 'max:5120'],
+            'cover' => ['nullable', 'image', 'max:5120'],
             'phone' => ['sometimes', 'required', 'string'],
             'whatsapp' => ['nullable', 'string'],
         ];

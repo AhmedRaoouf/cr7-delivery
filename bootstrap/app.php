@@ -3,6 +3,7 @@
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureClientMatchesUserType;
 use App\Http\Middleware\EnsureUserType;
+use App\Http\Middleware\SetLocaleFromHeader;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -38,6 +39,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // AFTER auth:sanctum resolves the token — never as global/prepended API
         // middleware, which always runs before route-level middleware regardless
         // of prepend/append. It is applied per-route instead, as 'client.type'.
+        $middleware->api(prepend: [
+            SetLocaleFromHeader::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (ApiException $e, Request $request) {

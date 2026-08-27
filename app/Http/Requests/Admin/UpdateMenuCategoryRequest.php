@@ -16,7 +16,7 @@ class UpdateMenuCategoryRequest extends FormRequest
         return [
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
-            'image' => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'max:5120'],
             'sort_order' => ['nullable', 'integer'],
             'is_active' => ['nullable', 'boolean'],
         ];

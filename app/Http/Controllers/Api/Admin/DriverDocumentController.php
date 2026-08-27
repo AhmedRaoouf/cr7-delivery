@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDriverDocumentRequest;
 use App\Models\Driver;
@@ -10,8 +11,11 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/** doc 12 §5 — driver documents are "Admin only": stored on the private disk, never a public URL. */
 class DriverDocumentController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Driver $driver): JsonResponse
     {
         return ApiResponse::success($driver->documents()->latest()->get());
@@ -19,9 +23,18 @@ class DriverDocumentController extends Controller
 
     public function store(StoreDriverDocumentRequest $request, Driver $driver): JsonResponse
     {
-        $document = $driver->documents()->create($request->validated());
+        $data = $this->withPrivateUpload($request->validated(), $request, 'file', 'driver-documents');
+        $document = $driver->documents()->create($data);
 
         return ApiResponse::success($document, 'تم رفع المستند بنجاح', status: 201);
+    }
+
+    /** doc 12 §5 — the only way to see a driver document: never a public URL. */
+    public function file(DriverDocument $driverDocument): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($driverDocument->file), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->response($driverDocument->file);
     }
 
     public function review(Request $request, DriverDocument $driverDocument): JsonResponse

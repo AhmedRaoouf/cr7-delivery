@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
 use App\Models\Product;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/POST/PATCH/DELETE /restaurant/products[/{id}]: self-service, own restaurant only. */
 class ProductController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
@@ -40,7 +43,12 @@ class ProductController extends Controller
     public function store(StoreRestaurantProductRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $product = $restaurant->products()->create($request->validated());
+
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'image', 'products');
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+
+        $product = $restaurant->products()->create($data);
 
         return ApiResponse::success($product, 'تم إنشاء المنتج بنجاح', status: 201);
     }
@@ -48,7 +56,12 @@ class ProductController extends Controller
     public function update(StoreRestaurantProductRequest $request, Product $product): JsonResponse
     {
         $this->ensureOwned($request, $product);
-        $product->update($request->validated());
+
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'image', 'products');
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+
+        $product->update($data);
 
         return ApiResponse::success($product->fresh(), 'تم تحديث المنتج بنجاح');
     }

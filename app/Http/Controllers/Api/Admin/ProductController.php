@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductRequest;
 use App\Http\Requests\Admin\UpdateProductRequest;
@@ -13,6 +14,8 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Request $request, Restaurant $restaurant): JsonResponse
     {
         $products = $restaurant->products()
@@ -36,14 +39,22 @@ class ProductController extends Controller
 
     public function store(StoreProductRequest $request, Restaurant $restaurant): JsonResponse
     {
-        $product = $restaurant->products()->create($request->validated());
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'image', 'products');
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+
+        $product = $restaurant->products()->create($data);
 
         return ApiResponse::success($product, 'تم إنشاء المنتج بنجاح', status: 201);
     }
 
     public function update(UpdateProductRequest $request, Restaurant $restaurant, Product $product): JsonResponse
     {
-        $product->update($request->validated());
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'image', 'products');
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+
+        $product->update($data);
 
         return ApiResponse::success($product, 'تم تحديث المنتج بنجاح');
     }

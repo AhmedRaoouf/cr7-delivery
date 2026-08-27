@@ -81,8 +81,17 @@ enum OrderStatus: string
         return "order_status.{$this->value}";
     }
 
-    /** Static Arabic label (doc 04 §5) — the config/enum listing form, without the dynamic {mm:ss}/{code} suffix. */
+    /**
+     * Static label (doc 04 §5) — the config/enum listing form, without the dynamic
+     * {mm:ss}/{code} suffix. Routed through __() so it respects Accept-Language
+     * (SetLocaleFromHeader) exactly like every message in the response envelope.
+     */
     public function label(): string
+    {
+        return __($this->arabicLabel());
+    }
+
+    private function arabicLabel(): string
     {
         return match ($this) {
             self::Pending, self::RestaurantTimeout => 'بانتظار موافقة المطعم',

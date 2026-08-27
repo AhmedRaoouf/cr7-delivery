@@ -5,15 +5,26 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Models\PaymentProof;
 use App\Support\ApiResponse;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** doc 08 §7 — GET /admin/payments, POST /{id}/approve|reject. */
 class PaymentController extends Controller
 {
+    /** doc 12 §5 — "Payment proof image — Admin only": never a public URL, served through this gate. */
+    public function proofFile(PaymentProof $proof): StreamedResponse
+    {
+        abort_unless(Storage::disk('local')->exists($proof->image), 404);
+
+        return Storage::disk('local')->response($proof->image);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $payments = Payment::query()

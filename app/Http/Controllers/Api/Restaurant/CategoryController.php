@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreCategoryRequest;
 use App\Models\MenuCategory;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/POST/PATCH/DELETE /restaurant/categories[/{id}]: self-service, scoped to the caller's own restaurant. */
 class CategoryController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
@@ -22,7 +25,8 @@ class CategoryController extends Controller
     public function store(StoreCategoryRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $category = $restaurant->menuCategories()->create($request->validated());
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $category = $restaurant->menuCategories()->create($data);
 
         return ApiResponse::success($category, 'تم إنشاء القسم بنجاح', status: 201);
     }
@@ -30,7 +34,8 @@ class CategoryController extends Controller
     public function update(StoreCategoryRequest $request, MenuCategory $category): JsonResponse
     {
         $this->ensureOwned($request, $category);
-        $category->update($request->validated());
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $category->update($data);
 
         return ApiResponse::success($category->fresh(), 'تم تحديث القسم بنجاح');
     }

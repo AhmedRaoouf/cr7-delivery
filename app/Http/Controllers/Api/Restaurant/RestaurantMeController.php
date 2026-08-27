@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\UpdateRestaurantMeRequest;
 use App\Support\ApiResponse;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/PATCH /restaurant/me, POST /restaurant/open-status. */
 class RestaurantMeController extends Controller
 {
+    use HandlesUploads;
+
     public function show(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->with(['city', 'serviceZone', 'cuisines'])->firstOrFail();
@@ -25,7 +28,12 @@ class RestaurantMeController extends Controller
     public function update(UpdateRestaurantMeRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $restaurant->update($request->validated());
+
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants');
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants');
+
+        $restaurant->update($data);
 
         return ApiResponse::success($restaurant->fresh(), 'تم تحديث بيانات المطعم بنجاح');
     }

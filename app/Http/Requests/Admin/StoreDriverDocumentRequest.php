@@ -15,7 +15,7 @@ class StoreDriverDocumentRequest extends FormRequest
     {
         return [
             'type' => ['required', 'in:national_id,license,vehicle_license,criminal_record,other'],
-            'file' => ['required', 'string'],
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
             'expires_at' => ['nullable', 'date'],
         ];
     }

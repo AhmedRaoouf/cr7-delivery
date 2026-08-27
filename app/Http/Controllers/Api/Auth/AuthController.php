@@ -6,6 +6,7 @@ use App\Actions\Auth\ChangePasswordAction;
 use App\Actions\Auth\DeleteAccountAction;
 use App\Actions\Auth\ForgotPasswordAction;
 use App\Actions\Auth\ResetPasswordAction;
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Requests\Auth\DeleteAccountRequest;
@@ -20,6 +21,8 @@ use Illuminate\Http\Request;
 /** doc 08 §3 — shared auth concerns across every client: session, profile, password lifecycle. */
 class AuthController extends Controller
 {
+    use HandlesUploads;
+
     public function me(Request $request): JsonResponse
     {
         return ApiResponse::success(new UserResource($request->user()));
@@ -27,7 +30,8 @@ class AuthController extends Controller
 
     public function updateMe(UpdateMeRequest $request): JsonResponse
     {
-        $request->user()->update($request->validated());
+        $data = $this->withPublicUpload($request->validated(), $request, 'avatar', 'avatars');
+        $request->user()->update($data);
 
         return ApiResponse::success(new UserResource($request->user()->fresh()), 'تم تحديث البيانات بنجاح');
     }

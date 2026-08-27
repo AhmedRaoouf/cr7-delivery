@@ -384,6 +384,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/drivers/{driver}/documents', [DriverDocumentController::class, 'index']);
             Route::post('/drivers/{driver}/documents', [DriverDocumentController::class, 'store']);
             Route::post('/driver-documents/{driverDocument}/review', [DriverDocumentController::class, 'review']);
+            Route::get('/driver-documents/{driverDocument}/file', [DriverDocumentController::class, 'file']);
         });
 
         // Marketing — cuisines
@@ -416,6 +417,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('/payments', [AdminPaymentController::class, 'index']);
             Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
+            Route::get('/payment-proofs/{proof}/file', [AdminPaymentController::class, 'proofFile']);
         });
         Route::middleware('permission:payments.verify')->group(function () {
             Route::post('/payments/{payment}/approve', [AdminPaymentController::class, 'approve']);

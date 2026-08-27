@@ -8,10 +8,15 @@ use App\Http\Controllers\Api\Admin\DriverDocumentController;
 use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\BannerController as AdminBannerController;
 use App\Http\Controllers\Api\Admin\ComplaintController as AdminComplaintController;
+use App\Http\Controllers\Api\Admin\CustomerController as AdminCustomerController;
+use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Api\Admin\DeliveryIssueController as AdminDeliveryIssueController;
+use App\Http\Controllers\Api\Admin\DirectOrderController as AdminDirectOrderController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\Admin\OrderGroupController as AdminOrderGroupController;
 use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
@@ -20,12 +25,14 @@ use App\Http\Controllers\Api\Admin\ProductOptionController;
 use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
 use App\Http\Controllers\Api\Admin\PromoCodeController;
 use App\Http\Controllers\Api\Admin\RefundController as AdminRefundController;
+use App\Http\Controllers\Api\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
 use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\Admin\SettlementController as AdminSettlementController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\Restaurant\DirectOrderController as RestaurantDirectOrderController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
@@ -240,6 +247,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/complaints/unread-count', [RestaurantComplaintController::class, 'unreadCount']);
         Route::get('/complaints/{complaint}', [RestaurantComplaintController::class, 'show']);
         Route::post('/complaints/{complaint}/messages', [RestaurantComplaintController::class, 'addMessage']);
+
+        // §6.2 Direct orders — the restaurant buys a delivery, not a marketplace order.
+        Route::post('/direct-orders/quote', [RestaurantDirectOrderController::class, 'quote']);
+        Route::post('/direct-orders', [RestaurantDirectOrderController::class, 'store']);
+        Route::get('/direct-orders', [RestaurantDirectOrderController::class, 'index']);
+        Route::get('/direct-orders/{order}', [RestaurantDirectOrderController::class, 'show']);
+        Route::post('/direct-orders/{order}/ready', [RestaurantDirectOrderController::class, 'ready']);
+        Route::post('/direct-orders/{order}/cancel', [RestaurantDirectOrderController::class, 'cancel']);
     });
 
     /*
@@ -489,5 +504,47 @@ Route::prefix('v1')->group(function () {
         Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware('permission:settings.manage');
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('permission:audit.view');
+
+        // Dashboard & alerts
+        Route::get('/dashboard/summary', [AdminDashboardController::class, 'summary']);
+        Route::get('/dashboard/charts', [AdminDashboardController::class, 'charts']);
+        Route::get('/dashboard/alerts', [AdminDashboardController::class, 'alerts']);
+        Route::get('/dashboard/live-orders', [AdminDashboardController::class, 'liveOrders']);
+        Route::get('/dashboard/live-drivers', [AdminDashboardController::class, 'liveDrivers'])->middleware('permission:drivers.view_location');
+
+        // Customers
+        Route::middleware('permission:customers.view')->group(function () {
+            Route::get('/customers', [AdminCustomerController::class, 'index']);
+            Route::get('/customers/{customer}', [AdminCustomerController::class, 'show']);
+            Route::get('/customers/{customer}/orders', [AdminCustomerController::class, 'orders']);
+            Route::get('/customers/{customer}/addresses', [AdminCustomerController::class, 'addresses']);
+            Route::get('/customers/{customer}/complaints', [AdminCustomerController::class, 'complaints']);
+            Route::get('/customers/{customer}/stats', [AdminCustomerController::class, 'stats']);
+        });
+        Route::post('/customers/{customer}/status', [AdminCustomerController::class, 'status'])->middleware('permission:customers.toggle_status');
+
+        // Direct orders (cross-restaurant) + order intervention leftovers
+        Route::get('/direct-orders', [AdminDirectOrderController::class, 'index'])->middleware('permission:direct_orders.view_all');
+        Route::get('/restaurants/{restaurant}/direct-order-ratio', [AdminDirectOrderController::class, 'ratio'])->middleware('permission:direct_orders.view');
+        Route::post('/orders/{order}/issues', [AdminOrderController::class, 'raiseIssue'])->middleware('permission:orders.raise_issue');
+        Route::post('/order-groups/{orderGroup}/recalculate', [AdminOrderGroupController::class, 'recalculate'])->middleware('permission:orders.recalculate_group');
+
+        Route::middleware('permission:orders.resolve_issue')->group(function () {
+            Route::get('/delivery-issues', [AdminDeliveryIssueController::class, 'index']);
+            Route::post('/delivery-issues/{deliveryIssue}/resolve', [AdminDeliveryIssueController::class, 'resolve']);
+        });
+
+        // Reports
+        Route::get('/reports/sales', [AdminReportController::class, 'sales'])->middleware('permission:reports.sales');
+        Route::get('/reports/restaurants', [AdminReportController::class, 'restaurants'])->middleware('permission:reports.restaurants');
+        Route::get('/reports/products', [AdminReportController::class, 'products'])->middleware('permission:reports.products');
+        Route::get('/reports/drivers', [AdminReportController::class, 'drivers'])->middleware('permission:reports.drivers');
+        Route::get('/reports/zones', [AdminReportController::class, 'zones'])->middleware('permission:reports.zones');
+        Route::get('/reports/promo-codes', [AdminReportController::class, 'promoCodes'])->middleware('permission:promos.view');
+        Route::get('/reports/refunds', [AdminReportController::class, 'refunds'])->middleware('permission:refunds.view');
+        Route::get('/reports/complaints', [AdminReportController::class, 'complaints'])->middleware('permission:complaints.view');
+        Route::get('/reports/customers', [AdminReportController::class, 'customers'])->middleware('permission:reports.customers');
+        Route::get('/reports/customers/cohorts', [AdminReportController::class, 'customerCohorts'])->middleware('permission:reports.customers');
+        Route::get('/ops/health', [AdminReportController::class, 'opsHealth'])->middleware('permission:ops.health');
     });
 });

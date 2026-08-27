@@ -210,6 +210,37 @@ class OrderController extends Controller
         return ApiResponse::success($order->fresh(), 'تم تمديد وقت التحضير');
     }
 
+    public function raiseIssue(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureInScope($request, $order);
+
+        $validated = $request->validate([
+            'category' => ['required', 'in:customer_unreachable,wrong_address,accident,food_problem,driver_unresponsive,payment,handover,other'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $issue = $order->deliveryIssues()->create([
+            'reported_by' => 'system',
+            'reporter_id' => $request->user()->id,
+            'category' => $validated['category'],
+            'description' => $validated['description'] ?? null,
+            'status' => 'open',
+        ]);
+
+        $order->update(['status' => OrderStatus::DeliveryIssue]);
+        $order->statusHistory()->create([
+            'from_status' => $order->getOriginal('status'),
+            'to_status' => OrderStatus::DeliveryIssue->value,
+            'actor_type' => 'admin',
+            'actor_id' => $request->user()->id,
+            'meta' => ['message' => 'تدخّلت الإدارة'],
+        ]);
+
+        AuditLogger::record($request->user(), 'orders.raise_issue', $order, $validated);
+
+        return ApiResponse::success($issue, 'تم فتح بلاغ مشكلة', status: 201);
+    }
+
     public function notes(Request $request, Order $order): JsonResponse
     {
         $this->ensureInScope($request, $order);

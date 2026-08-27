@@ -72,6 +72,36 @@ function tokenVarFor(string $folder): ?string
     };
 }
 
+/**
+ * Routes that accept an uploaded file (doc 12 §5: public images vs "Admin only" private
+ * documents) - these get a Postman `formdata` body instead of raw JSON, with the listed
+ * fields marked type=file. Matches the FormRequest rules exactly (image/file validation).
+ */
+function fileFieldsFor(string $method, string $uri): ?array
+{
+    $map = [
+        'POST api/v1/admin/categories' => ['image'],
+        'PATCH api/v1/admin/categories/{category}' => ['image'],
+        'POST api/v1/admin/restaurants/{restaurant}/categories' => ['image'],
+        'PATCH api/v1/admin/restaurants/{restaurant}/categories/{menuCategory}' => ['image'],
+        'POST api/v1/admin/restaurants/{restaurant}/products' => ['image', 'gallery'],
+        'PATCH api/v1/admin/restaurants/{restaurant}/products/{product}' => ['image', 'gallery'],
+        'POST api/v1/restaurant/categories' => ['image'],
+        'PATCH api/v1/restaurant/categories/{category}' => ['image'],
+        'POST api/v1/restaurant/products' => ['image', 'gallery'],
+        'PATCH api/v1/restaurant/products/{product}' => ['image', 'gallery'],
+        'PATCH api/v1/restaurant/me' => ['logo', 'cover'],
+        'PATCH api/v1/auth/me' => ['avatar'],
+        'POST api/v1/admin/banners' => ['image_ar', 'image_en'],
+        'PATCH api/v1/admin/banners/{banner}' => ['image_ar', 'image_en'],
+        'POST api/v1/admin/drivers/{driver}/documents' => ['file'],
+        'POST api/v1/driver/documents' => ['file'],
+        'POST api/v1/orders/{orderGroup}/payment/proof' => ['image'],
+    ];
+
+    return $map["{$method} {$uri}"] ?? null;
+}
+
 /** Best-effort example bodies for the routes worth demonstrating; everything else gets an empty {} template. */
 function exampleBody(string $method, string $uri): ?array
 {
@@ -205,7 +235,10 @@ foreach ($routes as $route) {
             ['key' => 'X-App', 'value' => xAppFor($folder)],
         ];
 
-        if (in_array($method, ['POST', 'PATCH', 'PUT', 'DELETE'], true)) {
+        $fileFields = fileFieldsFor($method, $uri);
+
+        // Postman sets its own multipart boundary Content-Type; setting one manually breaks the upload.
+        if (! $fileFields && in_array($method, ['POST', 'PATCH', 'PUT', 'DELETE'], true)) {
             $headers[] = ['key' => 'Content-Type', 'value' => 'application/json'];
         }
         if (str_contains($uri, 'orders') && $method === 'POST' && ! str_contains($uri, '{')) {
@@ -226,7 +259,26 @@ foreach ($routes as $route) {
             'url' => toPostmanUrl($uri),
         ];
 
-        if (in_array($method, ['POST', 'PATCH', 'PUT'], true)) {
+        if ($fileFields && in_array($method, ['POST', 'PATCH', 'PUT'], true)) {
+            $formdata = [];
+            foreach ($fileFields as $fileField) {
+                $formdata[] = ['key' => $fileField, 'type' => 'file', 'src' => []];
+            }
+            $nonFileExample = array_diff_key((array) (exampleBody($method, $uri) ?? []), array_flip($fileFields));
+            foreach ($nonFileExample as $key => $value) {
+                $formdata[] = ['key' => $key, 'value' => is_scalar($value) ? (string) $value : json_encode($value), 'type' => 'text'];
+            }
+
+            // PHP never populates $_FILES for a real multipart PATCH/PUT request. Laravel's fix is
+            // method-spoofing: send POST with a `_method` field and it re-routes internally as
+            // PATCH/PUT while $_FILES parses normally either way.
+            if (in_array($method, ['PATCH', 'PUT'], true)) {
+                $formdata[] = ['key' => '_method', 'value' => $method, 'type' => 'text'];
+                $request['method'] = 'POST';
+            }
+
+            $request['body'] = ['mode' => 'formdata', 'formdata' => $formdata];
+        } elseif (in_array($method, ['POST', 'PATCH', 'PUT'], true)) {
             $body = exampleBody($method, $uri) ?? new stdClass();
             $request['body'] = [
                 'mode' => 'raw',

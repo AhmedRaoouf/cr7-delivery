@@ -857,7 +857,7 @@
                 {
                     "name": "PATCH /api/v1/auth/me",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -870,10 +870,6 @@
                             {
                                 "key": "X-App",
                                 "value": "app"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             }
                         ],
                         "url": {
@@ -888,13 +884,34 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"name\": \"New Name\",\n    \"locale\": \"ar\",\n    \"theme\": \"dark\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "avatar",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "name",
+                                    "value": "New Name",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "locale",
+                                    "value": "ar",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "theme",
+                                    "value": "dark",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -2637,10 +2654,6 @@
                                 "value": "app"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{customer_token}}"
                             }
@@ -2664,13 +2677,24 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"image\": \"proof.jpg\",\n    \"reference\": \"TXN123\",\n    \"amount_claimed\": 100\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "reference",
+                                    "value": "TXN123",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "amount_claimed",
+                                    "value": "100",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -3241,10 +3265,6 @@
                                 "value": "app"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{driver_token}}"
                             }
@@ -3261,13 +3281,19 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"type\": \"license\",\n    \"file\": \"license.jpg\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "type",
+                                    "value": "license",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -4262,10 +4288,6 @@
                                 "value": "restaurant"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{restaurant_token}}"
                             }
@@ -4282,20 +4304,31 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"name_ar\": \"قسم\",\n    \"name_en\": \"Category\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "name_ar",
+                                    "value": "قسم",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_en",
+                                    "value": "Category",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
                 {
                     "name": "PATCH /api/v1/restaurant/categories/{category}",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -4308,10 +4341,6 @@
                             {
                                 "key": "X-App",
                                 "value": "restaurant"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -4336,13 +4365,19 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -4939,7 +4974,7 @@
                 {
                     "name": "PATCH /api/v1/restaurant/me",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -4952,10 +4987,6 @@
                             {
                                 "key": "X-App",
                                 "value": "restaurant"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -4974,13 +5005,34 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"name_ar\": \"اسم عربي\",\n    \"name_en\": \"English Name\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "logo",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "cover",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "name_ar",
+                                    "value": "اسم عربي",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_en",
+                                    "value": "English Name",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -5895,10 +5947,6 @@
                                 "value": "restaurant"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{restaurant_token}}"
                             }
@@ -5915,13 +5963,39 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"menu_category_id\": 1,\n    \"name_ar\": \"منتج\",\n    \"name_en\": \"Product\",\n    \"price\": 100\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "gallery",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "menu_category_id",
+                                    "value": "1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_ar",
+                                    "value": "منتج",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_en",
+                                    "value": "Product",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "price",
+                                    "value": "100",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -6018,7 +6092,7 @@
                 {
                     "name": "PATCH /api/v1/restaurant/products/{product}",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -6031,10 +6105,6 @@
                             {
                                 "key": "X-App",
                                 "value": "restaurant"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -6059,13 +6129,24 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "gallery",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -6689,10 +6770,6 @@
                                 "value": "admin"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{admin_token}}"
                             }
@@ -6709,13 +6786,29 @@
                             "variable": []
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"title_ar\": \"بانر\",\n    \"title_en\": \"Banner\",\n    \"image_ar\": \"a.jpg\",\n    \"image_en\": \"a.jpg\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image_ar",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "image_en",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "title_ar",
+                                    "value": "بانر",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "title_en",
+                                    "value": "Banner",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -6763,7 +6856,7 @@
                 {
                     "name": "PATCH /api/v1/admin/banners/{banner}",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -6776,10 +6869,6 @@
                             {
                                 "key": "X-App",
                                 "value": "admin"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -6804,13 +6893,24 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image_ar",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "image_en",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -8255,6 +8355,48 @@
                     }
                 },
                 {
+                    "name": "GET /api/v1/admin/driver-documents/{driverDocument}/file",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept-Language",
+                                "value": "ar"
+                            },
+                            {
+                                "key": "X-App",
+                                "value": "admin"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/driver-documents/:driverDocument/file",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "driver-documents",
+                                ":driverDocument",
+                                "file"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "driverDocument",
+                                    "value": ""
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
                     "name": "POST /api/v1/admin/driver-documents/{driverDocument}/review",
                     "request": {
                         "method": "POST",
@@ -8592,10 +8734,6 @@
                                 "value": "admin"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{admin_token}}"
                             }
@@ -8619,13 +8757,14 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -10306,6 +10445,48 @@
                             "variable": [
                                 {
                                     "key": "slug",
+                                    "value": ""
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "GET /api/v1/admin/payment-proofs/{proof}/file",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Accept-Language",
+                                "value": "ar"
+                            },
+                            {
+                                "key": "X-App",
+                                "value": "admin"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/payment-proofs/:proof/file",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "payment-proofs",
+                                ":proof",
+                                "file"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "proof",
                                     "value": ""
                                 }
                             ]
@@ -12060,10 +12241,6 @@
                                 "value": "admin"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{admin_token}}"
                             }
@@ -12087,20 +12264,31 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"name_ar\": \"قسم\",\n    \"name_en\": \"Category\"\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "name_ar",
+                                    "value": "قسم",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_en",
+                                    "value": "Category",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
                 {
                     "name": "PATCH /api/v1/admin/restaurants/{restaurant}/categories/{menuCategory}",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -12113,10 +12301,6 @@
                             {
                                 "key": "X-App",
                                 "value": "admin"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -12147,13 +12331,19 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -12420,10 +12610,6 @@
                                 "value": "admin"
                             },
                             {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
                                 "key": "Authorization",
                                 "value": "Bearer {{admin_token}}"
                             }
@@ -12447,13 +12633,39 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{\n    \"menu_category_id\": 1,\n    \"name_ar\": \"منتج\",\n    \"name_en\": \"Product\",\n    \"price\": 100\n}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "gallery",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "menu_category_id",
+                                    "value": "1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_ar",
+                                    "value": "منتج",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "name_en",
+                                    "value": "Product",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "price",
+                                    "value": "100",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },
@@ -12507,7 +12719,7 @@
                 {
                     "name": "PATCH /api/v1/admin/restaurants/{restaurant}/products/{product}",
                     "request": {
-                        "method": "PATCH",
+                        "method": "POST",
                         "header": [
                             {
                                 "key": "Accept",
@@ -12520,10 +12732,6 @@
                             {
                                 "key": "X-App",
                                 "value": "admin"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
                             },
                             {
                                 "key": "Authorization",
@@ -12554,13 +12762,24 @@
                             ]
                         },
                         "body": {
-                            "mode": "raw",
-                            "raw": "{}",
-                            "options": {
-                                "raw": {
-                                    "language": "json"
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "image",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "gallery",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "_method",
+                                    "value": "PATCH",
+                                    "type": "text"
                                 }
-                            }
+                            ]
                         }
                     }
                 },

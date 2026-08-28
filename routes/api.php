@@ -88,6 +88,13 @@ Route::prefix('v1')->group(function () {
     Route::get('/cities', [SharedCityController::class, 'index']);
     Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
     Route::post('/geo/resolve', [GeoController::class, 'resolve']);
+    // Geocoding proxies. Throttled because every request behind them is a
+    // billed one at the provider, and an unthrottled public route is a free
+    // way for anyone to spend the account's monthly quota.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('/geo/reverse', [GeoController::class, 'reverse']);
+        Route::get('/geo/search', [GeoController::class, 'search']);
+    });
     Route::get('/cuisines', [SharedCuisineController::class, 'index']);
     Route::get('/banners', [BannerController::class, 'index']);
     Route::get('/pages/{slug}', [PageController::class, 'show']);

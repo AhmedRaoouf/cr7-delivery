@@ -11,6 +11,7 @@ use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\DispatchService;
+use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -125,7 +126,7 @@ class CreateDirectOrderAction
                 'restaurant_order_ref' => $data['restaurant_order_ref'],
                 'business_date' => now()->toDateString(),
                 'prep_minutes' => $data['prep_minutes'] ?? null,
-                'pickup_otp' => (string) random_int(1000, 9999),
+                'pickup_otp' => Otp::orderCode(),
                 'delivery_otp' => null,
                 'delivery_instructions' => $data['delivery_instructions'] ?? null,
                 'accepted_at' => $now,

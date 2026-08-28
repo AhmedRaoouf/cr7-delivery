@@ -10,6 +10,7 @@ use App\Models\OrderGroup;
 use App\Models\User;
 use App\Models\UserAddress;
 use App\Support\CheckoutPricer;
+use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -127,7 +128,7 @@ class CreateOrderAction
                     'commission_amount' => round($groupQuote['subtotal'] * ((float) $restaurant->commission_rate / 100), 2),
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
-                    'pickup_otp' => (string) random_int(1000, 9999),
+                    'pickup_otp' => Otp::orderCode(),
                     'business_date' => now()->toDateString(),
                     'customer_note' => $data['customer_note'] ?? null,
                     'delivery_instructions' => $data['delivery_instructions'] ?? null,

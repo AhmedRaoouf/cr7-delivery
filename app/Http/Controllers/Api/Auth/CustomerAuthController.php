@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
+use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 
 /** FR-AUTH-01/02/03 — the customer shell never has a password. */
@@ -21,7 +22,15 @@ class CustomerAuthController extends Controller
 
         $action->execute($request->string('phone'), $purpose);
 
-        return ApiResponse::success(message: 'تم إرسال رمز التحقق');
+        // Non-null only while the code is a fixed staging one, in which case it
+        // is public already. `ApiResponse` drops the key when it is null, so a
+        // real deployment answers exactly what it answered before.
+        $staticOtp = Otp::echoable();
+
+        return ApiResponse::success(
+            $staticOtp === null ? null : ['static_otp' => $staticOtp],
+            'تم إرسال رمز التحقق',
+        );
     }
 
     public function verifyOtp(VerifyOtpRequest $request, VerifyOtpAction $action): JsonResponse

@@ -14,8 +14,11 @@ Two things came in together:
   them are closed. This half is mostly one-line resource additions and four small routes.
 - **Part C** — what a fresh clone needed before it could serve a single screen, and what it needs
   now.
+- **Part D** — maps and verification codes: the two things that stood between this API and a
+  demoable app. Both are now **server settings, not build constants**.
 
-`php artisan test` → **29 tests, 115 assertions, green.** Verified on PHP 8.5 + MySQL 8.
+`php artisan test` → **47 tests, 174 assertions, green.** Verified on PHP 8.5 + MySQL 8.
+Deployment steps are in **`DEPLOY.md`**, which is the file to follow rather than the summary below.
 
 ---
 
@@ -218,7 +221,111 @@ Found wiring `cr7_delivery` against the API. Ordered by how much they cost the p
 
 ---
 
+# Part D — maps and verification codes
+
+Full account with the reasoning: spec repo `docs/29-maps-and-otp-2026-08-28.md`. Decisions **D-66**
+and **D-67**.
+
+## D.1 The map is a server setting
+
+`GET /config` now carries a `maps` block: the tile URL template with the **public** Mapbox token in
+it, `tile_size`, `zoom_offset`, the attribution the provider's terms require, whether geocoding will
+answer, and `invert_dark`.
+
+The device fetches tiles directly — proxying every pan through PHP is an outage, not a design — so
+the public token has to reach the app. Serving it from `/config` instead of compiling it into the
+binary is what makes rotating it a `.env` edit rather than a store release, and what lets the app
+ship today drawing OpenStreetMap and start drawing Mapbox the day a token exists.
+
+```dotenv
+MAPS_PROVIDER=mapbox
+MAPBOX_TOKEN=pk.…            # PUBLIC token only. Never an sk. token.
+MAPBOX_STYLE_LIGHT=mapbox/streets-v12
+MAPBOX_STYLE_DARK=mapbox/dark-v11
+```
+
+Leave `MAPBOX_TOKEN` empty and the same block describes OpenStreetMap. Every screen keeps working;
+street labels go missing. There is no failure path where the app draws a grey rectangle.
+
+Three fields are worth knowing about:
+
+* **`tile_size: 512` + `zoom_offset: -1`** — one 512 px tile covers four 256 px ones and bills as
+  **one** request, so the ‪200 000‬/month free tier goes four times as far. The offset is what keeps
+  the zoom scale lined up at that size; a client that guesses draws the town one level out.
+* **`invert_dark`** — OSM ships one light tile set, which the app inverts on the luminance. Mapbox
+  ships a real `dark-v11`. Inverting a dark style returns it to **white**, so the server states
+  which it just handed over.
+* **`attribution`** — required by both providers' terms, and it follows the provider so switching
+  back to OSM does not leave the map crediting Mapbox.
+
+## D.2 Geocoding is proxied and cached hard
+
+| Route | Answers |
+|---|---|
+| `GET /geo/reverse?lat=&lng=` | `{address, place, neighborhood, city}` |
+| `GET /geo/search?q=&lat=&lng=` | candidate places, `proximity`-biased to جمصة, `country=eg` |
+
+Both public, both `throttle:60,1` — an unthrottled public route in front of a billed API is a free
+way for anyone to spend the month's quota.
+
+**The cache is the load-bearing part.** The address picker fires a camera event every frame of a
+pan. Answers are cached ‪30‬ days on coordinates rounded to **4 decimals (~‪11‬ m)**, and the client
+waits ‪700‬ ms of stillness before asking. A pin dragged across a block is one request, not one per
+frame.
+
+Nothing in this path throws. No token → `NullGeocoder` answers `null`. A 502 from Mapbox → `null`.
+The coverage verdict on the picker comes from **our own** zone polygons, so a missing street name
+costs the customer nothing.
+
+## D.3 One switch mints every code — and it is dangerous
+
+`random_int` was written out at **seven** call sites: the login code, the pickup code, the delivery
+code, both admin captain-swap verbs, the direct-order pickup code and the admin force-pickup. All
+seven now go through `App\Support\Otp`. Seven copies of a rule is seven chances to leave one live.
+
+```dotenv
+OTP_STATIC_MODE=true
+OTP_STATIC_CODE=123456        # 6 digits, FR-AUTH-02
+OTP_STATIC_ORDER_CODE=1234    # 4 digits, doc 04
+OTP_ECHO_IN_RESPONSE=true
+```
+
+> ### ⚠️ While `OTP_STATIC_MODE=true`, every phone number signs in with the same code.
+>
+> Correct on a private staging server with no SMS gateway — the alternative is an app nobody can log
+> into. **A full account takeover on a public one.**
+>
+> Turning it off: write an `OtpChannel` for the SMS provider, bind it in `AppServiceProvider` in
+> place of `LogOtpChannel`, set `OTP_STATIC_MODE=false`, `config:cache`. **No client release** — the
+> app hides the «وضع التجربة» note and stops prefilling the moment the server stops publishing a
+> code.
+>
+> While it is on, `AppServiceProvider::boot()` logs a warning on every production boot. That line is
+> the reminder; do not filter it out.
+
+`POST /auth/otp/send` returns `data.static_otp`, and `/config` carries the same under
+`auth.static_otp`. `Otp::echoable()` checks **staticness first and the flag second** — a *random*
+code returned to whoever asked for it is not a second factor, so `OTP_ECHO_IN_RESPONSE=true` alone
+can never produce one. `Otp::pad()` forces the configured value to the right length, because a
+misconfigured `OTP_STATIC_CODE=12` would otherwise sail past `digits:6` on the way back in and lock
+everyone out of an account nobody could report as broken.
+
+## D.4 Files
+
+**New:** `config/maps.php` · `config/otp.php` · `app/Support/Otp.php` · `app/Support/MapStyles.php` ·
+`app/Services/Maps/{Geocoder,MapboxGeocoder,NullGeocoder}.php` · `tests/Feature/MapsAndOtpTest.php`
+(‪17‬ tests) · `DEPLOY.md`.
+
+**Changed:** `ConfigController` (the `maps` and `auth` blocks) · `GeoController` (`reverse`,
+`search`) · `CustomerAuthController` (the echo) · `AppServiceProvider` (the geocoder binding, the
+production warning) · `SendOtpAction` and the six order-code call sites · `routes/api.php` ·
+`.env.example`.
+
+---
+
 ## Deploying
+
+**Follow `DEPLOY.md`.** The short version:
 
 ```bash
 git pull
@@ -238,12 +345,17 @@ ships with `must_change_password = true`, but the default is in this file and in
 ## Still open, and named
 
 1. **No SMS and no push provider.** `LogOtpChannel` writes OTPs to `storage/logs/laravel.log`;
-   `/devices` stores tokens nothing sends to. Wiring FCM and an SMS gateway is its own job, and it
-   is the last thing between this API and a real launch.
+   `/devices` stores tokens nothing sends to. Static OTP mode (Part D.3) makes the app usable in the
+   meantime — it is **not** a substitute for the gateway, and it must be switched off the day one
+   exists. Wiring FCM and an SMS gateway is the last thing between this API and a real launch.
 2. **Realtime.** Reverb is in the stack; nothing broadcasts. The client polls.
 3. **`name_en` on most dishes is the Arabic string.** Doc 17 publishes Latin names for the brands
    and for ~‪115‬ descriptions, not for ~‪450‬ individual dishes. An invented transliteration is
    worse than the name the restaurant actually uses.
 4. **صواني الدمياطي has no logo and its name is a working name** (doc 17 Q-01).
-5. **No per-sub-order cancel.** `POST /orders/{group}/cancel` cancels what it can across the whole
+5. **No turn-by-turn inside the app.** The captain hands the destination to Google Maps or Apple
+   Maps, and the customer's tracking screen draws a straight line from the captain to the door
+   rather than a routed path — a fake road is a promise about a street the captain may not be on.
+   Mapbox Directions is one endpoint away if the operator wants the real line.
+6. **No per-sub-order cancel.** `POST /orders/{group}/cancel` cancels what it can across the whole
    group; the client refuses a partial selection rather than sending one that would be ignored.

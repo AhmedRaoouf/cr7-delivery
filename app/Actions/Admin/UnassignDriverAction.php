@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
+use App\Support\Otp;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -47,7 +48,7 @@ class UnassignDriverAction
             $order->update([
                 'driver_id' => null,
                 'status' => $nextStatus,
-                'pickup_otp' => (string) random_int(1000, 9999),
+                'pickup_otp' => Otp::orderCode(),
                 'pickup_otp_attempts' => 0,
             ]);
 

@@ -16,6 +16,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
+use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -145,7 +146,7 @@ class OrderController extends Controller
         }
 
         $from = $order->status;
-        $order->update(['status' => OrderStatus::PickedUp, 'picked_up_at' => now(), 'delivery_otp' => (string) random_int(1000, 9999)]);
+        $order->update(['status' => OrderStatus::PickedUp, 'picked_up_at' => now(), 'delivery_otp' => Otp::orderCode()]);
 
         $order->statusHistory()->create([
             'from_status' => $from->value,

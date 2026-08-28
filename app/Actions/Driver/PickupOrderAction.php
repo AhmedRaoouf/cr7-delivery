@@ -7,6 +7,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Support\Otp;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +34,7 @@ class PickupOrderAction
 
         return DB::transaction(function () use ($driver, $order) {
             $from = $order->status;
-            $deliveryOtp = $order->origin->value === 'restaurant_direct' ? null : (string) random_int(1000, 9999);
+            $deliveryOtp = $order->origin->value === 'restaurant_direct' ? null : Otp::orderCode();
 
             $order->update([
                 'status' => OrderStatus::PickedUp,

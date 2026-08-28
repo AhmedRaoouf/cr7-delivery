@@ -56,7 +56,13 @@ class RefundController extends Controller
 
         AuditLogger::record($request->user(), 'refunds.create', $refund, $validated);
 
-        return ApiResponse::success($refund, 'تم إنشاء طلب الاسترداد', status: 201);
+        return ApiResponse::success($refund, 'تم إنشاء طلب الاسترداد', meta: [
+            // D-65 — what the policy would have refunded, so a figure that departs
+            // from it is a decision somebody made rather than an accident.
+            'policy_full_amount' => \App\Support\RefundPolicy::fullRefundAmount($order, $validated['reason_code'] ?? null),
+            'platform_fee_refundable' => \App\Support\RefundPolicy::feeIsRefundable($order, $validated['reason_code'] ?? null),
+            'platform_fee_share' => (float) $order->platform_fee_share,
+        ], status: 201);
     }
 
     public function process(Request $request, Refund $refund): JsonResponse

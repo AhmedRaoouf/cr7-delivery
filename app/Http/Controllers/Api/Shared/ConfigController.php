@@ -42,6 +42,13 @@ class ConfigController extends Controller
                 'symbol_en' => 'EGP',
                 'decimals' => 2,
             ],
+            // D-63 — the app shows «رسوم الخدمة» on the summary before it has a
+            // quote. The number charged is still the quote's, never this one.
+            'platform' => [
+                'order_fee' => (float) $settings->get('platform.order_fee', 0),
+                'order_fee_label_ar' => 'رسوم الخدمة',
+                'order_fee_label_en' => 'Service fee',
+            ],
             'cart' => [
                 'max_restaurants' => $settings->get('cart.max_restaurants', 3),
                 'max_qty_per_line' => $settings->get('cart.max_qty_per_line', 10),

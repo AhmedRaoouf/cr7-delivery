@@ -22,7 +22,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'phone', 'email', 'password', 'type', 'avatar', 'gender',
         'birth_date', 'locale', 'theme', 'is_active', 'must_change_password',
-        'default_address_id',
+        'default_address_id', 'notify_orders', 'notify_captain', 'notify_promos',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -36,6 +36,9 @@ class User extends Authenticatable
             'birth_date' => 'date',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'notify_orders' => 'boolean',
+            'notify_captain' => 'boolean',
+            'notify_promos' => 'boolean',
             'phone_verified_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',

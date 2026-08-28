@@ -36,6 +36,47 @@ class AuthController extends Controller
         return ApiResponse::success(new UserResource($request->user()->fresh()), 'تم تحديث البيانات بنجاح');
     }
 
+    /**
+     * CUS-44 — the three notification toggles, kept on the account rather than on the
+     * device so a reinstall cannot silently re-enable a channel the customer turned
+     * off, and so the sender can honour them.
+     */
+    public function notificationSettings(Request $request): JsonResponse
+    {
+        return ApiResponse::success($this->notificationPreferences($request->user()));
+    }
+
+    public function updateNotificationSettings(Request $request): JsonResponse
+    {
+        // The wire names are the client's own — `NotificationPrefsModel` uses
+        // them for the on-device copy too, so one vocabulary covers both.
+        $validated = $request->validate([
+            'order_updates' => ['sometimes', 'boolean'],
+            'captain_messages' => ['sometimes', 'boolean'],
+            'promotions' => ['sometimes', 'boolean'],
+        ]);
+
+        $user = $request->user();
+
+        $user->update(array_filter([
+            'notify_orders' => $validated['order_updates'] ?? null,
+            'notify_captain' => $validated['captain_messages'] ?? null,
+            'notify_promos' => $validated['promotions'] ?? null,
+        ], static fn ($value) => $value !== null));
+
+        return ApiResponse::success($this->notificationPreferences($user->fresh()), 'تم حفظ التفضيلات');
+    }
+
+    /** @return array<string, bool> */
+    private function notificationPreferences(\App\Models\User $user): array
+    {
+        return [
+            'order_updates' => (bool) $user->notify_orders,
+            'captain_messages' => (bool) $user->notify_captain,
+            'promotions' => (bool) $user->notify_promos,
+        ];
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();

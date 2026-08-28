@@ -136,6 +136,15 @@ class OrderController extends Controller
         return ApiResponse::success($issue, 'تم الإبلاغ عن المشكلة', status: 201);
     }
 
+    /** DRV-28 — one delivered trip, opened directly rather than found in a list. */
+    public function show(Request $request, Order $order): JsonResponse
+    {
+        $driver = $request->user()->driver()->firstOrFail();
+        abort_unless($order->driver_id === $driver->id, 404);
+
+        return ApiResponse::success($order->load(['restaurant', 'items.options', 'orderGroup.address']));
+    }
+
     public function history(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();

@@ -50,9 +50,12 @@ class AdminCancelOrderAction
                 $payment = $order->orderGroup->payment;
 
                 if ($payment) {
+                    // D-65 — an admin cancellation is a platform failure, so the
+                    // service fee goes back with everything else. RefundPolicy owns
+                    // that judgement so the rule lives in one readable place.
                     $order->refunds()->create([
                         'payment_id' => $payment->id,
-                        'amount' => $order->total,
+                        'amount' => \App\Support\RefundPolicy::fullRefundAmount($order->fresh(), $reasonCode),
                         'type' => 'full',
                         'reason_code' => $reasonCode,
                         'note' => $note,

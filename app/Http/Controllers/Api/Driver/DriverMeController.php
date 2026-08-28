@@ -31,9 +31,19 @@ class DriverMeController extends Controller
             throw new ApiException('driver_already_busy', 'لا يمكن الاتصال بالإنترنت أثناء وجود طلب نشط', 422);
         }
 
-        $driver->update(['is_online' => $validated['is_online']]);
+        // DRV-07's «متصل منذ» reads this. Set only on the transition, so a captain
+        // who re-sends `is_online: true` on a reconnect does not restart their shift.
+        $goingOnline = $validated['is_online'] && ! $driver->is_online;
 
-        return ApiResponse::success(['is_online' => $driver->is_online]);
+        $driver->update([
+            'is_online' => $validated['is_online'],
+            'online_since' => $validated['is_online'] ? ($goingOnline ? now() : $driver->online_since) : null,
+        ]);
+
+        return ApiResponse::success([
+            'is_online' => $driver->is_online,
+            'online_since' => $driver->online_since,
+        ]);
     }
 
     public function location(Request $request): JsonResponse

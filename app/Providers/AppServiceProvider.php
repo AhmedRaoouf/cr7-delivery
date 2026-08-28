@@ -35,5 +35,9 @@ class AppServiceProvider extends ServiceProvider
             'order' => Order::class,
             'user' => User::class,
         ]);
+
+        // D-60 — restaurants.price_band is derived from the menu, so it is recomputed
+        // whenever a row that feeds the median moves.
+        Product::observe(\App\Observers\ProductObserver::class);
     }
 }

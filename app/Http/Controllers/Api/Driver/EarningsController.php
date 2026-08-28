@@ -36,6 +36,35 @@ class EarningsController extends Controller
         ]);
     }
 
+    /** DRV-26 — the earning line for one order, with the trip it was paid for. */
+    public function earning(Request $request, \App\Models\Order $order): JsonResponse
+    {
+        $driver = $request->user()->driver()->firstOrFail();
+        abort_unless($order->driver_id === $driver->id, 404);
+
+        $transactions = $driver->transactions()->where('order_id', $order->id)->latest()->get();
+
+        return ApiResponse::success([
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'restaurant_name' => $order->restaurant_name_snapshot,
+            'distance_km' => (float) $order->distance_km,
+            'delivered_at' => $order->delivered_at,
+            'driver_earning' => (float) $order->driver_earning,
+            'payment_method' => $order->payment_method,
+            // On a cash trip the captain holds the whole customer total, not just the
+            // delivery fee — that is what the settlement nets off.
+            'cash_collected' => $order->payment_method->value === 'cash' ? (float) $order->total : 0.0,
+            'transactions' => $transactions->map(fn ($t) => [
+                'id' => $t->id,
+                'type' => $t->type,
+                'amount' => (float) $t->amount,
+                'note' => $t->note,
+                'created_at' => $t->created_at,
+            ]),
+        ]);
+    }
+
     public function settlements(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();

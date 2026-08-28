@@ -25,7 +25,7 @@ class ReportController extends Controller
         $series = AdminScope::applyToOrders(Order::query(), $request->user())
             ->where('status', 'delivered')
             ->whereBetween('created_at', [$from, $to])
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as gmv, SUM(commission_amount) as commission, SUM(delivery_fee_share) as delivery_fees')
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as gmv, SUM(commission_amount) as commission, SUM(delivery_fee_share) as delivery_fees, SUM(platform_fee_share) as platform_fees')
             ->groupBy('date')->orderBy('date')->get();
 
         return ApiResponse::success($series);

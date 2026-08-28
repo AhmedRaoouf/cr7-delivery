@@ -42,6 +42,9 @@ class ConfigController extends Controller
                 'symbol_en' => 'EGP',
                 'decimals' => 2,
             ],
+            'maps' => [
+                'mapbox_access_token' => config('services.mapbox.access_token'),
+            ],
             'cart' => [
                 'max_restaurants' => $settings->get('cart.max_restaurants', 3),
                 'max_qty_per_line' => $settings->get('cart.max_qty_per_line', 10),

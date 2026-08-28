@@ -50,6 +50,72 @@ function toPostmanUrl(string $uri): array
     ];
 }
 
+/** Resource sub-folder within a role folder, e.g. admin/restaurants/{restaurant}/products -> "Restaurants". */
+function subFolderFor(string $uri): string
+{
+    $uri = preg_replace('#^api/v1/#', '', $uri);
+    $segments = explode('/', $uri);
+
+    if (in_array($segments[0] ?? '', ['admin', 'driver', 'restaurant'], true) && count($segments) > 1) {
+        array_shift($segments);
+    }
+
+    $resource = $segments[0] ?? 'misc';
+
+    $labels = [
+        'auth' => 'Auth',
+        'config' => 'Config',
+        'devices' => 'Devices',
+        'geo' => 'Geo',
+        'cities' => 'Cities',
+        'zones' => 'Zones',
+        'cuisines' => 'Cuisines',
+        'banners' => 'Banners',
+        'pages' => 'Pages',
+        'faqs' => 'FAQs',
+        'promo' => 'Promo',
+        'promo-codes' => 'Promo Codes',
+        'restaurants' => 'Restaurants',
+        'products' => 'Products',
+        'categories' => 'Categories',
+        'search' => 'Search',
+        'favorites' => 'Favorites',
+        'cart' => 'Cart',
+        'checkout' => 'Checkout',
+        'addresses' => 'Addresses',
+        'orders' => 'Orders',
+        'order-groups' => 'Order Groups',
+        'direct-orders' => 'Direct Orders',
+        'complaints' => 'Complaints',
+        'notifications' => 'Notifications',
+        'me' => 'Me / Profile',
+        'status' => 'Status',
+        'location' => 'Location',
+        'offers' => 'Offers',
+        'documents' => 'Documents',
+        'transactions' => 'Transactions',
+        'earning-rule' => 'Earning Rule',
+        'open-status' => 'Open Status',
+        'opening-hours' => 'Opening Hours',
+        'drivers' => 'Drivers',
+        'driver-documents' => 'Driver Documents',
+        'pricing-rules' => 'Pricing Rules',
+        'payments' => 'Payments',
+        'payment-proofs' => 'Payment Proofs',
+        'refunds' => 'Refunds',
+        'settlements' => 'Settlements',
+        'delivery-issues' => 'Delivery Issues',
+        'users' => 'Users',
+        'roles' => 'Roles',
+        'settings' => 'Settings',
+        'customers' => 'Customers',
+        'reports' => 'Reports',
+        'dashboard' => 'Dashboard',
+    ];
+
+    return $labels[$resource] ?? ucwords(str_replace('-', ' ', $resource));
+}
+
 function xAppFor(string $folder): string
 {
     return match ($folder) {
@@ -227,7 +293,9 @@ foreach ($routes as $route) {
         }
 
         $folder = folderFor($uri);
+        $subFolder = subFolderFor($uri);
         $folders[$folder] ??= [];
+        $folders[$folder][$subFolder] ??= [];
 
         $headers = [
             ['key' => 'Accept', 'value' => 'application/json'],
@@ -296,7 +364,7 @@ foreach ($routes as $route) {
         $name = $route['action'] !== 'Closure' ? preg_replace('/^.*\\\\/', '', $route['action']) : $uri;
         $name = "{$method} /{$uri}";
 
-        $folders[$folder][] = [
+        $folders[$folder][$subFolder][] = [
             'name' => $name,
             'request' => $request,
         ];
@@ -305,8 +373,12 @@ foreach ($routes as $route) {
 
 ksort($folders);
 
-foreach ($folders as $folderName => $requests) {
-    $items[] = ['name' => $folderName, 'item' => $requests];
+foreach ($folders as $folderName => $subFolders) {
+    $subItems = [];
+    foreach ($subFolders as $subFolderName => $requests) {
+        $subItems[] = ['name' => $subFolderName, 'item' => $requests];
+    }
+    $items[] = ['name' => $folderName, 'item' => $subItems];
 }
 
 /** Auto-capture the token from a login/verify response into an environment variable. */
@@ -403,5 +475,6 @@ $environment = [
 
 file_put_contents(__DIR__.'/../postman/CR7-Delivery-Local.postman_environment.json', json_encode($environment, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
-$total = array_sum(array_map('count', $folders));
-echo "Generated {$total} requests across ".count($folders)." folders.\n";
+$total = array_sum(array_map(fn ($sub) => array_sum(array_map('count', $sub)), $folders));
+$subFolderCount = array_sum(array_map('count', $folders));
+echo "Generated {$total} requests across ".count($folders)." folders / {$subFolderCount} sub-folders.\n";

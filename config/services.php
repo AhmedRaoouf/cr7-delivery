@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    // 'log' (dev — writes the OTP to storage/logs/laravel.log) or 'sms_misr' (real gateway).
+    'otp_channel' => env('OTP_CHANNEL', 'log'),
+
+    'sms_misr' => [
+        'url' => env('SMS_MISR_URL', 'https://smsmisr.com/api/SMS/'),
+        'environment' => env('SMS_MISR_ENVIRONMENT', '2'), // 1 = live, 2 = test — confirm with SMS Misr's dashboard
+        'username' => env('SMS_MISR_USERNAME'),
+        'password' => env('SMS_MISR_PASSWORD'),
+        'sender' => env('SMS_MISR_SENDER'),
+    ],
+
+    // Client-side Maps SDK token (doc 01: Haversine drives distance/pricing, the map is display + navigation
+    // deep-link only). Served through GET /config so all three apps can rotate it without a release.
+    'mapbox' => [
+        'access_token' => env('MAPBOX_ACCESS_TOKEN'),
+    ],
+
 ];

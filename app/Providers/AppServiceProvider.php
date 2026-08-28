@@ -9,6 +9,7 @@ use App\Models\Restaurant;
 use App\Models\User;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
+use App\Services\Otp\SmsMisrChannel;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,7 +20,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(OtpChannel::class, LogOtpChannel::class);
+        // Flip with OTP_CHANNEL=sms_misr in .env once the account is live — no code change needed.
+        $this->app->bind(OtpChannel::class, match (config('services.otp_channel')) {
+            'sms_misr' => SmsMisrChannel::class,
+            default => LogOtpChannel::class,
+        });
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\DispatchService;
+use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -74,7 +75,8 @@ class CreateDirectOrderAction
                 'delivery_base_fee' => $quote['delivery_fee'],
                 'extra_stop_fee_total' => 0,
                 'delivery_fee' => $quote['delivery_fee'],
-                'total' => $quote['delivery_fee'],
+                'platform_fee' => $quote['platform_fee'],
+                'total' => $quote['total'],
                 'rollup_status' => $data['ready_now'] ? 'ready' : 'preparing',
                 'delivery_instructions' => $data['delivery_instructions'] ?? null,
                 'placed_at' => now(),
@@ -115,14 +117,16 @@ class CreateDirectOrderAction
                 'subtotal' => 0,
                 'discount_share' => 0,
                 'delivery_fee_share' => $quote['delivery_fee'],
-                'total' => $quote['delivery_fee'],
+                // One restaurant by definition, so the share is the whole fee.
+                'platform_fee_share' => $quote['platform_fee'],
+                'total' => $quote['total'],
                 'min_order_value_snapshot' => 0,
                 'commission_rate_snapshot' => 0,
                 'commission_amount' => 0,
                 'restaurant_order_ref' => $data['restaurant_order_ref'],
                 'business_date' => now()->toDateString(),
                 'prep_minutes' => $data['prep_minutes'] ?? null,
-                'pickup_otp' => (string) random_int(1000, 9999),
+                'pickup_otp' => Otp::orderCode(),
                 'delivery_otp' => null,
                 'delivery_instructions' => $data['delivery_instructions'] ?? null,
                 'accepted_at' => $now,

@@ -17,6 +17,10 @@ class DatabaseSeeder extends Seeder
             SettingsSeeder::class,
             LocationSeeder::class,
             AdminUserSeeder::class,
+            ContentSeeder::class,
+            // doc 17 — the real Gamasa catalogue. Without it every browse screen is
+            // empty and nothing downstream of a product can be exercised at all.
+            CatalogSeeder::class,
         ]);
     }
 }

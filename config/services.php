@@ -46,10 +46,4 @@ return [
         'sender' => env('SMS_MISR_SENDER'),
     ],
 
-    // Client-side Maps SDK token (doc 01: Haversine drives distance/pricing, the map is display + navigation
-    // deep-link only). Served through GET /config so all three apps can rotate it without a release.
-    'mapbox' => [
-        'access_token' => env('MAPBOX_ACCESS_TOKEN'),
-    ],
-
 ];

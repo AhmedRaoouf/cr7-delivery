@@ -5,8 +5,15 @@
  * routes, so it can never drift from the real API surface. Run: php scripts/generate_postman.php
  */
 
-$routesJson = shell_exec('php artisan route:list --path=api/v1 --json 2>&1');
-$routes = json_decode($routesJson, true);
+// display_errors off: on PHP 8.5 Laravel's own config emits a PDO deprecation that
+// would otherwise be prepended to the JSON and break the decode.
+$routesJson = shell_exec(
+    escapeshellarg(PHP_BINARY).' -d display_errors=0 artisan route:list --path=api/v1 --json 2>&1',
+);
+
+// Belt and braces — take the payload from the first bracket, whatever preceded it.
+$start = strpos((string) $routesJson, '[');
+$routes = $start === false ? null : json_decode(substr((string) $routesJson, $start), true);
 
 if (! is_array($routes)) {
     fwrite(STDERR, "Failed to read routes.\n".$routesJson);

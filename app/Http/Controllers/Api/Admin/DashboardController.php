@@ -27,6 +27,11 @@ class DashboardController extends Controller
             'orders_cancelled' => (clone $orders)->where('status', 'cancelled')->count(),
             'gmv' => (float) (clone $orders)->where('status', 'delivered')->sum('subtotal'),
             'commission_total' => (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount'),
+            // D-63 — platform revenue is now two numbers. Anywhere a single "revenue"
+            // figure is printed it has to be commission_total + platform_fees_total.
+            'platform_fees_total' => (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share'),
+            'platform_revenue_total' => (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount')
+                + (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share'),
             'active_orders' => (clone $orders)->whereNotIn('status', ['delivered', 'cancelled'])->count(),
             'online_drivers' => AdminScope::applyToDrivers(Driver::query(), $request->user())->where('is_online', true)->count(),
         ]);

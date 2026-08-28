@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\DriverDocumentController;
 use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\BannerController as AdminBannerController;
+use App\Http\Controllers\Api\Admin\CaptainApplicationController as AdminCaptainApplicationController;
 use App\Http\Controllers\Api\Admin\ComplaintController as AdminComplaintController;
 use App\Http\Controllers\Api\Admin\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
@@ -63,6 +64,7 @@ use App\Http\Controllers\Api\Restaurant\ReportController as RestaurantReportCont
 use App\Http\Controllers\Api\Restaurant\RestaurantMeController;
 use App\Http\Controllers\Api\Restaurant\SettlementController as RestaurantSettlementController;
 use App\Http\Controllers\Api\Shared\BannerController;
+use App\Http\Controllers\Api\Shared\CaptainApplicationController;
 use App\Http\Controllers\Api\Shared\CityController as SharedCityController;
 use App\Http\Controllers\Api\Shared\ConfigController;
 use App\Http\Controllers\Api\Shared\CuisineController as SharedCuisineController;
@@ -86,10 +88,20 @@ Route::prefix('v1')->group(function () {
     Route::get('/cities', [SharedCityController::class, 'index']);
     Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
     Route::post('/geo/resolve', [GeoController::class, 'resolve']);
+    // Geocoding proxies. Throttled because every request behind them is a
+    // billed one at the provider, and an unthrottled public route is a free
+    // way for anyone to spend the account's monthly quota.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('/geo/reverse', [GeoController::class, 'reverse']);
+        Route::get('/geo/search', [GeoController::class, 'search']);
+    });
     Route::get('/cuisines', [SharedCuisineController::class, 'index']);
     Route::get('/banners', [BannerController::class, 'index']);
     Route::get('/pages/{slug}', [PageController::class, 'show']);
     Route::get('/faqs', [FaqController::class, 'index']);
+    // APP-03 — public by necessity: an applicant has no account yet, and this creates
+    // an application rather than one (D-45).
+    Route::post('/captain-applications', [CaptainApplicationController::class, 'store']);
     Route::middleware(['auth:sanctum', 'client.type'])->group(function () {
         Route::post('/devices', [DeviceController::class, 'store']);
         Route::delete('/devices', [DeviceController::class, 'destroy']);
@@ -111,6 +123,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware(['auth:sanctum', 'client.type'])->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::patch('/me', [AuthController::class, 'updateMe']);
+            Route::get('/me/notification-settings', [AuthController::class, 'notificationSettings']);
+            Route::patch('/me/notification-settings', [AuthController::class, 'updateNotificationSettings']);
             Route::post('/password/change', [AuthController::class, 'changePassword']);
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);
@@ -181,6 +195,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/restaurants/{restaurant}/products', [CustomerRestaurantController::class, 'products']);
     Route::get('/restaurants/{restaurant}/best-sellers', [CustomerRestaurantController::class, 'bestSellers']);
     Route::get('/restaurants/{restaurant}/reviews', [CustomerRestaurantController::class, 'reviews']);
+    // Before /products/{product}: restoring a saved basket is one request, not one
+    // per line.
+    Route::get('/products', [CustomerProductController::class, 'index']);
     Route::get('/products/{product}', [CustomerProductController::class, 'show']);
     Route::get('/search', [SearchController::class, 'index']);
 
@@ -283,8 +300,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{order}/cancel', [DriverOrderController::class, 'cancel']);
         Route::post('/orders/{order}/issue', [DriverOrderController::class, 'issue']);
         Route::get('/orders', [DriverOrderController::class, 'history']);
+        // DRV-28 opens one delivered trip directly instead of resolving it out of the
+        // list it came from. Declared after /orders/active so that stays reachable.
+        Route::get('/orders/{order}', [DriverOrderController::class, 'show']);
 
         Route::get('/earnings', [DriverEarningsController::class, 'earnings']);
+        Route::get('/earnings/{order}', [DriverEarningsController::class, 'earning']);
         Route::get('/settlements', [DriverEarningsController::class, 'settlements']);
         Route::get('/stats', [DriverEarningsController::class, 'stats']);
 
@@ -379,6 +400,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/drivers/{driver}/transactions', [DriverController::class, 'transactions'])->middleware('permission:drivers.adjust_balance');
         Route::post('/drivers/{driver}/reset-password', [DriverController::class, 'resetPassword'])->middleware('permission:drivers.reset_password');
         Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])->middleware('permission:drivers.update');
+
+        // Captain applications (ADM-30..ADM-32) — approving one is what creates the
+        // account; APP-03 never does (D-45).
+        Route::middleware('permission:driver_applications.view')->group(function () {
+            Route::get('/captain-applications', [AdminCaptainApplicationController::class, 'index']);
+            Route::get('/captain-applications/{application}', [AdminCaptainApplicationController::class, 'show']);
+        });
+        Route::post('/captain-applications/{application}/review', [AdminCaptainApplicationController::class, 'review'])
+            ->middleware('permission:driver_applications.review');
 
         Route::middleware('permission:drivers.review_documents')->group(function () {
             Route::get('/drivers/{driver}/documents', [DriverDocumentController::class, 'index']);

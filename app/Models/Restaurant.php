@@ -20,13 +20,14 @@ class Restaurant extends Model
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
         'min_order_value', 'avg_prep_minutes', 'is_open_manual', 'is_active',
         'is_verified', 'is_featured', 'direct_orders_enabled', 'menu_layout',
-        'sort_order',
+        'sort_order', 'price_band', 'tagline_ar', 'tagline_en', 'menu_sheets', 'brand_color',
     ];
 
     protected function casts(): array
     {
         return [
             'menu_layout' => MenuLayout::class,
+            'menu_sheets' => 'array',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'commission_rate' => 'decimal:2',
@@ -115,6 +116,13 @@ class Restaurant extends Model
         }
 
         $now = now()->format('H:i:s');
+
+        // A shift that closes before it opens runs past midnight — «من ‪10:00‬ حتى
+        // ‪02:00‬» is one window, not an empty one. Compared as two halves rather
+        // than one range, or a beach-town kitchen reads as closed all evening.
+        if ($today->closes_at < $today->opens_at) {
+            return $now >= $today->opens_at || $now <= $today->closes_at;
+        }
 
         return $now >= $today->opens_at && $now <= $today->closes_at;
     }

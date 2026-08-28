@@ -19,6 +19,9 @@ class OrderResource extends JsonResource
             'timeline' => $this->whenLoaded('statusHistory'),
             'attempts' => $this->whenLoaded('driverAttempts'),
             'refunds' => $this->whenLoaded('refunds'),
+            // D-65 — the refund an admin should be offered by default on this order.
+            'policy_full_refund_amount' => \App\Support\RefundPolicy::fullRefundAmount($this->resource),
+            'platform_fee_refundable' => \App\Support\RefundPolicy::feeIsRefundable($this->resource),
             'order_group' => $this->whenLoaded('orderGroup', fn () => [
                 'id' => $this->orderGroup->id,
                 'group_number' => $this->orderGroup->group_number,

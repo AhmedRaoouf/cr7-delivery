@@ -26,13 +26,14 @@ class OrderGroupCreatedResource extends JsonResource
                 'wallet_number' => null,
                 'amount' => $payment?->gate_opened_at ? (float) $payment->amount : null,
                 'deadline_at' => $payment?->deadline_at,
-                'note' => 'المبلغ بيتحدد بعد ما كل المطاعم ترد',
+                'note' => 'يُحدَّد المبلغ بعد أن ترد كل المطاعم',
             ],
             'subtotal' => (float) $this->subtotal,
             'discount_amount' => (float) $this->discount_amount,
             'delivery_base_fee' => (float) $this->delivery_base_fee,
             'extra_stop_fee_total' => (float) $this->extra_stop_fee_total,
             'delivery_fee' => (float) $this->delivery_fee,
+            'platform_fee' => (float) $this->platform_fee,
             'total' => (float) $this->total,
             'sub_orders' => $this->orders->map(fn ($order) => [
                 'id' => $order->id,
@@ -43,6 +44,7 @@ class OrderGroupCreatedResource extends JsonResource
                 'subtotal' => (float) $order->subtotal,
                 'discount_share' => (float) $order->discount_share,
                 'delivery_fee_share' => (float) $order->delivery_fee_share,
+                'platform_fee_share' => (float) $order->platform_fee_share,
                 'total' => (float) $order->total,
             ]),
         ];

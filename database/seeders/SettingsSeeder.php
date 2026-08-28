@@ -59,6 +59,17 @@ class SettingsSeeder extends Seeder
             'delivery.multi_pickup_max_spread_km' => [2.5, 'delivery'],
 
             'commission.default_rate' => [10.00, 'commission'],
+
+            // D-63..D-65 — the platform service fee («رسوم الخدمة»). A fixed amount
+            // charged once per order group, on top of the food and the delivery fee,
+            // and kept by the platform.
+            'platform.order_fee' => [5.00, 'platform'],
+            // D-64 — a direct order is a delivery the platform sold, so it carries the
+            // fee too. Flip this to false to exempt phone orders without a deploy.
+            'platform.order_fee_applies_to_direct' => [true, 'platform'],
+            // D-65 — refunded when the platform failed the order, never when the
+            // customer changed their mind after confirming.
+            'platform.order_fee_refundable_on_platform_failure' => [true, 'platform'],
             'best_sellers.window_days' => [30, 'best_sellers'],
             'best_sellers.count' => [5, 'best_sellers'],
 
@@ -67,6 +78,9 @@ class SettingsSeeder extends Seeder
             'direct_orders.ratio_alert_threshold' => [0.40, 'direct_orders'],
             'direct_orders.sms_customer_on_dispatch' => [false, 'direct_orders'],
             'direct_orders.restaurant_may_set_fee' => [false, 'direct_orders'],
+
+            // APP-04 prints this window back to the applicant.
+            'driver_applications.review_hours' => [48, 'driver_applications'],
 
             'admin.require_2fa' => [['super_admin', 'finance'], 'admin'],
             'admin.invite_ttl_hours' => [48, 'admin'],

@@ -6,6 +6,7 @@ use App\Enums\OtpPurpose;
 use App\Exceptions\ApiException;
 use App\Models\OtpCode;
 use App\Services\Otp\OtpChannel;
+use App\Support\Otp;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -39,7 +40,7 @@ class SendOtpAction
             throw new ApiException('otp_resend_cooldown', 'يرجى الانتظار قبل إعادة الإرسال', 429, meta: ['retry_after' => $retryAfter]);
         }
 
-        $code = (string) random_int(100000, 999999);
+        $code = Otp::authCode();
 
         OtpCode::create([
             'phone' => $phone,

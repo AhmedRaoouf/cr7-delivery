@@ -18,6 +18,8 @@ class RestaurantController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filter = $request->array('filter');
+        $lat = $request->float('lat') ?: null;
+        $lng = $request->float('lng') ?: null;
 
         $restaurants = Restaurant::query()
             ->with(['cuisines', 'serviceZone'])
@@ -33,11 +35,38 @@ class RestaurantController extends Controller
                 'serviceZone',
                 fn ($zq) => $zq->whereNotNull('free_delivery_over'),
             ))
+            // D-60 — the band is the menu's own median, recomputed by the catalogue,
+            // never hand-set. A restaurant with no published menu carries null and
+            // answers no chip rather than defaulting into «متوسط».
+            ->when($filter['price_band'] ?? null, fn ($q, $band) => $q->where('price_band', $band))
+            ->when(($filter['max_delivery_fee'] ?? null) !== null, fn ($q) => $q->whereHas(
+                'serviceZone',
+                fn ($zq) => $zq->where('delivery_fee', '<=', (float) $filter['max_delivery_fee']),
+            ))
             ->when($request->string('search')->isNotEmpty(), fn ($q) => $q->whereFullText(['name_ar', 'name_en'], $request->string('search')))
-            ->when($request->string('sort')->value(), function ($q, $sort) {
+            ->when($request->string('sort')->value(), function ($q, $sort) use ($lat, $lng) {
                 match ($sort) {
                     '-rating_avg' => $q->orderByDesc('rating_avg'),
                     'rating_avg' => $q->orderBy('rating_avg'),
+                    // «الأكثر طلبًا»
+                    '-orders_count', 'popular' => $q->orderByDesc('orders_count'),
+                    // «الأسرع» — the zone's own average, not a guess per restaurant.
+                    // A correlated subquery rather than a join: joining `service_zones`
+                    // makes the `is_active` above ambiguous, and both tables have one.
+                    'fastest' => $q->orderBy(
+                        \App\Models\ServiceZone::query()
+                            ->select('avg_delivery_minutes')
+                            ->whereColumn('service_zones.id', 'restaurants.service_zone_id'),
+                    ),
+                    // «الأقرب» — needs a point to be near. Without one it is not a
+                    // sort at all, so it falls through to the default rather than
+                    // silently ordering by something else.
+                    'nearest' => ($lat !== null && $lng !== null)
+                        ? $q->orderByRaw(
+                            '(6371 * acos(least(1, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))',
+                            [$lat, $lng, $lat],
+                        )
+                        : $q->orderByDesc('is_featured')->orderBy('sort_order'),
                     default => $q->orderByDesc('is_featured')->orderBy('sort_order'),
                 };
             }, fn ($q) => $q->orderByDesc('is_featured')->orderBy('sort_order'))

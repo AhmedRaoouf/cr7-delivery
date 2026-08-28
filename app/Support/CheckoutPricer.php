@@ -14,6 +14,8 @@ use Illuminate\Support\Collection;
 /**
  * doc 08 §4 — POST /checkout/quote. Also the pricing core CreateOrderAction reuses
  * so the numbers placed on an order are exactly the numbers the customer was quoted.
+ * doc 16 D-63 — the platform service fee is added here and nowhere else, so the number
+ * quoted is provably the number charged.
  * doc 16 §9 — multi-restaurant delivery fee = farthest restaurant's fee + extra_stop_fee
  * per extra stop; discount and delivery fee split pro-rata by subtotal, remainder to
  * the largest subtotal (doc 08 §4 checkout/quote note).
@@ -72,6 +74,14 @@ class CheckoutPricer
 
         $deliveryFee = $freeDeliveryApplied ? 0.0 : round($deliveryBaseFee + $extraStopFeeTotal, 2);
 
+        // D-63 — the platform service fee. Charged **once per order group**, whatever
+        // the basket spans: three restaurants pay it once, exactly like the delivery
+        // fee (D-30..D-35). It is neither delivery nor commission, so `free_delivery`,
+        // `free_delivery_over` and every discount below leave it alone on purpose.
+        $platformFee = $restaurantCount === 0
+            ? 0.0
+            : round((float) (Setting::query()->where('key', 'platform.order_fee')->value('value') ?? 0), 2);
+
         $promo = null;
         $discountAmount = 0.0;
         $promoModel = null;
@@ -99,7 +109,7 @@ class CheckoutPricer
             }
         }
 
-        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $deliveryFee, $distances) {
+        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $deliveryFee, $platformFee, $distances) {
             $restaurant = $lines->first()->restaurant;
             $lineSubtotal = round($restaurantSubtotals[$restaurantId], 2);
             $share = $subtotal > 0 ? $lineSubtotal / $subtotal : 0;
@@ -111,6 +121,7 @@ class CheckoutPricer
                 'subtotal' => $lineSubtotal,
                 'discount_share' => round($discountAmount * $share, 2),
                 'delivery_fee_share' => round($deliveryFee * $share, 2),
+                'platform_fee_share' => round($platformFee * $share, 2),
                 'meets_min_order' => $lineSubtotal >= (float) $restaurant->min_order_value,
                 'eta_minutes_min' => $restaurant->serviceZone ? max(5, $restaurant->serviceZone->avg_delivery_minutes - 10) : null,
                 'eta_minutes_max' => $restaurant->serviceZone ? $restaurant->serviceZone->avg_delivery_minutes + 10 : null,
@@ -121,6 +132,7 @@ class CheckoutPricer
         // Rounding remainder goes to the largest subtotal (doc 08 §4).
         $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount);
         $groups = $this->assignRoundingRemainder($groups, 'delivery_fee_share', $deliveryFee);
+        $groups = $this->assignRoundingRemainder($groups, 'platform_fee_share', $platformFee);
 
         foreach ($groups as $group) {
             if (! $group['meets_min_order']) {
@@ -139,7 +151,7 @@ class CheckoutPricer
             $blockers[] = ['code' => 'cash_only_restricted', 'message' => 'حسابك مقيّد بالدفع نقدًا فقط حاليًا'];
         }
 
-        $total = round($subtotal - $discountAmount + $deliveryFee, 2);
+        $total = round($subtotal - $discountAmount + $deliveryFee + $platformFee, 2);
 
         return [
             'restaurant_count' => $restaurantCount,
@@ -149,6 +161,7 @@ class CheckoutPricer
             'extra_stop_fee' => $extraStopFee,
             'extra_stop_fee_total' => $extraStopFeeTotal,
             'delivery_fee' => $deliveryFee,
+            'platform_fee' => $platformFee,
             'delivery_pricing_rule_id' => $pricingRule?->id,
             'free_delivery_applied' => $freeDeliveryApplied,
             'subtotal' => $subtotal,

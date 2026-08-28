@@ -18,7 +18,7 @@ class Driver extends Model
     protected $fillable = [
         'user_id', 'city_id', 'national_id', 'vehicle_type', 'vehicle_plate',
         'earning_type', 'earning_value', 'current_lat', 'current_lng',
-        'location_updated_at', 'is_online', 'is_available', 'is_active',
+        'location_updated_at', 'is_online', 'online_since', 'is_available', 'is_active',
         'active_order_id',
     ];
 
@@ -32,6 +32,7 @@ class Driver extends Model
             'current_lng' => 'decimal:7',
             'location_updated_at' => 'datetime',
             'is_online' => 'boolean',
+            'online_since' => 'datetime',
             'is_available' => 'boolean',
             'is_active' => 'boolean',
             'rating_avg' => 'decimal:2',

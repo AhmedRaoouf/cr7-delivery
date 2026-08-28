@@ -26,6 +26,10 @@ class ProductResource extends JsonResource
             'rating_count' => $this->rating_count,
             'tags' => $this->tags,
             'menu_category_id' => $this->menu_category_id,
+            // CUS-11 search returns dishes across restaurants, so a row has to name
+            // the restaurant it belongs to or it cannot be opened or added.
+            'restaurant_id' => $this->restaurant_id,
+            'restaurant_name' => $this->whenLoaded('restaurant', fn () => $this->restaurant->{"name_{$locale}"}),
         ];
     }
 }

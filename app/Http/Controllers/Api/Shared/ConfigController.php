@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Shared;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Support\ApiResponse;
+use App\Support\MapStyles;
+use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 
 /** doc 08 §2 — GET /config: app bootstrap payload. */
@@ -42,8 +44,23 @@ class ConfigController extends Controller
                 'symbol_en' => 'EGP',
                 'decimals' => 2,
             ],
-            'maps' => [
-                'mapbox_access_token' => config('services.mapbox.access_token'),
+            // D-63 — the app shows «رسوم الخدمة» on the summary before it has a
+            // quote. The number charged is still the quote's, never this one.
+            'platform' => [
+                'order_fee' => (float) $settings->get('platform.order_fee', 0),
+                'order_fee_label_ar' => 'رسوم الخدمة',
+                'order_fee_label_en' => 'Service fee',
+            ],
+            // The tile template, its zoom scale and the attribution the
+            // provider's terms require. Published here rather than compiled
+            // into the app so rotating the token is a server edit, not a store
+            // release.
+            'maps' => MapStyles::payload(),
+            // Only ever non-null while `OTP_STATIC_MODE` is on, and then it is
+            // already public. The app prints it as «كود التجربة» so nobody has
+            // to go read the server log to sign in.
+            'auth' => [
+                'static_otp' => Otp::echoable(),
             ],
             'cart' => [
                 'max_restaurants' => $settings->get('cart.max_restaurants', 3),

@@ -24,6 +24,9 @@ class GenerateSettlementAction
             $grossSales = (float) $orders->sum('subtotal');
             $commissionTotal = (float) $orders->sum('commission_amount');
             $deliveryFeesTotal = (float) $orders->sum('delivery_fee_share');
+            // D-63 — reported, never paid out. It stays outside `net_amount` for both
+            // party types: neither the restaurant nor the captain earned it.
+            $platformFeeTotal = (float) $orders->sum('platform_fee_share');
             $refundsTotal = (float) \App\Models\Refund::query()->whereIn('order_id', $orders->pluck('id'))->where('status', 'processed')->sum('amount');
             $cashCollected = (float) $orders->where('payment_method', 'cash')->sum('total');
 
@@ -40,6 +43,10 @@ class GenerateSettlementAction
                 'refunds_total' => $refundsTotal,
                 'commission_total' => $commissionTotal,
                 'delivery_fees_total' => $deliveryFeesTotal,
+                'platform_fee_total' => $platformFeeTotal,
+                // On a cash order the captain physically holds the service fee too —
+                // it is inside `orders.total` — so it is netted off what the platform
+                // owes through the existing formula. Nothing special is needed here.
                 'cash_collected' => $cashCollected,
                 'net_amount' => $netAmount,
                 'status' => 'draft',
@@ -53,6 +60,7 @@ class GenerateSettlementAction
                     'gross' => $order->subtotal,
                     'commission' => $order->commission_amount,
                     'delivery_fee' => $order->delivery_fee_share,
+                    'platform_fee' => $order->platform_fee_share,
                     'driver_earning' => $order->driver_earning,
                     'net' => $partyType === 'restaurant'
                         ? round((float) $order->subtotal - (float) $order->commission_amount, 2)

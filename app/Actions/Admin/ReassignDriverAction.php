@@ -9,6 +9,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\Otp;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -57,7 +58,7 @@ class ReassignDriverAction
                 'driver_id' => $newDriver->id,
                 'status' => OrderStatus::DriverAssigned,
                 'driver_assigned_at' => now(),
-                'pickup_otp' => (string) random_int(1000, 9999),
+                'pickup_otp' => Otp::orderCode(),
                 'pickup_otp_attempts' => 0,
             ]);
 

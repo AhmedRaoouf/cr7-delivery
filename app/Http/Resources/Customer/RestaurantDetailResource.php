@@ -41,6 +41,12 @@ class RestaurantDetailResource extends JsonResource
             'distance_km' => ($lat && $lng) ? round(Geo::haversineKm((float) $this->latitude, (float) $this->longitude, $lat, $lng), 2) : null,
             'is_open_now' => $this->isOpenNow(),
             'menu_layout' => $this->menu_layout,
+            'price_band' => $this->price_band,
+            'tagline' => $this->{"tagline_{$locale}"},
+            'brand_color' => $this->brand_color,
+            // D-58 — the printed sheets the restaurant handed us, shown whole in their
+            // own section behind pill 0 («المنيو»). Never cropped (doc 09 §imagery).
+            'menu_sheets' => $this->menu_sheets ?? [],
             'opening_hours' => $this->whenLoaded('openingHours', fn () => $this->openingHours->map(fn ($h) => [
                 'weekday' => $h->weekday,
                 'opens_at' => $h->opens_at,

@@ -25,10 +25,16 @@ class OrderGroupDetailResource extends JsonResource
             'delivery_base_fee' => (float) $this->delivery_base_fee,
             'extra_stop_fee_total' => (float) $this->extra_stop_fee_total,
             'delivery_fee' => (float) $this->delivery_fee,
+            'platform_fee' => (float) $this->platform_fee,
             'total' => (float) $this->total,
             'customer_note' => $this->customer_note,
             'delivery_instructions' => $this->delivery_instructions,
             'placed_at' => $this->placed_at,
+            // CUS-32 counts down to this. It also lives on GET /orders/{id}/confirmation,
+            // but that route throws `confirmation_not_open` unless the gate is open —
+            // so the countdown would need a request that fails by design.
+            'confirm_deadline_at' => $this->confirm_deadline_at,
+            'confirmation_opened_at' => $this->confirmation_opened_at,
             'confirmed_at' => $this->confirmed_at,
             'completed_at' => $this->completed_at,
             'sub_orders' => $this->whenLoaded('orders', fn () => $this->orders->map(fn ($order) => [
@@ -45,7 +51,16 @@ class OrderGroupDetailResource extends JsonResource
                 'subtotal' => (float) $order->subtotal,
                 'discount_share' => (float) $order->discount_share,
                 'delivery_fee_share' => (float) $order->delivery_fee_share,
+                'platform_fee_share' => (float) $order->platform_fee_share,
                 'total' => (float) $order->total,
+                // doc 04 §11.3 — the customer reads their own delivery code, and only
+                // once the captain physically holds the food. Exposing it earlier
+                // would let it be handed over before there is anything to hand over.
+                // A direct order has none at all (D-49), so this stays null there.
+                'delivery_otp' => in_array($order->status->value, ['picked_up', 'on_the_way', 'arrived_customer'], true)
+                    ? $order->delivery_otp
+                    : null,
+                'delivery_otp_resends' => $order->delivery_otp_resends,
                 'prep_minutes' => $order->prep_minutes,
                 'prep_due_at' => $order->prep_due_at,
                 'driver' => $order->driver ? [

@@ -10,6 +10,7 @@ use App\Models\OrderGroup;
 use App\Models\User;
 use App\Models\UserAddress;
 use App\Support\CheckoutPricer;
+use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -67,6 +68,9 @@ class CreateOrderAction
                 'delivery_base_fee' => $quote['delivery_base_fee'],
                 'extra_stop_fee_total' => $quote['extra_stop_fee_total'],
                 'delivery_fee' => $quote['delivery_fee'],
+                // D-63 — snapshot. Changing `platform.order_fee` afterwards must not
+                // re-price an order already placed.
+                'platform_fee' => $quote['platform_fee'],
                 'total' => $quote['total'],
                 'rollup_status' => 'pending',
                 'customer_note' => $data['customer_note'] ?? null,
@@ -100,6 +104,8 @@ class CreateOrderAction
                     'status' => OrderStatus::Pending,
                     'payment_method' => $data['payment_method'],
                     'restaurant_name_snapshot' => $restaurant->name_ar,
+                    // DRV-13 names the person the captain is delivering to.
+                    'customer_name_snapshot' => $user->name,
                     'delivery_address_text' => $this->composeAddressText($address),
                     'delivery_contact_phone' => $address->contact_phone ?? $user->phone,
                     'delivery_latitude' => $address->latitude,
@@ -109,13 +115,20 @@ class CreateOrderAction
                     'subtotal' => $groupQuote['subtotal'],
                     'discount_share' => $groupQuote['discount_share'],
                     'delivery_fee_share' => $groupQuote['delivery_fee_share'],
-                    'total' => round($groupQuote['subtotal'] - $groupQuote['discount_share'] + $groupQuote['delivery_fee_share'], 2),
+                    'platform_fee_share' => $groupQuote['platform_fee_share'],
+                    'total' => round(
+                        $groupQuote['subtotal']
+                        - $groupQuote['discount_share']
+                        + $groupQuote['delivery_fee_share']
+                        + $groupQuote['platform_fee_share'],
+                        2,
+                    ),
                     'min_order_value_snapshot' => $restaurant->min_order_value,
                     'commission_rate_snapshot' => $restaurant->commission_rate,
                     'commission_amount' => round($groupQuote['subtotal'] * ((float) $restaurant->commission_rate / 100), 2),
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
-                    'pickup_otp' => (string) random_int(1000, 9999),
+                    'pickup_otp' => Otp::orderCode(),
                     'business_date' => now()->toDateString(),
                     'customer_note' => $data['customer_note'] ?? null,
                     'delivery_instructions' => $data['delivery_instructions'] ?? null,

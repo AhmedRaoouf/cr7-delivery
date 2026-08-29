@@ -43,7 +43,12 @@ MAPBOX_STYLE_LIGHT=mapbox/streets-v12
 MAPBOX_STYLE_DARK=mapbox/dark-v11
 
 # --- verification codes -----------------------------------------------------
-# See the warning in §6. Leave true only while there is no SMS gateway.
+# These two move TOGETHER. See the warning in §6.
+#   log      + true   staging: everyone signs in with OTP_STATIC_CODE
+#   sms_misr + false  live:    real code, real SMS
+# `log` + `false` is the broken pair — the code is random and written only to
+# storage/logs, so /auth/otp/send answers 200 and nobody can sign in at all.
+OTP_CHANNEL=log
 OTP_STATIC_MODE=true
 OTP_STATIC_CODE=123456
 OTP_STATIC_ORDER_CODE=1234
@@ -52,6 +57,10 @@ OTP_ECHO_IN_RESPONSE=true
 
 `APP_URL` has to be right **before** step 3: `CatalogSeeder` writes absolute image
 URLs at seed time, so a wrong host bakes 63 broken images into the database.
+
+`MAPBOX_TOKEN` is the name that is read. `MAPBOX_ACCESS_TOKEN` also works — an
+earlier commit documented that spelling — but prefer the first; there is one
+token and it should have one name.
 
 ---
 

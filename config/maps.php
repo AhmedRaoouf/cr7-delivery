@@ -22,7 +22,13 @@ return [
     'mapbox' => [
         // A **public** token (`pk.…`). Never a secret (`sk.…`) token: this one
         // is published to every client by design.
-        'token' => env('MAPBOX_TOKEN'),
+        //
+        // Two names because two commits arrived with one each. `.env.example`
+        // documented `MAPBOX_ACCESS_TOKEN` while this — the only thing that
+        // actually reads a token — wanted `MAPBOX_TOKEN`, so setting the
+        // documented one left the app on OpenStreetMap with no error anywhere
+        // to explain why. Either name works; `MAPBOX_TOKEN` is the one to use.
+        'token' => env('MAPBOX_TOKEN') ?: env('MAPBOX_ACCESS_TOKEN'),
 
         'style_light' => env('MAPBOX_STYLE_LIGHT', 'mapbox/streets-v12'),
         'style_dark' => env('MAPBOX_STYLE_DARK', 'mapbox/dark-v11'),

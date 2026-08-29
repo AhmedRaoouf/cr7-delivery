@@ -57,5 +57,16 @@ class AppServiceProvider extends ServiceProvider
         if (Otp::isStatic() && $this->app->environment('production')) {
             Log::warning('[OTP] STATIC MODE IS ON IN PRODUCTION — every phone signs in with the same code. Set OTP_STATIC_MODE=false.');
         }
+
+        // And the other way round, which is the failure that looks like a
+        // working server: static mode off while `LogOtpChannel` is still the
+        // binding means every code is random and lands in storage/logs and
+        // nowhere else. `POST /auth/otp/send` answers 200, the customer waits
+        // for an SMS that was never sent, and nobody can sign in at all. Both
+        // halves have to move together — bind a real channel, then flip the
+        // switch.
+        if (! Otp::isStatic() && $this->app->make(OtpChannel::class) instanceof LogOtpChannel) {
+            Log::warning('[OTP] NOBODY CAN SIGN IN — static mode is off and the only OTP channel is the log. Bind a real SMS channel, or set OTP_STATIC_MODE=true while testing.');
+        }
     }
 }

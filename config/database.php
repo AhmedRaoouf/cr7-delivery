@@ -58,7 +58,12 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                // PHP 8.5 deprecates `PDO::MYSQL_ATTR_SSL_CA` for `Pdo\Mysql::ATTR_SSL_CA`.
+                // Naming the old constant is enough to emit the notice, and with
+                // `display_errors` on that notice is written *before* the JSON body —
+                // every API response comes back unparseable, which is a debug session
+                // that ends in the wrong place. One file, 8.3 through 8.5.
+                (class_exists(\Pdo\Mysql::class) ? \Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 
@@ -78,7 +83,12 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                // PHP 8.5 deprecates `PDO::MYSQL_ATTR_SSL_CA` for `Pdo\Mysql::ATTR_SSL_CA`.
+                // Naming the old constant is enough to emit the notice, and with
+                // `display_errors` on that notice is written *before* the JSON body —
+                // every API response comes back unparseable, which is a debug session
+                // that ends in the wrong place. One file, 8.3 through 8.5.
+                (class_exists(\Pdo\Mysql::class) ? \Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
 

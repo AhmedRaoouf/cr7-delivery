@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Shared\CityResource;
+use App\Http\Resources\Shared\ServiceZoneResource;
 use App\Models\City;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -14,13 +16,13 @@ class CityController extends Controller
     {
         $cities = City::query()->where('is_active', true)->orderBy('sort_order')->get();
 
-        return ApiResponse::success($cities);
+        return ApiResponse::success(CityResource::collection($cities));
     }
 
     public function zones(City $city): JsonResponse
     {
         $zones = $city->serviceZones()->where('is_active', true)->get();
 
-        return ApiResponse::success($zones);
+        return ApiResponse::success(ServiceZoneResource::collection($zones));
     }
 }

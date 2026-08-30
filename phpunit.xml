@@ -29,6 +29,11 @@
         <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_DATABASE" value="cr7_delivery_test"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- Pinned, not inherited. MapsAndOtpTest asserts the provider it gets back
+             from GET /config; without this a developer who sets MAPS_PROVIDER=osm in
+             their own .env (which is the right setting for a machine with no Mapbox
+             token) fails a test that has nothing to do with what they changed. -->
+        <env name="MAPS_PROVIDER" value="mapbox"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

@@ -3,9 +3,16 @@
 `DEPLOY.md` is what runs **on the server**. This is how to drive it from an Android
 phone.
 
-`api.cr7-delivery.com` currently answers from **Hostinger** (`platform: hostinger`,
-`panel: hpanel`, PHP 8.3.31), so Termux is the terminal, not the host. §4 covers running
-the API on the phone itself, which is a useful staging trick and a bad production plan.
+The API answers from **Hostinger** (`platform: hostinger`, `panel: hpanel`, PHP 8.3.31),
+so Termux is the terminal, not the host. §4 covers running the API on the phone itself,
+which is a useful staging trick and a bad production plan.
+
+> **The host is `cr7-delivery.com`, not `api.cr7-delivery.com`.** Checked 2026-08-30:
+> `api.cr7-delivery.com` has no DNS record at all, while the apex resolves to
+> `193.58.105.119` and `147.79.116.204` and both answer `200` on `/api/v1/config`. Every
+> base URL here and in `DEPLOY.md` is therefore `https://cr7-delivery.com/api/v1` — which
+> is also what the dashboards' `CR7_API_URL` must be set to. Pointing anything at the
+> `api.` name produces `ENOTFOUND` rather than a useful error.
 
 ---
 

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!--
+  PHP 8.5 deprecated PDO::MYSQL_ATTR_SSL_CA; Laravel 11's own
+  vendor/laravel/framework/config/database.php still uses it, and
+  LoadConfiguration::getBaseConfiguration() `require`s every framework config
+  file on every boot — so every test in the suite triggered it and `artisan test`
+  reported "59 deprecated" instead of "59 passed".
+
+  It is not this application's code and there is nothing here to fix: the
+  deployed API runs PHP 8.3.31, where the constant is not deprecated at all.
+  The fix upstream is Laravel 12.
+
+  Scope is deliberately two lines in one vendor file. A deprecation raised
+  anywhere else — including anywhere in app/ — still shows.
+-->
+<files version="1">
+ <file path="vendor/laravel/framework/config/database.php">
+  <line number="61" hash="feba792a5a63a3efd64efe6f5cf20c2cf8ff7a23">
+   <issue><![CDATA[Constant PDO::MYSQL_ATTR_SSL_CA is deprecated since 8.5, use Pdo\Mysql::ATTR_SSL_CA instead]]></issue>
+  </line>
+  <line number="81" hash="feba792a5a63a3efd64efe6f5cf20c2cf8ff7a23">
+   <issue><![CDATA[Constant PDO::MYSQL_ATTR_SSL_CA is deprecated since 8.5, use Pdo\Mysql::ATTR_SSL_CA instead]]></issue>
+  </line>
+ </file>
+</files>

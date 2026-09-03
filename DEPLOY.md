@@ -185,5 +185,100 @@ php artisan queue:work --queue=default --tries=3    # under supervisor
 * * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-The dispatch rounds, the prep-time countdown and the settlement generator are all
-scheduled jobs. Without the cron entry, orders sit in `waiting_for_driver`.
+> Corrected 2026-09-03. This section used to say that the dispatch rounds, the
+> prep-time countdown and the settlement generator are scheduled jobs and that
+> orders sit in `waiting_for_driver` without the cron entry. They are not:
+> `grep -rn "Schedule::" app bootstrap routes` finds nothing, `app/Jobs` does not
+> exist, and all three run synchronously inside `app/Actions` and `app/Services`.
+> **Ordering works with no cron and no queue worker at all.** The one thing the
+> cron entry now does is prune Telescope — §10.
+
+---
+
+## 10. Telescope
+
+Telescope watches every request the API answers — the customer app, the captain
+shell, both dashboards — and tags each entry with the client that made it, so
+the list filters down to `app:admin`, `role:driver`, `status:422` or `failed`.
+
+It runs on the deployed API, not only on a developer's machine. That is a
+deliberate decision and it comes with a real cost, stated plainly in §10.3.
+
+### 10.1 Turning it on
+
+```bash
+composer install --no-dev --optimize-autoloader   # telescope is a runtime require now
+php artisan migrate --force                       # creates the four telescope_* tables
+
+php -r "echo bin2hex(random_bytes(24)), PHP_EOL;" # the token — copy it
+```
+
+Then in `.env`:
+
+```dotenv
+TELESCOPE_ENABLED=true
+TELESCOPE_RECORD_ALL=true
+TELESCOPE_TOKEN=<the token from above>
+TELESCOPE_DRIVER=database
+TELESCOPE_RESPONSE_SIZE_LIMIT=512
+```
+
+```bash
+php artisan config:clear && php artisan config:cache
+```
+
+Open it once with the token in the query string:
+
+```
+https://cr7-delivery.com/telescope?telescope_token=<the token>
+```
+
+It is remembered in an `httpOnly` cookie for eight hours, which is what lets
+Telescope's own XHR calls to `telescope/telescope-api/*` through.
+
+### 10.2 Reading it
+
+The entry list has a tag filter. The tags a request carries:
+
+| Tag | Where it comes from |
+|---|---|
+| `app:app` · `app:restaurant` · `app:admin` | `X-App` (doc 08 §1) |
+| `role:customer` · `role:driver` | `X-Role` — the customer and the captain are one binary (D-45), so `X-App` alone cannot tell them apart |
+| `platform:ios` · `platform:android` | `X-Platform` |
+| `status:200`, `status:422`, … | the response code |
+| `failed` | any 4xx or 5xx |
+| `user:<id>` | the authenticated user, when there is one |
+| `app:unknown` | no `X-App` header — curl, a scanner, a health check |
+
+The dashboards call the API from their own Node server, never from the browser
+(D-69), so `app:admin` means the admin dashboard, not the operator's laptop.
+
+### 10.3 What it costs, and switching it off
+
+**Whoever holds the token reads every request body the API received** — every
+address, phone number, order and cart that moved through it. `Authorization`,
+`Cookie`, passwords, OTPs and FCM tokens are redacted in every environment, and
+the bodies are not. Treat `TELESCOPE_TOKEN` as a production credential.
+
+A wrong token, a missing token, or `TELESCOPE_TOKEN=` empty answers **404** on
+every Telescope URL. That is deliberate: a 403 tells a stranger there is a panel
+here worth attacking.
+
+`TELESCOPE_RECORD_ALL=true` writes a row per request, per query and per model
+event, so the tables only grow. `routes/console.php` schedules
+`telescope:prune --hours=48` daily — which needs §9's cron entry, and is the one
+thing on this deployment that does. Without cron, run it by hand:
+
+```bash
+php artisan telescope:prune --hours=48
+php artisan telescope:clear                # or wipe it entirely
+```
+
+When the test run is over:
+
+```dotenv
+TELESCOPE_ENABLED=false
+```
+
+then `php artisan config:cache`. The provider is not registered at all after
+that — `AppServiceProvider` reads the flag before it loads anything.

@@ -12,7 +12,8 @@
             <directory>tests/Feature</directory>
         </testsuite>
     </testsuites>
-    <source>
+    <!-- `baseline` silences one known vendor deprecation; see phpunit-baseline.xml. -->
+    <source baseline="phpunit-baseline.xml">
         <include>
             <directory>app</directory>
         </include>

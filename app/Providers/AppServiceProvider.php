@@ -25,6 +25,27 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Telescope is registered by hand rather than by package discovery
+        // (`dont-discover` in composer.json), so the decision is one readable
+        // `if` rather than a side effect of which packages happen to be
+        // installed. Three conditions, all of which must hold:
+        //
+        //   * the class is present — `composer install --no-dev` on a host that
+        //     does not want it must not fatal on a missing provider;
+        //   * `telescope.enabled` — TELESCOPE_ENABLED=false turns it off on a
+        //     live deployment without a redeploy;
+        //   * a token is set outside `local` — Telescope is a full read of every
+        //     request body the API receives, and `AuthorizeTelescope` answers 404
+        //     without one, so booting it would only cost memory.
+        $telescopeIsUsable = class_exists(\Laravel\Telescope\Telescope::class)
+            && config('telescope.enabled') === true
+            && ($this->app->environment('local') || config('telescope.auth_token') !== '');
+
+        if ($telescopeIsUsable) {
+            $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
+            $this->app->register(TelescopeServiceProvider::class);
+        }
+
         // Flip with OTP_CHANNEL=sms_misr in .env once the account is live — no code change needed.
         $this->app->bind(OtpChannel::class, match (config('services.otp_channel')) {
             'sms_misr' => SmsMisrChannel::class,

@@ -63,13 +63,22 @@ class DriverController extends Controller
         $this->ensureInScope($request, $driver);
 
         $data = $request->validated();
-        $driver->update(collect($data)->except('zone_ids')->all());
+
+        // `name`, `phone` and `email` are columns on `users`; passing them to
+        // `Driver::update()` writes nothing and reports success, which is what the edit
+        // form had been doing on every save.
+        $userFields = collect($data)->only(['name', 'phone', 'email'])->all();
+        if ($userFields !== []) {
+            $driver->user->update($userFields);
+        }
+
+        $driver->update(collect($data)->except(['zone_ids', 'name', 'phone', 'email'])->all());
 
         if (array_key_exists('zone_ids', $data)) {
             $driver->assignedZones()->sync($data['zone_ids'] ?? []);
         }
 
-        return ApiResponse::success($driver->fresh(['assignedZones']), 'تم تحديث بيانات الكابتن بنجاح');
+        return ApiResponse::success($driver->fresh(['user', 'assignedZones']), 'تم تحديث بيانات الكابتن بنجاح');
     }
 
     public function status(Request $request, Driver $driver): JsonResponse

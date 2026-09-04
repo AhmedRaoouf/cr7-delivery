@@ -4,6 +4,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | First sign-in password
+    |--------------------------------------------------------------------------
+    |
+    | The password handed to a captain, restaurant or admin account the moment it is
+    | created or reset. Every one of them carries `must_change_password`, so it is good
+    | for exactly one sign-in.
+    |
+    | A value here is a SHARED, KNOWN password: anyone who learns a new account's phone
+    | number can sign in as it before its owner does. It is set because nothing here
+    | delivers a generated password — no mail, no SMS — and dictating twelve random
+    | characters over the phone was losing accounts.
+    |
+    | Leave it EMPTY in production and each password becomes a random 12 characters again.
+    |
+    */
+
+    'temp_password' => env('TEMP_PASSWORD_DEFAULT', '123456789'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication Defaults
     |--------------------------------------------------------------------------
     |

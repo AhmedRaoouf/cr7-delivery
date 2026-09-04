@@ -5,9 +5,9 @@ namespace App\Actions\Admin;
 use App\Enums\UserType;
 use App\Models\Driver;
 use App\Models\User;
+use App\Support\TempPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /** FR-DRV-01 / D-11 — captain accounts are created by Admin only, never self-signed-up. */
 class CreateDriverAction
@@ -16,7 +16,7 @@ class CreateDriverAction
     public function execute(array $data): array
     {
         return DB::transaction(function () use ($data) {
-            $tempPassword = Str::password(12);
+            $tempPassword = TempPassword::issue();
 
             $user = User::create([
                 'name' => $data['name'],

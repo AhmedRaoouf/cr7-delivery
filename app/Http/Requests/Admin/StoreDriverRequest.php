@@ -2,11 +2,19 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\NormalisesPhone;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** FR-DRV-01 — Admin creates a driver; the linked login is provisioned server-side. */
 class StoreDriverRequest extends FormRequest
 {
+    use NormalisesPhone;
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalisePhoneFields();
+    }
+
     public function authorize(): bool
     {
         return $this->user()->can('drivers.create');
@@ -26,6 +34,15 @@ class StoreDriverRequest extends FormRequest
             'earning_value' => ['required', 'numeric', 'min:0'],
             'zone_ids' => ['nullable', 'array'],
             'zone_ids.*' => ['exists:service_zones,id'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'phone.regex' => 'رقم الهاتف غير صحيح — 11 رقمًا تبدأ بـ 010 أو 011 أو 012 أو 015',
+            'phone.unique' => 'هذا الرقم مسجل بالفعل',
+            'email.unique' => 'هذا البريد مسجل بالفعل',
         ];
     }
 }

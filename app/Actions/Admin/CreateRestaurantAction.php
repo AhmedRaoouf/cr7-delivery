@@ -5,6 +5,7 @@ namespace App\Actions\Admin;
 use App\Enums\UserType;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Support\TempPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ class CreateRestaurantAction
     public function execute(array $data): array
     {
         return DB::transaction(function () use ($data) {
-            $tempPassword = Str::password(12);
+            $tempPassword = TempPassword::issue();
 
             $owner = User::create([
                 'name' => $data['name_en'],

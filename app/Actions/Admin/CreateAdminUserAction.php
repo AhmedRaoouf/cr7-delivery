@@ -6,9 +6,9 @@ use App\Enums\AdminScopeType;
 use App\Enums\UserType;
 use App\Models\User;
 use App\Support\PermissionEscalationGuard;
+use App\Support\TempPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /** doc 24 §1.5 — the account is created inactive with a random password; must_change_password = true. */
 class CreateAdminUserAction
@@ -20,7 +20,7 @@ class CreateAdminUserAction
         PermissionEscalationGuard::assertCanGrantPermissions($actor, $data['grants'] ?? []);
 
         return DB::transaction(function () use ($actor, $data) {
-            $tempPassword = Str::password(12);
+            $tempPassword = TempPassword::issue();
 
             $user = User::create([
                 'name' => $data['name'],

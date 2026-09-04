@@ -2,10 +2,18 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\NormalisesPhone;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreAdminUserRequest extends FormRequest
 {
+    use NormalisesPhone;
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalisePhoneFields();
+    }
+
     public function authorize(): bool
     {
         return $this->user()->can('users.invite');

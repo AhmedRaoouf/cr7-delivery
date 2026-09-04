@@ -13,6 +13,7 @@
         "laravel/telescope": "^5.23",
         "laravel/tinker": "^2.9",
         "league/flysystem-aws-s3-v3": "^3.0",
+        "openspout/openspout": "^4.28",
         "pusher/pusher-php-server": "^7.2",
         "spatie/laravel-permission": "^6.9"
     },

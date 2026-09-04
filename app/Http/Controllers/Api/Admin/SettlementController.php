@@ -8,8 +8,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Settlement;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\SettlementExporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** doc 08 §7 — GET /admin/settlements, POST /generate, GET /{id}, POST /{id}/pay. */
 class SettlementController extends Controller
@@ -47,6 +49,21 @@ class SettlementController extends Controller
     public function show(Settlement $settlement): JsonResponse
     {
         return ApiResponse::success($settlement->load(['items.order', 'party', 'createdBy']));
+    }
+
+    /**
+     * `RES-31` / `ADM-33` — the settlement as a workbook.
+     *
+     * Streamed rather than built and returned: a settlement covering a busy month is
+     * thousands of order lines, and holding the sheet in memory first is how a
+     * 128 MB shared-hosting limit is hit by a report nobody thought was large.
+     */
+    public function export(Settlement $settlement): StreamedResponse
+    {
+        $party = $settlement->party;
+        $name = $party?->getAttribute('name_ar') ?? $party?->getAttribute('name') ?? '';
+
+        return SettlementExporter::stream($settlement, (string) $name);
     }
 
     public function pay(Request $request, Settlement $settlement): JsonResponse

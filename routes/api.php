@@ -255,6 +255,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/settlements', [RestaurantSettlementController::class, 'index']);
         Route::get('/settlements/{settlement}', [RestaurantSettlementController::class, 'show']);
+        Route::get('/settlements/{settlement}/export', [RestaurantSettlementController::class, 'export']);
 
         Route::get('/ratings', [RestaurantRatingController::class, 'index']);
         Route::get('/notifications', [NotificationController::class, 'index']);
@@ -460,6 +461,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/settlements', [AdminSettlementController::class, 'index'])->middleware('permission:settlements.view');
         Route::get('/settlements/{settlement}', [AdminSettlementController::class, 'show'])->middleware('permission:settlements.view');
+        Route::get('/settlements/{settlement}/export', [AdminSettlementController::class, 'export'])->middleware('permission:settlements.view');
         Route::post('/settlements/generate', [AdminSettlementController::class, 'generate'])->middleware('permission:settlements.generate');
         Route::post('/settlements/{settlement}/pay', [AdminSettlementController::class, 'pay'])->middleware('permission:settlements.pay');
 

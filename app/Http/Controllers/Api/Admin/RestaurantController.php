@@ -87,6 +87,8 @@ class RestaurantController extends Controller
     {
         $this->ensureInScope($request, $restaurant);
 
+        // Only the switch. The 20/day cap on `ADM-48` is D-49's platform-wide setting,
+        // not a per-restaurant column — there is no `direct_orders_daily_cap` to write.
         $validated = $request->validate(['enabled' => ['required', 'boolean']]);
         $restaurant->update(['direct_orders_enabled' => $validated['enabled']]);
 

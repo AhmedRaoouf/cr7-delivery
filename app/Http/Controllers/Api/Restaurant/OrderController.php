@@ -28,9 +28,28 @@ class OrderController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
         $queue = $request->input('filter.queue');
 
+        // `RES-10` renders a search box, a status select and a date range. Until now
+        // only `queue` reached the query, so all three were decoration: an operator
+        // narrowing to «تم التسليم» in March got the same unfiltered page back.
+        $status = $request->input('filter.status');
+        $search = trim((string) $request->input('filter.q', ''));
+        $from = $request->input('filter.date_from');
+        $to = $request->input('filter.date_to');
+
         $orders = $restaurant->orders()
             ->with(['items.options', 'driver.user'])
             ->when($queue && isset(self::QUEUES[$queue]), fn ($q) => $q->whereIn('status', self::QUEUES[$queue]))
+            ->when(is_string($status) && $status !== '', fn ($q) => $q->where('status', $status))
+            ->when($search !== '', fn ($q) => $q->where(function ($sub) use ($search) {
+                $sub->where('order_number', 'like', '%'.$search.'%')
+                    ->orWhere('restaurant_order_ref', 'like', '%'.$search.'%')
+                    ->orWhere('customer_name_snapshot', 'like', '%'.$search.'%')
+                    ->orWhere('delivery_contact_phone', 'like', '%'.$search.'%');
+            }))
+            // On `created_at`, not `delivered_at`: the same range has to mean the same
+            // thing on a board queue where nothing has been delivered yet.
+            ->when(is_string($from) && $from !== '', fn ($q) => $q->whereDate('created_at', '>=', $from))
+            ->when(is_string($to) && $to !== '', fn ($q) => $q->whereDate('created_at', '<=', $to))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

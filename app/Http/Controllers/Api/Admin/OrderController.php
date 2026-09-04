@@ -66,11 +66,20 @@ class OrderController extends Controller
 
         $radius = $request->float('radius_km') ?: 10;
 
-        $drivers = $dispatch->eligibleDrivers($order, $radius)->map(fn ($c) => [
+        // `ADM-07`'s «اعرض كل الكباتن النشطين». The ranked list is live captains within
+        // the radius, which is right for choosing quickly and useless at a moment when
+        // every captain is offline — and `ReassignDriverAction` will accept any active,
+        // free captain regardless. The operator opts into the wider list explicitly and
+        // sees each captain's state on the row.
+        $includeOffline = $request->boolean('include_offline');
+
+        $drivers = $dispatch->eligibleDrivers($order, $radius, $includeOffline)->map(fn ($c) => [
             'driver_id' => $c['driver']->id,
             'name' => $c['driver']->user->name,
-            'distance_km' => round($c['distance_km'], 2),
+            'distance_km' => $c['distance_km'] === null ? null : round($c['distance_km'], 2),
             'state' => $c['state'],
+            'is_busy' => $c['driver']->active_order_id !== null,
+            'last_seen_at' => $c['driver']->location_updated_at?->toIso8601String(),
             'rating_avg' => (float) $c['driver']->rating_avg,
         ]);
 

@@ -7,6 +7,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * doc 05 §1-3 — dispatch starts the instant an order becomes `ready`, offering to the
@@ -93,13 +94,26 @@ class DispatchService
     }
 
     /** doc 08 §7 — GET /admin/orders/{id}/eligible-drivers: same ranking, read-only, no round/TTL side effects. */
-    public function eligibleDrivers(Order $order, float $radiusKm): \Illuminate\Support\Collection
+    /**
+     * @param  bool  $includeOffline  Admin-only escape hatch for `ADM-07`.
+     *
+     * Automatic dispatch only ever wants live captains, so `false` is the default and
+     * nothing about the nearest-3 algorithm changes. But an operator looking at sixteen
+     * unclaimed orders at a moment when every captain is offline was shown an empty list
+     * and had no way to hand the work to anyone — while `ReassignDriverAction` would
+     * have accepted the assignment perfectly well, since it only requires the captain to
+     * be active and free. The filter was in the suggestion, not in the rule.
+     *
+     * Offline captains also have no distance to sort by if they never reported a
+     * position, so they come last, and the caller shows each one's state on the row.
+     */
+    public function eligibleDrivers(Order $order, float $radiusKm, bool $includeOffline = false): Collection
     {
         $staleSeconds = (int) (Setting::query()->where('key', 'driver.location_stale_seconds')->value('value') ?? 60);
 
         return Driver::query()
             ->where('is_active', true)
-            ->whereNotNull('location_updated_at')
+            ->when(! $includeOffline, fn ($q) => $q->whereNotNull('location_updated_at'))
             ->get()
             ->map(function (Driver $driver) use ($order, $staleSeconds) {
                 $isLive = $driver->is_online
@@ -107,12 +121,23 @@ class DispatchService
 
                 return [
                     'driver' => $driver,
-                    'distance_km' => Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
+                    'distance_km' => $driver->current_lat === null || $driver->current_lng === null
+                        ? null
+                        : Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
                     'state' => $isLive ? 'live' : ($driver->is_online ? 'stale' : 'offline'),
                 ];
             })
-            ->filter(fn ($c) => $c['distance_km'] <= $radiusKm && $c['state'] !== 'offline')
-            ->sortBy('distance_km')
+            ->filter(fn ($c) => $includeOffline
+                ? $c['driver']->active_order_id === null
+                : $c['distance_km'] <= $radiusKm && $c['state'] !== 'offline')
+            // Live first, then stale, then offline; nearest first inside each group. An
+            // unknown position sorts last rather than as "zero km away".
+            ->sortBy(fn ($c) => [
+                match ($c['state']) {
+                    'live' => 0, 'stale' => 1, default => 2
+                },
+                $c['distance_km'] ?? PHP_INT_MAX,
+            ])
             ->values();
     }
 

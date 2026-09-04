@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\UpdateDriverRequest;
 use App\Models\Driver;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -114,6 +115,10 @@ class DriverController extends Controller
         $this->ensureInScope($request, $driver);
 
         $tempPassword = $action->execute($driver->user);
+
+        // Same reasoning as the restaurant's: the write is on `users`, and the new password
+        // is not what the log is for.
+        AuditLogger::record($request->user(), 'drivers.reset_password', $driver, ['user_id' => $driver->user->id]);
 
         return ApiResponse::success(['temp_password' => $tempPassword], 'تم إعادة تعيين كلمة المرور بنجاح');
     }

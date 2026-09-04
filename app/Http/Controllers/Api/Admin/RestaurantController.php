@@ -11,6 +11,7 @@ use App\Http\Requests\Admin\UpdateRestaurantRequest;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -114,7 +115,19 @@ class RestaurantController extends Controller
             'zone_ids.*' => ['exists:service_zones,id'],
         ]);
 
+        $before = $restaurant->servedZones()->pluck('service_zones.id')->all();
         $restaurant->servedZones()->sync($validated['zone_ids']);
+
+        // A `sync()` writes the pivot, not `restaurants`, so no model event fires and
+        // AuditableObserver never sees it. Which zones a restaurant serves decides which
+        // customers can order from it at all — recorded by hand.
+        AuditLogger::record(
+            $request->user(),
+            'restaurants.zones',
+            $restaurant,
+            ['zone_ids' => $validated['zone_ids']],
+            ['zone_ids' => $before],
+        );
 
         return ApiResponse::success($restaurant->fresh(['servedZones']), 'تم تحديث مناطق التغطية بنجاح');
     }
@@ -124,6 +137,11 @@ class RestaurantController extends Controller
         $this->ensureInScope($request, $restaurant);
 
         $tempPassword = $action->execute($restaurant->owner);
+
+        // The write lands on `users`, which is not observed here — `UserController` audits
+        // that table itself and a second entry would double every row it writes. Never the
+        // password: the audit trail records that it changed, not to what.
+        AuditLogger::record($request->user(), 'restaurants.reset_password', $restaurant, ['owner_user_id' => $restaurant->owner->id]);
 
         return ApiResponse::success(['temp_password' => $tempPassword], 'تم إعادة تعيين كلمة المرور بنجاح');
     }

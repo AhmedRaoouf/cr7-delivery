@@ -21,6 +21,34 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     /**
+     * The models an admin can reach through the admin API, D-52's «whose rows».
+     *
+     * `User` is deliberately absent: `UserController` already records its own rows, and a
+     * second observer entry would double every one of them. `Order`, `Complaint`,
+     * `Settlement`, `Refund` and `Payment` are absent for the same reason — their admin
+     * actions are verbs («force this status», «reassign this captain») whose meaning is
+     * lost if they are logged as a column diff, so they stay with `AuditLogger::record`.
+     */
+    private const AUDITED = [
+        \App\Models\Banner::class,
+        \App\Models\City::class,
+        \App\Models\Cuisine::class,
+        \App\Models\DeliveryPricingRule::class,
+        \App\Models\Driver::class,
+        \App\Models\DriverDocument::class,
+        \App\Models\Faq::class,
+        \App\Models\MenuCategory::class,
+        \App\Models\Product::class,
+        \App\Models\ProductOption::class,
+        \App\Models\ProductOptionGroup::class,
+        \App\Models\PromoCode::class,
+        \App\Models\Restaurant::class,
+        \App\Models\Role::class,
+        \App\Models\ServiceZone::class,
+        \App\Models\StaticPage::class,
+    ];
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -81,6 +109,14 @@ class AppServiceProvider extends ServiceProvider
         // moved from here — see App\Observers\OrderObserver for why the model event
         // is the hook rather than the nineteen call sites that write `status`.
         Order::observe(\App\Observers\OrderObserver::class);
+
+        // D-52 — «every admin action on a row writes an `audit_logs` row». Sixteen admin
+        // controllers mutate these models and none of them said so; the model event is the
+        // hook for the same reason it is above, and it covers the endpoint nobody has
+        // written yet. Only an admin actor is recorded — see App\Observers\AuditableObserver.
+        foreach (self::AUDITED as $model) {
+            $model::observe(\App\Observers\AuditableObserver::class);
+        }
 
         // Static OTP is correct on a staging server with no SMS gateway and is
         // a full account takeover on a public one. Say so on every boot rather

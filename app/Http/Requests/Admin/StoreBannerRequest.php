@@ -27,6 +27,8 @@ class StoreBannerRequest extends FormRequest
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'is_active' => ['nullable', 'boolean'],
+            'remove_image_ar' => ['nullable', 'boolean'],
+            'remove_image_en' => ['nullable', 'boolean'],
         ];
     }
 }

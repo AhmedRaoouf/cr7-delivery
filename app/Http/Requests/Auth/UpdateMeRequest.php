@@ -19,6 +19,7 @@ class UpdateMeRequest extends FormRequest
             'avatar' => ['nullable', 'image', 'max:5120'],
             'locale' => ['nullable', 'in:ar,en'],
             'theme' => ['nullable', 'in:dark,light,system'],
+            'remove_avatar' => ['nullable', 'boolean'],
         ];
     }
 }

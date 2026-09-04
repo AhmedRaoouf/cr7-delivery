@@ -31,6 +31,13 @@ class StoreRestaurantRequest extends FormRequest
             'commission_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
             'avg_prep_minutes' => ['nullable', 'integer', 'min:1'],
+            // `ADM-12` offered a logo picker the API had no rule for, so the file was
+            // dropped and the response still answered 200 with `logo: null`. The
+            // drawing and the contract agree now.
+            'logo' => ['nullable', 'image', 'max:5120'],
+            'cover' => ['nullable', 'image', 'max:5120'],
+            'remove_logo' => ['nullable', 'boolean'],
+            'remove_cover' => ['nullable', 'boolean'],
         ];
     }
 }

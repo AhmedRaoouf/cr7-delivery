@@ -19,6 +19,7 @@ class StoreMenuCategoryRequest extends FormRequest
             'image' => ['nullable', 'image', 'max:5120'],
             'sort_order' => ['nullable', 'integer'],
             'is_active' => ['nullable', 'boolean'],
+            'remove_image' => ['nullable', 'boolean'],
         ];
     }
 }

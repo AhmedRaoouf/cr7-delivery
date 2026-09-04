@@ -77,6 +77,11 @@ class AppServiceProvider extends ServiceProvider
         // whenever a row that feeds the median moves.
         Product::observe(\App\Observers\ProductObserver::class);
 
+        // Realtime. Every open board, map and tracking screen learns that an order
+        // moved from here — see App\Observers\OrderObserver for why the model event
+        // is the hook rather than the nineteen call sites that write `status`.
+        Order::observe(\App\Observers\OrderObserver::class);
+
         // Static OTP is correct on a staging server with no SMS gateway and is
         // a full account takeover on a public one. Say so on every boot rather
         // than letting it ride into production unnoticed.

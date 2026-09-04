@@ -22,6 +22,8 @@ class UpdateRestaurantMeRequest extends FormRequest
             'cover' => ['nullable', 'image', 'max:5120'],
             'phone' => ['sometimes', 'required', 'string'],
             'whatsapp' => ['nullable', 'string'],
+            'remove_logo' => ['nullable', 'boolean'],
+            'remove_cover' => ['nullable', 'boolean'],
         ];
     }
 }

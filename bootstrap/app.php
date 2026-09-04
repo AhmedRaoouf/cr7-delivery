@@ -26,6 +26,16 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    // Pusher private channels need an auth endpoint, and Laravel's default one sits at
+    // `/broadcasting/auth` on the `web` guard. No client of this API ever holds a web
+    // session (D-69: the dashboards keep the bearer token server-side, the apps send it
+    // as a header), so the stock route would answer 403 for every subscriber. Registered
+    // here on `auth:sanctum`, under the same `api/v1` prefix as everything else, so the
+    // dashboards can reach it through the BFF and the apps with their own token.
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        attributes: ['prefix' => 'api/v1', 'middleware' => ['api', 'auth:sanctum']],
+    )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'client.type' => EnsureClientMatchesUserType::class,

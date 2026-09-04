@@ -13,21 +13,15 @@ use App\Http\Requests\Restaurant\AcceptOrderRequest;
 use App\Http\Requests\Restaurant\RejectOrderRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
+use App\Support\BoardQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /** doc 08 §6.1 — the board: six queues mapped onto sub-order statuses. */
 class OrderController extends Controller
 {
-    private const QUEUES = [
-        'new' => ['pending', 'restaurant_timeout'],
-        'awaiting_customer' => ['accepted', 'awaiting_customer_confirmation', 'awaiting_payment'],
-        'confirmed' => ['confirmed'],
-        'preparing' => ['preparing'],
-        'ready' => ['ready', 'searching_driver', 'waiting_for_driver'],
-        'with_driver' => ['driver_assigned', 'arrived_restaurant', 'waiting_at_restaurant', 'picked_up', 'on_the_way', 'arrived_customer'],
-        'done' => ['delivered', 'cancelled', 'delivery_issue'],
-    ];
+    /** Moved to App\Support\BoardQueue so the broadcast path reads the same map. */
+    private const QUEUES = BoardQueue::QUEUES;
 
     public function index(Request $request): JsonResponse
     {

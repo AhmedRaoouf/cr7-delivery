@@ -30,6 +30,13 @@ class UpdateRestaurantRequest extends FormRequest
             'menu_layout' => ['nullable', 'in:list,pager'],
             'sort_order' => ['nullable', 'integer'],
             'cuisine_ids' => ['nullable', 'array'],
+            // `ADM-12` offered a logo picker the API had no rule for, so the file was
+            // dropped and the response still answered 200 with `logo: null`. The
+            // drawing and the contract agree now.
+            'logo' => ['nullable', 'image', 'max:5120'],
+            'cover' => ['nullable', 'image', 'max:5120'],
+            'remove_logo' => ['nullable', 'boolean'],
+            'remove_cover' => ['nullable', 'boolean'],
             'cuisine_ids.*' => ['exists:cuisines,id'],
         ];
     }

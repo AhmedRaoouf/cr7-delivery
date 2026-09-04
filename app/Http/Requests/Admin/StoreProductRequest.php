@@ -36,6 +36,8 @@ class StoreProductRequest extends FormRequest
             'is_available' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer'],
+            'remove_image' => ['nullable', 'boolean'],
+            'remove_gallery' => ['nullable', 'boolean'],
         ];
     }
 }

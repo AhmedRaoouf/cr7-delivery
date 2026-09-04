@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Shared;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Support\ApiResponse;
@@ -62,11 +63,23 @@ class ConfigController extends Controller
             'auth' => [
                 'static_otp' => Otp::echoable(),
             ],
+            // Realtime. The Pusher *key* is a public identifier — it is meant to sit
+            // in every client — while the secret never leaves the server. Published
+            // here, like the map token, so rotating the Pusher app is a server edit
+            // rather than a store release. `enabled` false means every client keeps
+            // its polling fallback and opens no socket at all.
+            'realtime' => [
+                'driver' => config('broadcasting.default') === 'pusher' ? 'pusher' : null,
+                'enabled' => config('broadcasting.default') === 'pusher' && filled(config('broadcasting.connections.pusher.key')),
+                'key' => config('broadcasting.default') === 'pusher' ? config('broadcasting.connections.pusher.key') : null,
+                'cluster' => config('broadcasting.connections.pusher.options.cluster'),
+                'auth_endpoint' => url('/api/v1/broadcasting/auth'),
+            ],
             'cart' => [
                 'max_restaurants' => $settings->get('cart.max_restaurants', 3),
                 'max_qty_per_line' => $settings->get('cart.max_qty_per_line', 10),
             ],
-            'order_statuses' => collect(\App\Enums\OrderStatus::cases())->map(fn ($s) => [
+            'order_statuses' => collect(OrderStatus::cases())->map(fn ($s) => [
                 'value' => $s->value,
                 'label' => $s->label(),
                 'color' => $s->color(),

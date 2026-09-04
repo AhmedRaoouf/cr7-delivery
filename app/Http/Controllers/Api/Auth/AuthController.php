@@ -30,7 +30,7 @@ class AuthController extends Controller
 
     public function updateMe(UpdateMeRequest $request): JsonResponse
     {
-        $data = $this->withPublicUpload($request->validated(), $request, 'avatar', 'avatars');
+        $data = $this->withPublicUpload($request->validated(), $request, 'avatar', 'avatars', $request->user());
         $request->user()->update($data);
 
         return ApiResponse::success(new UserResource($request->user()->fresh()), 'تم تحديث البيانات بنجاح');

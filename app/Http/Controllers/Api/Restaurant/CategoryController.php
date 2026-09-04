@@ -34,7 +34,7 @@ class CategoryController extends Controller
     public function update(StoreCategoryRequest $request, MenuCategory $category): JsonResponse
     {
         $this->ensureOwned($request, $category);
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $category);
         $category->update($data);
 
         return ApiResponse::success($category->fresh(), 'تم تحديث القسم بنجاح');

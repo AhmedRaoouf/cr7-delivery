@@ -58,8 +58,8 @@ class ProductController extends Controller
         $this->ensureOwned($request, $product);
 
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products');
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product);
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product);
 
         $product->update($data);
 

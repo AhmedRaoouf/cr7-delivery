@@ -30,8 +30,8 @@ class RestaurantMeController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants');
-        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants');
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
 
         $restaurant->update($data);
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\CreateRestaurantAction;
 use App\Actions\Admin\ResetUserPasswordAction;
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRestaurantRequest;
 use App\Http\Requests\Admin\UpdateRestaurantRequest;
@@ -15,6 +16,8 @@ use Illuminate\Http\Request;
 
 class RestaurantController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Request $request): JsonResponse
     {
         $restaurants = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
@@ -40,7 +43,13 @@ class RestaurantController extends Controller
 
     public function store(StoreRestaurantRequest $request, CreateRestaurantAction $action): JsonResponse
     {
-        $result = $action->execute($request->validated());
+        // Without this the validated array still holds the UploadedFile objects and the
+        // action would try to persist them as column values.
+        $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants');
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants');
+
+        $result = $action->execute($data);
 
         return ApiResponse::success([
             'restaurant' => $result['restaurant'],
@@ -53,6 +62,8 @@ class RestaurantController extends Controller
         $this->ensureInScope($request, $restaurant);
 
         $data = $request->validated();
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
         $restaurant->update(collect($data)->except('cuisine_ids')->all());
 
         if (array_key_exists('cuisine_ids', $data)) {

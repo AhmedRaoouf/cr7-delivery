@@ -51,8 +51,8 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, Restaurant $restaurant, Product $product): JsonResponse
     {
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products');
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product);
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product);
 
         $product->update($data);
 

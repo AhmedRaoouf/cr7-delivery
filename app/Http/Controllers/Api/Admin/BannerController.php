@@ -38,8 +38,8 @@ class BannerController extends Controller
     public function update(StoreBannerRequest $request, Banner $banner): JsonResponse
     {
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners');
-        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners');
+        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners', $banner);
+        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners', $banner);
 
         $banner->update($data);
 

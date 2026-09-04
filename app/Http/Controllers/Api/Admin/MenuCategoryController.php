@@ -32,7 +32,7 @@ class MenuCategoryController extends Controller
 
     public function update(UpdateMenuCategoryRequest $request, Restaurant $restaurant, MenuCategory $menuCategory): JsonResponse
     {
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $menuCategory);
         $menuCategory->update($data);
 
         return ApiResponse::success($menuCategory, 'تم تحديث القسم بنجاح');

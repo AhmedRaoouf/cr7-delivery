@@ -101,10 +101,58 @@ class DispatchService
                     'error' => $e->getMessage(),
                 ]);
             }
+
+            $this->ring($order, $candidate);
         }
 
         $order->update(['status' => OrderStatus::SearchingDriver, 'dispatch_round' => $round, 'dispatch_started_at' => $order->dispatch_started_at ?? now()]);
         $this->syncGroupRollup($order);
+    }
+
+    /**
+     * doc 11 §2 `offer.new` — the one push in this application that has to break
+     * through a silent phone.
+     *
+     * The broadcast above wakes a captain whose app is open and in front of them.
+     * This is for the far more common case: the phone is in a pocket, the screen
+     * is off, and the offer expires in `$ttlSeconds` whether or not anybody
+     * looked. Sent on the `offers` channel, which is what makes it loud —
+     * a high-priority Android channel with its own sound, and an APNs
+     * time-sensitive interruption level that plays through a Focus mode.
+     *
+     * Wrapped and swallowed for the same reason the broadcast is: the
+     * `driver_attempts` row written above **is** the offer. If FCM is down the
+     * captain still finds it on their next poll, and the dispatch round still
+     * advances on time.
+     *
+     * @param  array{driver: Driver, distance_km: float}  $candidate
+     */
+    private function ring(Order $order, array $candidate): void
+    {
+        try {
+            app(\App\Support\Notifications\NotificationDispatcher::class)->send(
+                $candidate['driver']->user,
+                'offer.new',
+                [
+                    'restaurant' => $order->restaurant?->name_ar,
+                    'distance' => number_format($candidate['distance_km'], 1),
+                    'earning' => number_format(
+                        DriverEarningCalculator::calculate($order, $candidate['driver']),
+                        2,
+                    ).' ج.م',
+                ],
+                'cr7://offer/'.$order->id,
+                $order->id,
+                ['order_id' => (string) $order->id, 'kind' => 'offer'],
+                channel: 'offers',
+            );
+        } catch (\Throwable $e) {
+            Log::warning('offer push failed', [
+                'order_id' => $order->id,
+                'driver_id' => $candidate['driver']->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function syncGroupRollup(Order $order): void

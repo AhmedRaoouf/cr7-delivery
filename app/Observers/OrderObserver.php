@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Events\OrderChanged;
 use App\Models\Order;
+use App\Support\Notifications\OrderNotifications;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -28,6 +29,12 @@ use Throwable;
  * 2. **A broadcast failure is never an order failure.** Pusher being unreachable must
  *    not roll back an accept, a delivery or a refund. It degrades the dashboards to
  *    their polling safety net, which is exactly the behaviour before this file existed.
+ *
+ * The same two properties are why doc 11's notifications hang here too. A push and a
+ * broadcast answer different questions — «wake the screen that is already open» versus
+ * «tell the person whose phone is in their pocket» — but they are owed by the same
+ * nineteen writes, at the same moment, under the same two rules. Announcing them from
+ * one place is the only way the two can never disagree about what happened.
  */
 class OrderObserver
 {
@@ -57,6 +64,8 @@ class OrderObserver
 
     private function announce(Order $order, ?string $previousStatus): void
     {
+        $this->notify($order, $previousStatus);
+
         if (config('broadcasting.default') === 'null') {
             return;
         }
@@ -79,5 +88,31 @@ class OrderObserver
         }
 
         $send();
+    }
+
+    /**
+     * doc 11's rows for this transition.
+     *
+     * Not deferred to after the commit the way the broadcast is, and the
+     * difference is deliberate: the `notifications` row belongs *in* the
+     * transaction, so an accept that rolls back takes «وافق المطعم» with it.
+     * Only the push leaves the transaction, and `NotificationDispatcher` defers
+     * that itself.
+     *
+     * Wrapped all the same. A notification is worth less than an order, and the
+     * failure this catches is the one where a customer cannot be delivered to
+     * because a copy template referenced a column that is null.
+     */
+    private function notify(Order $order, ?string $previousStatus): void
+    {
+        try {
+            app(OrderNotifications::class)->handle($order, $previousStatus);
+        } catch (Throwable $e) {
+            Log::warning('order notification failed', [
+                'order_id' => $order->id,
+                'status' => $order->status,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

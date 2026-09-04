@@ -22,9 +22,15 @@ class StoreAdminUserRequest extends FormRequest
             'grants' => ['nullable', 'array'],
             'grants.*' => ['string', 'exists:permissions,name'],
             'scope' => ['nullable', 'array'],
+            // `type` as well as `scope_type`, because `POST /auth/login` publishes the
+            // scope as `{"type": …}` and a client that echoes back what it was given must
+            // not be told it sent nothing — which, before this, minted a global admin.
             'scope.scope_type' => ['nullable', 'in:global,city,zone'],
+            'scope.type' => ['nullable', 'in:global,city,zone'],
             'scope.city_ids' => ['nullable', 'array'],
+            'scope.city_ids.*' => ['integer', 'exists:cities,id'],
             'scope.zone_ids' => ['nullable', 'array'],
+            'scope.zone_ids.*' => ['integer', 'exists:service_zones,id'],
         ];
     }
 }

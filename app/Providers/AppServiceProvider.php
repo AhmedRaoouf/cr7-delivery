@@ -15,11 +15,26 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\Otp;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * Every route parameter in `routes/api.php` that names a database id.
+     *
+     * `slug` is the only wildcard left unconstrained, because it is the only one that is
+     * not a number.
+     */
+    private const NUMERIC_ROUTE_PARAMS = [
+        'address', 'application', 'banner', 'category', 'city', 'complaint', 'cuisine',
+        'customer', 'deliveryIssue', 'driver', 'driverDocument', 'faq', 'item',
+        'menuCategory', 'notification', 'option', 'optionGroup', 'order', 'orderGroup',
+        'orderId', 'payment', 'pricingRule', 'product', 'promoCode', 'proof', 'refund',
+        'restaurant', 'role', 'settlement', 'user', 'zone',
+    ];
+
     /**
      * The models an admin can reach through the admin API, D-52's «whose rows».
      *
@@ -92,6 +107,25 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * Every route id is a number, and a request that says otherwise is a 404.
+         *
+         * `GET /driver/offers/current` returned **500** on the live API. There is no such
+         * route; `/driver/offers/{orderId}` matched, `current` was handed to an action
+         * typed `int $orderId`, and PHP raised a TypeError. Model-bound parameters were
+         * already safe — implicit binding looks the key up and answers 404 — but the three
+         * that resolve by hand (`orderId`, `application`, `item`) had nothing in front of
+         * them, so a typo in a client reached the controller and came back as a server
+         * error. A 500 is a page an operator escalates; a 404 is one they read.
+         *
+         * Declared here rather than as `->whereNumber()` on each line so a route added
+         * later inherits it instead of having to remember. `slug` is deliberately absent
+         * — `/pages/{slug}` is the one parameter that is meant to be words.
+         */
+        foreach (self::NUMERIC_ROUTE_PARAMS as $parameter) {
+            Route::pattern($parameter, '[0-9]+');
+        }
+
         // Short, stable morph type strings instead of fragile FQCNs (doc 03 §8: "restaurant|product", "restaurant|driver").
         Relation::enforceMorphMap([
             'restaurant' => Restaurant::class,

@@ -45,16 +45,39 @@ class CreateAdminUserAction
                 'must_change_password' => true,
             ]);
 
-            $scope = $data['scope'] ?? ['scope_type' => 'city', 'city_ids' => []];
-            $this->applyScope($user, $scope, $data['role']);
+            $this->applyScope($user, $data['scope'] ?? [], $data['role']);
 
             return ['user' => $user->fresh(), 'temp_password' => $tempPassword];
         });
     }
 
+    /**
+     * D-51 — «a permission says *what*, a geographic scope says *whose rows*, and both
+     * must pass».
+     *
+     * This used to fall back to **global** whenever the caller did not name a scope type,
+     * which is the widest authority the platform has and the exact opposite of what an
+     * unspecified value should mean. Three ways to reach it, none of them deliberate: a
+     * body with no `scope` at all, a `scope` carrying only `city_ids`, and — the one that
+     * actually happened — a client sending `type` instead of `scope_type`, because
+     * `POST /auth/login` *publishes* the scope as `{"type": "city", ...}` and this endpoint
+     * accepted only the other spelling. A silent typo minted a global admin.
+     *
+     * Both spellings are read now, and an unrecognised scope creates **no rows at all**.
+     * `AdminScope::isGlobal()` is false without a global row and every scoped list is
+     * empty without a city row, so an admin whose scope did not arrive sees nothing and
+     * says so, instead of seeing everything and saying nothing.
+     */
     private function applyScope(User $user, array $scope, string $role): void
     {
-        $type = $role === 'super_admin' ? 'global' : ($scope['scope_type'] ?? 'global');
+        // The one role whose authority is global by definition (doc 24 §1.2).
+        if ($role === 'super_admin') {
+            $user->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
+
+            return;
+        }
+
+        $type = $scope['scope_type'] ?? $scope['type'] ?? null;
 
         if ($type === 'global') {
             $user->adminScopes()->create(['scope_type' => AdminScopeType::Global]);

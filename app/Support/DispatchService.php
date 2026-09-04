@@ -3,11 +3,13 @@
 namespace App\Support;
 
 use App\Enums\OrderStatus;
+use App\Events\DriverOfferSent;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * doc 05 §1-3 — dispatch starts the instant an order becomes `ready`, offering to the
@@ -81,6 +83,24 @@ class DispatchService
                 'sent_at' => now(),
                 'expires_at' => $expiresAt,
             ]);
+
+            // Wakes the captain's app instead of it asking every three seconds. A
+            // broadcast failure is not a dispatch failure: the row above is the offer,
+            // this is only the notification, and the app's own poll still finds it.
+            try {
+                DriverOfferSent::dispatch(
+                    (int) $candidate['driver']->id,
+                    (int) $order->id,
+                    $round,
+                    $expiresAt->toIso8601String(),
+                );
+            } catch (\Throwable $e) {
+                Log::warning('offer broadcast failed', [
+                    'order_id' => $order->id,
+                    'driver_id' => $candidate['driver']->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $order->update(['status' => OrderStatus::SearchingDriver, 'dispatch_round' => $round, 'dispatch_started_at' => $order->dispatch_started_at ?? now()]);

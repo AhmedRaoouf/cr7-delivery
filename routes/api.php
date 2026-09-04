@@ -468,8 +468,11 @@ Route::prefix('v1')->group(function () {
         // Complaints
         Route::middleware('permission:complaints.view')->group(function () {
             Route::get('/complaints', [AdminComplaintController::class, 'index']);
-            Route::get('/complaints/{complaint}', [AdminComplaintController::class, 'show']);
+            // `sla` before `{complaint}`: routes match in order, so the wildcard would
+            // otherwise swallow the literal and answer the SLA board with a 404 for a
+            // complaint whose id is the word "sla".
             Route::get('/complaints/sla', [AdminComplaintController::class, 'sla']);
+            Route::get('/complaints/{complaint}', [AdminComplaintController::class, 'show']);
         });
         Route::post('/complaints/{complaint}/messages', [AdminComplaintController::class, 'addMessage'])->middleware('permission:complaints.reply');
         Route::patch('/complaints/{complaint}', [AdminComplaintController::class, 'update'])->middleware('permission:complaints.update');

@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Enums\OrderStatus;
+use App\Events\DriverLocationChanged;
 use App\Events\OrderChanged;
 use App\Http\Controllers\Api\Restaurant\OrderController;
+use App\Models\Driver;
 use App\Models\Order;
 use App\Support\BoardQueue;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -118,5 +120,66 @@ class OrderBroadcastTest extends TestCase
         );
 
         $this->assertSame(BoardQueue::QUEUES, $reflected->getValue());
+    }
+
+    public function test_a_captain_ping_carries_its_coordinates_and_goes_only_where_they_are_allowed(): void
+    {
+        $driver = new Driver([
+            'city_id' => 4,
+            'current_lat' => 31.4001,
+            'current_lng' => 31.5002,
+            'is_online' => true,
+            'is_available' => false,
+            'location_updated_at' => now(),
+        ]);
+        $driver->id = 12;
+
+        $event = DriverLocationChanged::fromDriver($driver);
+        $payload = $event->broadcastWith();
+
+        // This is the one broadcast in the system that delivers rather than rings, so
+        // that a marker can cross a map with no request at all.
+        $this->assertSame(31.4001, $payload['lat']);
+        $this->assertSame(31.5002, $payload['lng']);
+
+        // And nothing beyond a position: no name, no phone, no plate, no order.
+        $this->assertSame(
+            ['driver_id', 'lat', 'lng', 'is_online', 'is_available', 'location_updated_at'],
+            array_keys($payload),
+        );
+
+        // `admin.fleet.{city}` and not `admin.city.{city}`. The wider channel is joinable
+        // by a sub-admin who may watch orders move but may not be told where captains
+        // are; carrying coordinates onto it would deliver a field
+        // `GET /admin/dashboard/live-drivers` refuses. There is no global fallback either
+        // — a captain with no city is on nobody's map.
+        $names = array_map(
+            fn (PrivateChannel $channel) => $channel->name,
+            $event->broadcastOn(),
+        );
+
+        $this->assertSame(['private-admin.fleet.4'], $names);
+    }
+
+    public function test_a_ping_on_a_live_trip_also_reaches_the_customer_watching_it(): void
+    {
+        $driver = new Driver([
+            'city_id' => 4,
+            'current_lat' => 31.4,
+            'current_lng' => 31.5,
+            'is_online' => true,
+            'is_available' => false,
+        ]);
+        $driver->id = 12;
+        $driver->setRelation('activeOrder', $this->order(['order_group_id' => 9]));
+
+        $names = array_map(
+            fn (PrivateChannel $channel) => $channel->name,
+            DriverLocationChanged::fromDriver($driver)->broadcastOn(),
+        );
+
+        // The customer's own group channel — which is what lets `CUS-30` draw a moving
+        // bike without a `GET /orders/{id}` every five seconds.
+        $this->assertSame(['private-admin.fleet.4', 'private-order-group.9'], $names);
     }
 }

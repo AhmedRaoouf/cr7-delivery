@@ -38,6 +38,24 @@ Broadcast::channel('admin.city.{cityId}', function (User $user, int $cityId): bo
         || in_array($cityId, array_map('intval', AdminScope::scopedCityIds($user)), true);
 });
 
+/**
+ * The fleet map's own channel — narrower than `admin.city.{id}` on purpose.
+ *
+ * `DriverLocationChanged` carries coordinates rather than a doorbell, so this callback
+ * has to answer the same question `GET /admin/dashboard/live-drivers` answers: the
+ * `drivers.view_location` permission **and** the city scope, not either one. A sub-admin
+ * who may be told that orders moved in their city but may not be told where captains are
+ * joins `admin.city.{id}` and is refused here.
+ */
+Broadcast::channel('admin.fleet.{cityId}', function (User $user, int $cityId): bool {
+    if (! $user->isAdmin() || ! $user->can('drivers.view_location')) {
+        return false;
+    }
+
+    return AdminScope::isGlobal($user)
+        || in_array($cityId, array_map('intval', AdminScope::scopedCityIds($user)), true);
+});
+
 /** Orders with no city land here; only a global admin sees them. */
 Broadcast::channel('admin.orders', function (User $user): bool {
     return $user->isAdmin() && AdminScope::isGlobal($user);

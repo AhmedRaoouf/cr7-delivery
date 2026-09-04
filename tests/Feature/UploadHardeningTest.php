@@ -57,13 +57,28 @@ class UploadHardeningTest extends TestCase
 
     public function test_the_upload_disk_follows_the_configured_public_disk(): void
     {
-        Storage::fake('r2');
-        config()->set('filesystems.public_uploads', 'r2');
+        Storage::fake('elsewhere');
+        config()->set('filesystems.public_uploads', 'elsewhere');
 
         FileUploader::storePublic(UploadedFile::fake()->image('logo.png'), 'restaurants');
 
-        $this->assertCount(1, Storage::disk('r2')->allFiles('restaurants'));
+        $this->assertCount(1, Storage::disk('elsewhere')->allFiles('restaurants'));
         $this->assertCount(0, Storage::disk('public')->allFiles('restaurants'));
+    }
+
+    public function test_a_configured_disk_that_no_longer_exists_falls_back_instead_of_throwing(): void
+    {
+        // The deployment ran on Cloudflare R2 for a while and its `.env` still carries
+        // `PUBLIC_UPLOAD_DISK=r2`. That disk is gone from `config/filesystems.php`, and
+        // without this fallback the first upload after the pull throws «Disk [r2] does
+        // not have a configured driver» — a leftover env line turning a working feature
+        // into a 500, on the one code path where the failure is not a missing image.
+        config()->set('filesystems.public_uploads', 'r2');
+
+        $url = FileUploader::storePublic(UploadedFile::fake()->image('logo.png'), 'restaurants');
+
+        $this->assertCount(1, Storage::disk('public')->allFiles('restaurants'));
+        $this->assertStringContainsString('restaurants/', $url);
     }
 
     public function test_deleting_removes_a_file_this_application_stored(): void
@@ -74,6 +89,63 @@ class UploadHardeningTest extends TestCase
         FileUploader::deletePublic($url);
 
         $this->assertCount(0, Storage::disk('public')->allFiles('restaurants'));
+    }
+
+    public function test_replacing_an_image_removes_the_one_it_replaced(): void
+    {
+        // Otherwise every edit of a product photo leaves its predecessor on disk forever,
+        // and «change the picture» is the most repeated action in the whole dashboard.
+        $controller = new class
+        {
+            use \App\Http\Controllers\Concerns\HandlesUploads;
+
+            public function call(array $data, \Illuminate\Http\Request $request, ?\Illuminate\Database\Eloquent\Model $existing): array
+            {
+                return $this->withPublicUpload($data, $request, 'image', 'products', $existing);
+            }
+        };
+
+        $first = FileUploader::storePublic(UploadedFile::fake()->image('a.png'), 'products');
+        $product = new \App\Models\Product(['image' => $first]);
+
+        $request = \Illuminate\Http\Request::create('/', 'POST', [], [], [
+            'image' => UploadedFile::fake()->image('b.png'),
+        ]);
+
+        $data = $controller->call([], $request, $product);
+
+        $this->assertNotSame($first, $data['image']);
+        // One file, and it is the new one.
+        $this->assertCount(1, Storage::disk('public')->allFiles('products'));
+        $this->assertStringContainsString(
+            basename(Storage::disk('public')->allFiles('products')[0]),
+            $data['image'],
+        );
+    }
+
+    public function test_the_remove_flag_clears_the_column_and_the_file(): void
+    {
+        $controller = new class
+        {
+            use \App\Http\Controllers\Concerns\HandlesUploads;
+
+            public function call(array $data, \Illuminate\Http\Request $request, ?\Illuminate\Database\Eloquent\Model $existing): array
+            {
+                return $this->withPublicUpload($data, $request, 'image', 'products', $existing);
+            }
+        };
+
+        $url = FileUploader::storePublic(UploadedFile::fake()->image('a.png'), 'products');
+        $product = new \App\Models\Product(['image' => $url]);
+
+        $request = \Illuminate\Http\Request::create('/', 'POST', ['remove_image' => '1']);
+
+        $data = $controller->call([], $request, $product);
+
+        $this->assertNull($data['image']);
+        // And the flag itself never reaches the model — it is not a column.
+        $this->assertArrayNotHasKey('remove_image', $data);
+        $this->assertCount(0, Storage::disk('public')->allFiles('products'));
     }
 
     public function test_deleting_ignores_a_url_from_somewhere_else(): void

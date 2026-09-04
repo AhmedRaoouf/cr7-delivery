@@ -14,10 +14,13 @@ use RuntimeException;
  * Sensitive files (payment proofs, driver documents — "Admin only") go on the `local`
  * disk, which has no public URL at all; they are served through an admin-gated endpoint.
  *
- * Which disk is "public" is `filesystems.public_uploads` — `public` locally,
- * `r2` on the deployment. That indirection is the fix for a bug that shipped: the
- * `public` disk serves through a `public/storage` symlink, Hostinger's shared hosting
- * did not have one, and so every upload answered 200 with a URL that answered 404.
+ * Which disk is "public" is `filesystems.public_uploads`, and it is `public` everywhere:
+ * storage/app/public, served through the `public/storage` symlink. The indirection stays
+ * because it is what makes the disk a deployment decision rather than a code change, and
+ * because of the bug that created it — the symlink was missing on the server, so every
+ * upload answered 200 with a URL that answered 404. `storage:link` has been run since,
+ * and `/storage/` on the live host answers 403 (a directory that exists and refuses to
+ * list itself) rather than the 301 a missing path gets.
  */
 class FileUploader
 {
@@ -39,7 +42,27 @@ class FileUploader
 
     public static function disk(): string
     {
-        return (string) config('filesystems.public_uploads', 'public');
+        $disk = (string) config('filesystems.public_uploads', 'public');
+
+        // A deployment whose `.env` still names a disk this build no longer defines would
+        // otherwise throw «Disk [r2] does not have a configured driver» on the first
+        // upload — a leftover env line taking down a working feature, on the one code
+        // path where the failure is a 500 rather than a missing image. Fall back to the
+        // disk that is always defined, and say so rather than failing silently.
+        //
+        // Resolved through the manager, not by reading `filesystems.disks.*`: a disk
+        // injected by `Storage::fake()` is registered on the manager and never appears in
+        // the config, so a config lookup would send every test that fakes a disk to
+        // `public` instead.
+        try {
+            Storage::disk($disk);
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('upload disk is not configured; falling back', ['configured' => $disk]);
+
+            return 'public';
+        }
+
+        return $disk;
     }
 
     public static function storePublic(UploadedFile $file, string $folder): string

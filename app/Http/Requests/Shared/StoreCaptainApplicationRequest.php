@@ -4,7 +4,7 @@ namespace App\Http\Requests\Shared;
 
 use App\Enums\CaptainApplicationStatus;
 use App\Http\Requests\Concerns\NormalisesPhone;
-use Illuminate\Validation\Rule;
+use App\Models\CaptainApplication;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** APP-03 — public, unauthenticated: the applicant has no account yet (D-45). */
@@ -34,10 +34,24 @@ class StoreCaptainApplicationRequest extends FormRequest
                 'unique:users,phone',
                 // Nor twice while the first one is still in the queue: two pending rows
                 // for one number are two accounts waiting to collide on approval.
-                Rule::unique('captain_applications', 'phone')->whereIn('status', [
-                    CaptainApplicationStatus::Pending->value,
-                    CaptainApplicationStatus::UnderReview->value,
-                ]),
+                //
+                // A closure rather than a second `Rule::unique`, because both would fail
+                // under the key `phone.unique` and the applicant would be told to sign in
+                // to an account that does not exist yet — the opposite of what they need
+                // to hear, which is that their application is already being read.
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $queued = CaptainApplication::query()
+                        ->where('phone', $value)
+                        ->whereIn('status', [
+                            CaptainApplicationStatus::Pending,
+                            CaptainApplicationStatus::UnderReview,
+                        ])
+                        ->exists();
+
+                    if ($queued) {
+                        $fail('لديك طلب قيد المراجعة بهذا الرقم. انتظر الرد قبل تقديم طلب جديد.');
+                    }
+                },
             ],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'national_id' => ['nullable', 'string', 'max:20'],

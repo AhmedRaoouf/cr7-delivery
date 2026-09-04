@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AdminScopeType;
 use App\Models\CaptainApplication;
 use App\Models\Driver;
 use App\Models\User;
@@ -43,7 +44,7 @@ class AdminDriverCreationTest extends TestCase
         $admin->assignRole('super_admin');
         // The role says what; the scope says whose rows (D-50). Without the scope row
         // every driver is out of scope and each edit answers 404, never 403.
-        $admin->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
         Sanctum::actingAs($admin);
 
         return $admin;
@@ -214,7 +215,12 @@ class AdminDriverCreationTest extends TestCase
         ];
 
         $this->postJson('/api/v1/captain-applications', $body)->assertCreated();
-        $this->postJson('/api/v1/captain-applications', $body)->assertStatus(422);
+
+        // A different sentence from the registered-phone one: there is no account to sign
+        // in to yet, and telling an applicant to sign in to nothing is worse than silence.
+        $this->postJson('/api/v1/captain-applications', $body)
+            ->assertStatus(422)
+            ->assertJsonPath('errors.phone.0', 'لديك طلب قيد المراجعة بهذا الرقم. انتظر الرد قبل تقديم طلب جديد.');
 
         $this->assertSame(1, CaptainApplication::query()->count());
     }

@@ -15,11 +15,13 @@ use Illuminate\Http\Request;
 
 class DeliveryPricingRuleController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $rules = AdminScope::applyToPricingRules(DeliveryPricingRule::query(), $request->user())
-            ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($request->integer('service_zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
+            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
+            ->when($this->filterInt($request, 'service_zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
             ->orderBy('sort_order')
             ->paginate($request->integer('per_page', 20));
 

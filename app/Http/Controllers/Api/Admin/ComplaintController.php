@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 /** doc 08 §7 / doc 24 §4 — the platform side of the two-sided complaints box. */
 class ComplaintController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $complaints = Complaint::query()
@@ -20,6 +22,13 @@ class ComplaintController extends Controller
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
             ->when($request->string('filter.category')->isNotEmpty(), fn ($q) => $q->where('category', $request->string('filter.category')))
             ->when($request->string('filter.priority')->isNotEmpty(), fn ($q) => $q->where('priority', $request->string('filter.priority')))
+            // `ADM-53`'s «متأخرة» toggle. Overdue is the same question `SlaChip` asks per
+            // row — past `due_at` and not yet resolved — and it was answered client-side
+            // only, so the filter returned the full list and the count above it was wrong.
+            ->when($this->filterBool($request, 'overdue') === true, fn ($q) => $q
+                ->whereNotNull('due_at')
+                ->where('due_at', '<', now())
+                ->whereNull('resolved_at'))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

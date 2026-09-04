@@ -16,12 +16,21 @@ use Illuminate\Http\Request;
 
 class DriverController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->with(['user', 'city'])
-            ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($request->has('is_online'), fn ($q) => $q->where('is_online', $request->boolean('is_online')))
+            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
+            ->when($this->filterBool($request, 'is_online') !== null, fn ($q) => $q->where('is_online', $this->filterBool($request, 'is_online')))
+            // `ADM-19` has had a search box since it was drawn and the endpoint never had
+            // the filter, so typing a captain's name returned the whole fleet. The name and
+            // the phone are both on `users`, which is why this is a `whereHas`.
+            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                $term = '%'.$this->filterString($request, 'search').'%';
+                $q->whereHas('user', fn ($u) => $u->where('name', 'like', $term)->orWhere('phone', 'like', $term));
+            })
             ->paginate($request->integer('per_page', 20));
 
         return ApiResponse::success($drivers->items(), meta: [

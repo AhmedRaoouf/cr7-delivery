@@ -13,10 +13,12 @@ use Illuminate\Http\Request;
 
 class ServiceZoneController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $zones = AdminScope::applyToZones(ServiceZone::query(), $request->user())
-            ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
+            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->paginate($request->integer('per_page', 20));
 
         return ApiResponse::success($zones->items(), meta: [

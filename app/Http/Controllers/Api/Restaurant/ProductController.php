@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/POST/PATCH/DELETE /restaurant/products[/{id}]: self-service, own restaurant only. */
 class ProductController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     use HandlesUploads;
 
     public function index(Request $request): JsonResponse
@@ -21,7 +23,13 @@ class ProductController extends Controller
 
         $products = $restaurant->products()
             ->with('optionGroups.options')
-            ->when($request->integer('menu_category_id'), fn ($q, $id) => $q->where('menu_category_id', $id))
+            ->when($this->filterInt($request, 'menu_category_id'), fn ($q, $id) => $q->where('menu_category_id', $id))
+            // `RES-14`'s search box, which the endpoint never implemented: an operator
+            // looking for one dish in a 200-row menu got the whole menu back.
+            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                $term = '%'.$this->filterString($request, 'search').'%';
+                $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
+            })
             ->orderBy('sort_order')
             ->paginate($request->integer('per_page', 30));
 

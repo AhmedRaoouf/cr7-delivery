@@ -12,11 +12,14 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — GET /admin/delivery-issues, POST /{id}/resolve. */
 class DeliveryIssueController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $issues = DeliveryIssue::query()
             ->with(['order.restaurant', 'reporter'])
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
+            ->when($this->filterString($request, 'status') !== '', fn ($q) => $q->where('status', $this->filterString($request, 'status')))
+            ->when($this->filterInt($request, 'restaurant_id'), fn ($q, $id) => $q->whereHas('order', fn ($o) => $o->where('restaurant_id', $id)))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

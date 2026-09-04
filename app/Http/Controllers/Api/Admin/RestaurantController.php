@@ -17,14 +17,22 @@ use Illuminate\Http\Request;
 
 class RestaurantController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     use HandlesUploads;
 
     public function index(Request $request): JsonResponse
     {
         $restaurants = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
             ->with(['city', 'serviceZone'])
-            ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => $q->whereFullText(['name_ar', 'name_en'], $request->string('search')))
+            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
+            // `like`, not `whereFullText`. A full-text index answers on whole words, so a
+            // dashboard search box — which fires on every keystroke — matched nothing until
+            // the operator finished a word, and never matched a partial one at all.
+            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                $term = '%'.$this->filterString($request, 'search').'%';
+                $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
+            })
             ->paginate($request->integer('per_page', 20));
 
         return ApiResponse::success($restaurants->items(), meta: [

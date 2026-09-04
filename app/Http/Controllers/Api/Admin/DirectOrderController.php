@@ -14,13 +14,27 @@ use Illuminate\Http\Request;
 /** doc 08 §7 / doc 22 §4.6 — cross-restaurant direct-order oversight. */
 class DirectOrderController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $orders = AdminScope::applyToOrders(Order::query(), $request->user())
             ->where('origin', 'restaurant_direct')
             ->with('restaurant')
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->when($request->integer('filter.restaurant_id'), fn ($q, $id) => $q->where('restaurant_id', $id))
+            ->when($this->filterInt($request, 'restaurant_id'), fn ($q, $id) => $q->where('restaurant_id', $id))
+            // doc 08 §7 makes `filter[city_id]` global to every admin list; this one never
+            // read it, so `ADM-46`'s city picker did nothing.
+            ->when($this->filterInt($request, 'city_id'), fn ($q, $id) => $q->where('city_id', $id))
+            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                $term = '%'.$this->filterString($request, 'search').'%';
+                // A direct order has no app customer, so the phone the operator has is the
+                // one the restaurant typed onto the order itself.
+                $q->where(fn ($sq) => $sq
+                    ->where('order_number', 'like', $term)
+                    ->orWhere('guest_customer_name', 'like', $term)
+                    ->orWhere('guest_customer_phone', 'like', $term));
+            })
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

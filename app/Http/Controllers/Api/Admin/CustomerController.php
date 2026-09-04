@@ -14,12 +14,15 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — GET /admin/customers, /{id}, POST /{id}/status, GET /{id}/orders|addresses|complaints. */
 class CustomerController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $customers = AdminScope::applyToCustomers(User::query()->where('type', UserType::Customer), $request->user())
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => $q->where(fn ($sq) => $sq
-                ->where('name', 'like', '%'.$request->string('search').'%')
-                ->orWhere('phone', 'like', '%'.$request->string('search').'%')))
+            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                $term = '%'.$this->filterString($request, 'search').'%';
+                $q->where(fn ($sq) => $sq->where('name', 'like', $term)->orWhere('phone', 'like', $term));
+            })
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

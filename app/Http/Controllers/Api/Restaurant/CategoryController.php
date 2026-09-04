@@ -13,13 +13,24 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/POST/PATCH/DELETE /restaurant/categories[/{id}]: self-service, scoped to the caller's own restaurant. */
 class CategoryController extends Controller
 {
+    use \App\Http\Controllers\Concerns\FiltersLists;
+
     use HandlesUploads;
 
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
-        return ApiResponse::success($restaurant->menuCategories()->orderBy('sort_order')->get());
+        return ApiResponse::success(
+            $restaurant->menuCategories()
+                // `RES-12`'s search box, which the endpoint never implemented.
+                ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
+                    $term = '%'.$this->filterString($request, 'search').'%';
+                    $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
+                })
+                ->orderBy('sort_order')
+                ->get(),
+        );
     }
 
     public function store(StoreCategoryRequest $request): JsonResponse

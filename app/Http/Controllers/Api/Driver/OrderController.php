@@ -149,9 +149,25 @@ class OrderController extends Controller
     {
         $driver = $request->user()->driver()->firstOrFail();
 
+        // `filter[from]` is DRV-27's «اليوم / هذا الأسبوع / هذا الشهر» chip, and it
+        // is applied here rather than in the app because the two cannot both be
+        // right once the list pages: a client that drops rows out of a page it
+        // was handed reports a `total` that counts rows it hid, and a range
+        // narrow enough to empty a whole page makes the scroll stop on a list
+        // that has more behind it.
+        //
+        // The date compared is the one the trip finished on, falling back to
+        // when it was raised for a trip that never did — the same rule the app
+        // used, so «اليوم» still holds an order taken at 23:50 and delivered
+        // after midnight.
+        $from = $request->date('filter.from');
+
         $orders = $driver->orders()
             ->with('restaurant')
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
+            ->when($from, fn ($q) => $q->where(fn ($scope) => $scope
+                ->where('delivered_at', '>=', $from)
+                ->orWhere(fn ($fallback) => $fallback->whereNull('delivered_at')->where('created_at', '>=', $from))))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

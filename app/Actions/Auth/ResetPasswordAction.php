@@ -8,7 +8,6 @@ use App\Models\OtpCode;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /** doc 08 §3 — POST /auth/password/reset. Consumes the `reset`-purpose OTP sent to the account's phone. */
 class ResetPasswordAction
@@ -17,7 +16,7 @@ class ResetPasswordAction
     {
         DB::transaction(function () use ($login, $code, $password) {
             $user = User::query()
-                ->where(Str::contains($login, '@') ? 'email' : 'phone', $login)
+                ->whereLogin($login)
                 ->first();
 
             if (! $user || ! $user->password) {

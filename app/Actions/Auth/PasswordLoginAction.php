@@ -6,7 +6,6 @@ use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /** FR-AUTH-04/05/10 — driver, restaurant and admin accounts: Admin-created, password login, forced change on first use. */
 class PasswordLoginAction
@@ -14,9 +13,9 @@ class PasswordLoginAction
     /** @return array{user: User, token: string} */
     public function execute(string $identifier, string $password, UserType $expectedType): array
     {
-        $user = User::query()
-            ->where(Str::contains($identifier, '@') ? 'email' : 'phone', $identifier)
-            ->first();
+        // `whereLogin` normalises: `+20 109 000 9599` and `01090009599` are the same
+        // account, and comparing the raw string made the second one unreachable.
+        $user = User::query()->whereLogin($identifier)->first();
 
         if (! $user || ! $user->password || ! Hash::check($password, $user->password)) {
             throw new ApiException('invalid_credentials', 'بيانات الدخول غير صحيحة', 422);

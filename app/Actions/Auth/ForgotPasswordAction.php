@@ -3,21 +3,17 @@
 namespace App\Actions\Auth;
 
 use App\Enums\OtpPurpose;
-use App\Exceptions\ApiException;
 use App\Models\User;
-use Illuminate\Support\Str;
 
 /** doc 08 §3 — POST /auth/password/forgot. Reuses the OTP channel (purpose = reset) since every account has a phone. */
 class ForgotPasswordAction
 {
-    public function __construct(private readonly SendOtpAction $sendOtp)
-    {
-    }
+    public function __construct(private readonly SendOtpAction $sendOtp) {}
 
     public function execute(string $login): void
     {
         $user = User::query()
-            ->where(Str::contains($login, '@') ? 'email' : 'phone', $login)
+            ->whereLogin($login)
             ->first();
 
         if (! $user || ! $user->password) {

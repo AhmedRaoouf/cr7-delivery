@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\Gender;
 use App\Enums\Theme;
 use App\Enums\UserType;
+use App\Support\PhoneNumber;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -140,5 +142,23 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->type === UserType::Admin;
+    }
+
+    /**
+     * The one way to find a user from something they typed into a `login` box.
+     *
+     * Sign-in, forgot-password and reset each rebuilt this by hand and each compared the
+     * raw string, so a phone written `+20 109 000 9599` matched no row and the account
+     * answered «بيانات الدخول غير صحيحة» to its own correct password. Normalising here
+     * means a lookup cannot be written without it.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeWhereLogin(Builder $query, string $login): void
+    {
+        $query->where(
+            PhoneNumber::isEmail($login) ? 'email' : 'phone',
+            PhoneNumber::normaliseLogin($login),
+        );
     }
 }

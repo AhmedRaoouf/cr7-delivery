@@ -2,14 +2,28 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\NormalisesPhone;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** FR-REST-01 — Admin creates a restaurant; the linked owner login is provisioned server-side. */
 class StoreRestaurantRequest extends FormRequest
 {
+    use NormalisesPhone;
+
     public function authorize(): bool
     {
         return $this->user()->can('restaurants.create');
+    }
+
+    /**
+     * The owner's phone becomes a `users.phone` and carries `unique:users,phone`, which
+     * only means something once the value is normalised. The branch `phone` is
+     * deliberately left alone — that is a landline, not an Egyptian mobile, and putting
+     * it through the mobile rule would rewrite a correct number.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->normalisePhoneFields(['owner_phone']);
     }
 
     public function rules(): array

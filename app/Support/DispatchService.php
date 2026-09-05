@@ -40,7 +40,7 @@ class DispatchService
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
             'dispatch.offer_ttl_seconds', 'dispatch.max_rounds',
             'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
-            'dispatch.last_call_all_drivers',
+            'dispatch.last_call_all_drivers', 'dispatch.offer_to_all_online',
         ])->pluck('value', 'key');
 
         $batchSize = (int) ($settings['dispatch.batch_size'] ?? 3);
@@ -62,6 +62,27 @@ class DispatchService
         $lastCall = $round >= $maxRounds
             && filter_var($settings['dispatch.last_call_all_drivers'] ?? true, FILTER_VALIDATE_BOOL);
 
+        // `dispatch.offer_to_all_online` makes **round 1** that last call, and it is
+        // on by default.
+        //
+        // The last-call rule above only helps an order that reaches the last round,
+        // and reaching it costs two TTLs of `cr7:tick`. Measured on the deployment,
+        // 2026-09-05: order 39 sat in `waiting_for_driver` at `dispatch_round = 1`
+        // with **zero** `order_driver_attempts` rows seven minutes after it was
+        // marked ready, while the one live captain stood 7.53 km out — outside the
+        // 5 km first circle and inside every later one. Nobody was offered anything,
+        // no push was sent, and the board read «بانتظار الكابتن» the whole time. A
+        // ladder that needs a clock to climb strands every order on a host where the
+        // clock is not wired, and this platform runs one town.
+        //
+        // Distance still ranks and never hides: nearest first, then rating, then
+        // completed orders. A captain who has never sent a fix has no distance and
+        // sorts last, but is still asked — «متصل وفاضي» is the whole condition.
+        $broadcast = $lastCall || filter_var(
+            $settings['dispatch.offer_to_all_online'] ?? true,
+            FILTER_VALIDATE_BOOL,
+        );
+
         $excludedDriverIds = $order->driverAttempts()
             ->when($retry, fn ($q) => $q->whereIn('result', ['rejected', 'cancelled_after_accept']))
             ->pluck('driver_id');
@@ -71,8 +92,13 @@ class DispatchService
             ->where('is_online', true)
             ->where('is_available', true)
             ->whereNull('active_order_id')
-            ->whereNotNull('location_updated_at')
-            ->where('location_updated_at', '>=', now()->subSeconds($staleSeconds))
+            // A stale fix is a reason to rank a captain last, not a reason to keep an
+            // order in the kitchen. Four of the seven captains on the deployment had
+            // never pinged from the current build, so a freshness gate ahead of the
+            // ranking silently emptied the batch.
+            ->when(! $broadcast, fn ($q) => $q
+                ->whereNotNull('location_updated_at')
+                ->where('location_updated_at', '>=', now()->subSeconds($staleSeconds)))
             ->whereNotIn('id', $excludedDriverIds)
             // A captain with no zone rows is **unrestricted**, not «matches no zone».
             // `ADM-16` never required a zone and `CreateDriverAction` syncs `zone_ids`
@@ -86,16 +112,21 @@ class DispatchService
             ->get()
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
-                'distance_km' => Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
+                // Casting a null coordinate to float gives 0.0, and 0.0 is a real place
+                // 3 000 km west of Africa — it made a captain who had never reported a
+                // position the *nearest* one to every restaurant in the country.
+                'distance_km' => $driver->hasFix()
+                    ? Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude)
+                    : null,
             ])
-            ->filter(fn ($c) => $lastCall || $c['distance_km'] <= $radius)
+            ->filter(fn ($c) => $broadcast || ($c['distance_km'] !== null && $c['distance_km'] <= $radius))
             ->sortBy([
-                fn ($a, $b) => $a['distance_km'] <=> $b['distance_km'],
+                fn ($a, $b) => ($a['distance_km'] ?? INF) <=> ($b['distance_km'] ?? INF),
                 fn ($a, $b) => $b['driver']->rating_avg <=> $a['driver']->rating_avg,
                 fn ($a, $b) => $b['driver']->completed_orders <=> $a['driver']->completed_orders,
             ]);
 
-        $candidates = $lastCall ? $candidates : $candidates->take($batchSize);
+        $candidates = $broadcast ? $candidates : $candidates->take($batchSize);
 
         if ($candidates->isEmpty()) {
             // Recursing here is what made rounds free. The next round is a wider circle
@@ -119,7 +150,7 @@ class DispatchService
             $order->driverAttempts()->create([
                 'driver_id' => $candidate['driver']->id,
                 'round' => $round,
-                'distance_km' => round($candidate['distance_km'], 3),
+                'distance_km' => $candidate['distance_km'] === null ? null : round($candidate['distance_km'], 3),
                 'result' => 'sent',
                 'sent_at' => now(),
                 'expires_at' => $expiresAt,
@@ -176,7 +207,9 @@ class DispatchService
                 'offer.new',
                 [
                     'restaurant' => $order->restaurant?->name_ar,
-                    'distance' => number_format($candidate['distance_km'], 1),
+                    'distance' => $candidate['distance_km'] === null
+                        ? '—'
+                        : number_format($candidate['distance_km'], 1),
                     'earning' => number_format(
                         DriverEarningCalculator::calculate($order, $candidate['driver']),
                         2,

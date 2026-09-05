@@ -52,7 +52,10 @@ class OfferController extends Controller
                 'address' => $order->restaurant->address,
                 'latitude' => (float) $order->restaurant->latitude,
                 'longitude' => (float) $order->restaurant->longitude,
-                'distance_km' => (float) $attempt->distance_km,
+                // Null when the captain has never reported a position — they are
+                // offered the order anyway. `0.0` here would claim the restaurant
+                // is at their feet.
+                'distance_km' => $attempt->distance_km === null ? null : (float) $attempt->distance_km,
             ],
             'customer_area' => $order->delivery_address_text,
             'delivery_distance_km' => (float) $order->distance_km,

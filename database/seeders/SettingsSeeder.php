@@ -29,6 +29,11 @@ class SettingsSeeder extends Seeder
             // order can sit unreachable while a captain one kilometre past the
             // ladder waits with an empty screen.
             'dispatch.last_call_all_drivers' => [1, 'dispatch'],
+            // Every online, free captain hears about every order, from round 1.
+            // Turn it off to get the nearest-3 ladder back — but only on a host
+            // where `* * * * * php artisan schedule:run` is actually installed,
+            // because without that clock the ladder never climbs past round 1.
+            'dispatch.offer_to_all_online' => [1, 'dispatch'],
 
             'driver.location_stale_seconds' => [60, 'driver'],
             'driver.unresponsive_seconds' => [300, 'driver'],

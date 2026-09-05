@@ -50,6 +50,9 @@ class DispatchReachTest extends TestCase
             'dispatch.location_stale_seconds' => 90,
             'dispatch.retry_interval_seconds' => 90,
             'dispatch.last_call_all_drivers' => 1,
+            // Off here so the rungs below are still the rungs. The broadcast that
+            // ships on by default has its own test at the bottom of this file.
+            'dispatch.offer_to_all_online' => 0,
         ] as $key => $value) {
             Setting::query()->create(['key' => $key, 'value' => $value, 'group' => 'test']);
         }
@@ -194,5 +197,98 @@ class DispatchReachTest extends TestCase
         $first = $order->driverAttempts()->orderBy('id')->first();
 
         $this->assertSame($near->id, $first->driver_id);
+    }
+
+    /**
+     * The report that made this the default: «مش مهمة عندي الكابتن فين، المهم إن هو
+     * متصل دلوقتي تبعتله notification».
+     *
+     * With `dispatch.offer_to_all_online` on — which is how it ships — round 1 is
+     * already the last call. No clock has to run, no rung has to be climbed, and the
+     * captain 7.42 km out is asked in the same request that marked the order ready.
+     */
+    public function test_every_online_captain_is_asked_in_round_one_when_the_broadcast_is_on(): void
+    {
+        $this->turnBroadcastOn();
+
+        $restaurant = $this->makeRestaurant('ابن البلد', ...self::RESTAURANT);
+        $order = $this->makeOrder($restaurant);
+        $far = $this->makeDriver('كابتن رامي', self::FAR_CAPTAIN);
+
+        app(DispatchService::class)->dispatchRound($order, 1);
+
+        $this->assertSame(OrderStatus::SearchingDriver, $order->fresh()->status);
+        $this->assertSame(1, $far->driverAttempts()->where('result', 'sent')->count());
+    }
+
+    public function test_the_broadcast_ignores_the_batch_cap(): void
+    {
+        $this->turnBroadcastOn();
+
+        $restaurant = $this->makeRestaurant('ابن البلد', ...self::RESTAURANT);
+        $order = $this->makeOrder($restaurant);
+
+        collect(range(1, 6))->each(fn (int $n) => $this->makeDriver(
+            'كابتن '.$n,
+            [self::FAR_CAPTAIN[0] + $n * 0.01, self::FAR_CAPTAIN[1]],
+        ));
+
+        app(DispatchService::class)->dispatchRound($order, 1);
+
+        $this->assertSame(6, $order->driverAttempts()->where('result', 'sent')->count());
+    }
+
+    /**
+     * A captain whose phone has never reported a position is «متصل وفاضي», which is the
+     * whole condition. Four of the seven captains on the deployment were in exactly this
+     * state, and a freshness gate ahead of the ranking is what emptied the batch.
+     */
+    public function test_a_captain_who_has_never_sent_a_fix_is_still_offered_the_order(): void
+    {
+        $this->turnBroadcastOn();
+
+        $restaurant = $this->makeRestaurant('ابن البلد', ...self::RESTAURANT);
+        $order = $this->makeOrder($restaurant);
+
+        $blind = $this->makeDriver('كابتن بلا موقع', self::FAR_CAPTAIN);
+        $blind->update(['current_lat' => null, 'current_lng' => null, 'location_updated_at' => null]);
+
+        app(DispatchService::class)->dispatchRound($order, 1);
+
+        $attempt = $blind->driverAttempts()->where('result', 'sent')->first();
+
+        $this->assertNotNull($attempt, 'a captain with no fix was never asked');
+        $this->assertNull($attempt->distance_km, 'an unknown distance was written as 0 km');
+    }
+
+    /** Distance ranks and never hides — including against a captain who has no distance. */
+    public function test_a_captain_with_no_fix_ranks_behind_every_captain_who_has_one(): void
+    {
+        $this->turnBroadcastOn();
+
+        $restaurant = $this->makeRestaurant('ابن البلد', ...self::RESTAURANT);
+        $order = $this->makeOrder($restaurant);
+
+        $blind = $this->makeDriver('كابتن بلا موقع', self::FAR_CAPTAIN);
+        $blind->update(['current_lat' => null, 'current_lng' => null, 'location_updated_at' => null]);
+        $far = $this->makeDriver('كابتن رامي', self::FAR_CAPTAIN);
+
+        app(DispatchService::class)->dispatchRound($order, 1);
+
+        $this->assertSame(
+            $far->id,
+            $order->driverAttempts()->orderBy('id')->first()->driver_id,
+            'the captain with no position sorted first — 0.0 was read as a place',
+        );
+    }
+
+    private function turnBroadcastOn(): void
+    {
+        Setting::query()->where('key', 'dispatch.offer_to_all_online')->delete();
+        Setting::query()->create([
+            'key' => 'dispatch.offer_to_all_online',
+            'value' => true,
+            'group' => 'test',
+        ]);
     }
 }

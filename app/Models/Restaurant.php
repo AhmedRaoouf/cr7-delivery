@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MenuLayout;
+use App\Support\BusinessTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -103,9 +104,17 @@ class Restaurant extends Model
             return false;
         }
 
+        // `BusinessTime`, not `now()`. Opening hours are a clock on a wall in Gamasa and
+        // the server runs UTC, so this compared 10:00 Cairo against 07:00 UTC and read
+        // every restaurant as closed from 04:00 to 12:00 local — the switch in the header
+        // wrote `is_open_manual = true`, the API answered 200, and the label still said
+        // «المطعم مغلق». The weekday has to move with the hour: at 01:00 Cairo it is still
+        // the previous day in UTC, which is a different row.
+        $clock = BusinessTime::now();
+
         $today = $this->relationLoaded('openingHours')
-            ? $this->openingHours->firstWhere('weekday', now()->dayOfWeek)
-            : $this->openingHours()->where('weekday', now()->dayOfWeek)->first();
+            ? $this->openingHours->firstWhere('weekday', $clock->dayOfWeek)
+            : $this->openingHours()->where('weekday', $clock->dayOfWeek)->first();
 
         if (! $today) {
             return true;
@@ -115,7 +124,7 @@ class Restaurant extends Model
             return false;
         }
 
-        $now = now()->format('H:i:s');
+        $now = $clock->format('H:i:s');
 
         // A shift that closes before it opens runs past midnight — «من ‪10:00‬ حتى
         // ‪02:00‬» is one window, not an empty one. Compared as two halves rather

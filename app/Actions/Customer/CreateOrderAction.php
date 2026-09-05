@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
 use App\Models\UserAddress;
+use App\Support\BusinessTime;
 use App\Support\CheckoutPricer;
 use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +20,7 @@ use Illuminate\Support\Facades\DB;
  */
 class CreateOrderAction
 {
-    public function __construct(private readonly CheckoutPricer $pricer)
-    {
-    }
+    public function __construct(private readonly CheckoutPricer $pricer) {}
 
     public function execute(User $user, array $data, string $idempotencyKey): OrderGroup
     {
@@ -129,7 +128,7 @@ class CreateOrderAction
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
                     'pickup_otp' => Otp::orderCode(),
-                    'business_date' => now()->toDateString(),
+                    'business_date' => BusinessTime::date(),
                     'customer_note' => $data['customer_note'] ?? null,
                     'delivery_instructions' => $data['delivery_instructions'] ?? null,
                     'placed_at' => now(),

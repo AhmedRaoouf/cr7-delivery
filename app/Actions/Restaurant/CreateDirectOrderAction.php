@@ -10,6 +10,7 @@ use App\Models\OrderGroup;
 use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\BusinessTime;
 use App\Support\DispatchService;
 use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +25,7 @@ class CreateDirectOrderAction
     public function __construct(
         private readonly QuoteDirectOrderAction $quote,
         private readonly DispatchService $dispatch,
-    ) {
-    }
+    ) {}
 
     public function execute(User $user, Restaurant $restaurant, array $data, string $idempotencyKey): Order
     {
@@ -39,7 +39,7 @@ class CreateDirectOrderAction
         }
 
         $dailyCap = (int) (Setting::query()->where('key', 'direct_orders.daily_cap_per_restaurant')->value('value') ?? 20);
-        $todayCount = $restaurant->orders()->where('origin', 'restaurant_direct')->whereDate('business_date', now()->toDateString())->count();
+        $todayCount = $restaurant->orders()->where('origin', 'restaurant_direct')->whereDate('business_date', BusinessTime::date())->count();
 
         if ($todayCount >= $dailyCap) {
             throw new ApiException('direct_order_daily_cap_reached', 'تم الوصول للحد الأقصى اليومي للطلبات المباشرة', 422, meta: [
@@ -47,7 +47,7 @@ class CreateDirectOrderAction
             ]);
         }
 
-        $duplicateRef = $restaurant->orders()->where('restaurant_order_ref', $data['restaurant_order_ref'])->whereDate('business_date', now()->toDateString())->exists();
+        $duplicateRef = $restaurant->orders()->where('restaurant_order_ref', $data['restaurant_order_ref'])->whereDate('business_date', BusinessTime::date())->exists();
         if ($duplicateRef) {
             throw new ApiException('duplicate_restaurant_order_ref', 'رقم الطلب مستخدم بالفعل اليوم', 422);
         }
@@ -124,7 +124,7 @@ class CreateDirectOrderAction
                 'commission_rate_snapshot' => 0,
                 'commission_amount' => 0,
                 'restaurant_order_ref' => $data['restaurant_order_ref'],
-                'business_date' => now()->toDateString(),
+                'business_date' => BusinessTime::date(),
                 'prep_minutes' => $data['prep_minutes'] ?? null,
                 'pickup_otp' => Otp::orderCode(),
                 'delivery_otp' => null,

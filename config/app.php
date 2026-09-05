@@ -69,6 +69,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Business Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Rows are stored in UTC — `timezone` above stays UTC on every deployment, and
+    | changing it would leave a table half in one zone and half in another. This is
+    | the separate question of what clock the *business* runs on: the one opening
+    | hours are written against, and the one a «business date» names a day by.
+    |
+    */
+
+    'business_timezone' => env('APP_BUSINESS_TIMEZONE', 'Africa/Cairo'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

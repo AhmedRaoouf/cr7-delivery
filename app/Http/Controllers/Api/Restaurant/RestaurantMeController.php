@@ -47,7 +47,16 @@ class RestaurantMeController extends Controller
 
         $activeCount = $restaurant->orders()->whereNotIn('status', ['pending', 'delivered', 'cancelled'])->count();
 
-        return ApiResponse::success(['is_open_manual' => $restaurant->is_open_manual, 'active_orders_count' => $activeCount]);
+        // `is_open_now` as well as the flag that was just written, because they can
+        // disagree: switching «مفتوح» on outside today's window sets the manual flag and
+        // changes nothing a customer sees. `RES-19` told the operator «المطعم مفتوح
+        // الآن» and then kept the header on «مغلق», which reads as the switch being
+        // broken rather than as the hours being the reason.
+        return ApiResponse::success([
+            'is_open_manual' => $restaurant->is_open_manual,
+            'is_open_now' => $restaurant->fresh()->isOpenNow(),
+            'active_orders_count' => $activeCount,
+        ]);
     }
 
     public function openingHours(Request $request): JsonResponse

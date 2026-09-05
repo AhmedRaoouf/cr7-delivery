@@ -65,6 +65,11 @@ return [
         // dragged pin from spending a geocoding request every 11 metres.
         'reverse_days' => (int) env('MAPS_CACHE_REVERSE_DAYS', 30),
         'search_days' => (int) env('MAPS_CACHE_SEARCH_DAYS', 7),
+        // A route is cached far more briefly than a street name: roads do not
+        // move, but traffic does, and Mapbox's duration is the useful half of
+        // the answer. Ten minutes is long enough that a captain riding one
+        // street reuses a single answer and short enough that the ETA is real.
+        'route_minutes' => (int) env('MAPS_CACHE_ROUTE_MINUTES', 10),
     ],
 
     'timeout_seconds' => (int) env('MAPS_TIMEOUT_SECONDS', 6),

@@ -25,7 +25,10 @@ use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\MapboxGeocoder;
+use App\Services\Maps\MapboxRouter;
 use App\Services\Maps\NullGeocoder;
+use App\Services\Maps\NullRouter;
+use App\Services\Maps\Router;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
@@ -117,6 +120,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(Geocoder::class, fn () => filled(config('maps.mapbox.token'))
             ? new MapboxGeocoder
             : new NullGeocoder);
+
+        // The same token, and the same rule: configured means real roads, absent
+        // means the caller draws the straight line it always drew.
+        $this->app->singleton(Router::class, fn () => filled(config('maps.mapbox.token'))
+            ? new MapboxRouter
+            : new NullRouter);
     }
 
     /**

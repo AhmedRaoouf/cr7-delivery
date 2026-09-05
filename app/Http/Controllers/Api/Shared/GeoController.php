@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Shared;
 use App\Http\Controllers\Controller;
 use App\Models\ServiceZone;
 use App\Services\Maps\Geocoder;
+use App\Services\Maps\Router;
 use App\Support\ApiResponse;
 use App\Support\Geo;
 use Illuminate\Http\JsonResponse;
@@ -104,6 +105,39 @@ class GeoController extends Controller
             isset($validated['lng']) ? (float) $validated['lng'] : null,
             $this->language($request),
         ));
+    }
+
+    /**
+     * `GET /geo/route?from_lat=&from_lng=&to_lat=&to_lng=` — the road between two
+     * points, as a list of `[lat, lng]` the client draws directly.
+     *
+     * Operator, 2026-09-05: «عايزه بقى الخط ده يبقى في الشارع بالضبط، ماشي في الشارع
+     * بالضبط اللي التعبان يمشي فيها، وكل لما الديليفري يغير مكانه… يقوم محدد الشارع
+     * التاني اللي هيمشي فيه». Re-routing as the captain moves is the client's job and
+     * costs nothing extra here: a new position is a new cache key, and a position that
+     * has not really changed is the same key and the same answer.
+     *
+     * `route: null` is a complete, successful answer meaning «draw the straight line».
+     * A directions outage must never be a screen the captain has to dismiss while they
+     * are riding.
+     */
+    public function route(Request $request, Router $router): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_lat' => ['required', 'numeric', 'between:-90,90'],
+            'from_lng' => ['required', 'numeric', 'between:-180,180'],
+            'to_lat' => ['required', 'numeric', 'between:-90,90'],
+            'to_lng' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $route = $router->route(
+            (float) $validated['from_lat'],
+            (float) $validated['from_lng'],
+            (float) $validated['to_lat'],
+            (float) $validated['to_lng'],
+        );
+
+        return ApiResponse::success(['route' => $route]);
     }
 
     /** Mapbox takes an ISO code; the app already sends `Accept-Language`. */

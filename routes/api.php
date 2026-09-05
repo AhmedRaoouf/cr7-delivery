@@ -181,6 +181,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/complaints/{complaint}/messages', [CustomerComplaintController::class, 'addMessage']);
     });
 
+    // Directions. Behind auth, unlike the two geocoding proxies beside it: every
+    // screen that draws a route — the customer's tracking map, the captain's active
+    // job, the operator's fleet board — is already signed in, and a public route
+    // request is the most expensive thing an anonymous caller could spend the
+    // Mapbox quota on. Throttled on top of that, and cached per 110 m in
+    // `MapboxRouter`.
+    Route::middleware(['auth:sanctum', 'client.type', 'throttle:120,1'])
+        ->get('/geo/route', [GeoController::class, 'route']);
+
     Route::middleware(['auth:sanctum', 'client.type'])->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);

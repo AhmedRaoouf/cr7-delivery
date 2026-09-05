@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -68,7 +69,7 @@ class DashboardController extends Controller
             'restaurant_timeouts' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'no_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
             'delivery_issues' => (clone $orders)->where('status', 'delivery_issue')->count(),
-            'payments_to_verify' => \App\Models\Payment::query()->where('status', 'under_review')->count(),
+            'payments_to_verify' => Payment::query()->where('status', 'under_review')->count(),
         ]);
     }
 
@@ -87,7 +88,13 @@ class DashboardController extends Controller
         $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->where('is_online', true)
             ->with('user:id,name')
-            ->get(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_available']);
+            // `is_online` is the WHERE above *and* the field the fleet board reads back:
+            // `fleetState()` answers `offline` for a captain whose `is_online` is
+            // `undefined`, so leaving the column out of the select made `ADM-56` count
+            // every online captain as offline — three zeroed tiles, an empty list and a
+            // map with no markers, while `ADM-19` beside it showed the same captain
+            // «متصل ومتفرغ» because that screen selects the whole row.
+            ->get(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_online', 'is_available', 'is_active']);
 
         return ApiResponse::success($drivers);
     }

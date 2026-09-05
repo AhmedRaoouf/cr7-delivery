@@ -7,6 +7,7 @@ use App\Events\DriverOfferSent;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
+use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +24,8 @@ class DispatchService
     {
         $settings = Setting::query()->whereIn('key', [
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
-            'dispatch.offer_ttl_seconds', 'dispatch.max_rounds', 'driver.location_stale_seconds',
+            'dispatch.offer_ttl_seconds', 'dispatch.max_rounds',
+            'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
         ])->pluck('value', 'key');
 
         $batchSize = (int) ($settings['dispatch.batch_size'] ?? 3);
@@ -31,7 +33,7 @@ class DispatchService
         $radiusExpand = (float) ($settings['dispatch.radius_expand_km'] ?? 2);
         $ttlSeconds = (int) ($settings['dispatch.offer_ttl_seconds'] ?? 30);
         $maxRounds = (int) ($settings['dispatch.max_rounds'] ?? 3);
-        $staleSeconds = (int) ($settings['driver.location_stale_seconds'] ?? 60);
+        $staleSeconds = self::staleSeconds($settings);
 
         $radius = $baseRadius + ($round - 1) * $radiusExpand;
 
@@ -45,7 +47,15 @@ class DispatchService
             ->whereNotNull('location_updated_at')
             ->where('location_updated_at', '>=', now()->subSeconds($staleSeconds))
             ->whereNotIn('id', $excludedDriverIds)
-            ->whereHas('assignedZones', fn ($q) => $q->where('service_zones.id', $order->service_zone_id))
+            // A captain with no zone rows is **unrestricted**, not «matches no zone».
+            // `ADM-16` never required a zone and `CreateDriverAction` syncs `zone_ids`
+            // only when they are sent, so every captain created from the dashboard had
+            // an empty `service_zone_driver` — and a bare `whereHas` then matched nobody.
+            // Every round found an empty batch, every order fell through to
+            // `waiting_for_driver`, and no captain was ever offered anything.
+            ->where(fn ($q) => $q
+                ->whereDoesntHave('assignedZones')
+                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id)))
             ->get()
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
@@ -130,7 +140,7 @@ class DispatchService
     private function ring(Order $order, array $candidate): void
     {
         try {
-            app(\App\Support\Notifications\NotificationDispatcher::class)->send(
+            app(NotificationDispatcher::class)->send(
                 $candidate['driver']->user,
                 'offer.new',
                 [
@@ -177,14 +187,25 @@ class DispatchService
      */
     public function eligibleDrivers(Order $order, float $radiusKm, bool $includeOffline = false): Collection
     {
-        $staleSeconds = (int) (Setting::query()->where('key', 'driver.location_stale_seconds')->value('value') ?? 60);
+        $staleSeconds = self::staleSeconds(
+            Setting::query()
+                ->whereIn('key', ['dispatch.location_stale_seconds', 'driver.location_stale_seconds'])
+                ->pluck('value', 'key')
+        );
 
         return Driver::query()
             ->where('is_active', true)
             ->when(! $includeOffline, fn ($q) => $q->whereNotNull('location_updated_at'))
+            ->with('user:id,name')
             ->get()
             ->map(function (Driver $driver) use ($order, $staleSeconds) {
+                // `location_updated_at` is null for a captain who has never sent a ping,
+                // and `include_offline` exists precisely to list those rows — so calling
+                // `diffInSeconds()` on the null answered the whole request with a 500.
+                // `ADM-07` renders a failed query and an empty result the same way, so
+                // turning the switch on read as «لا يوجد كباتن نشطون متاحون الآن».
                 $isLive = $driver->is_online
+                    && $driver->location_updated_at !== null
                     && $driver->location_updated_at->diffInSeconds(now()) < $staleSeconds;
 
                 return [
@@ -195,9 +216,19 @@ class DispatchService
                     'state' => $isLive ? 'live' : ($driver->is_online ? 'stale' : 'offline'),
                 ];
             })
+            // `active_order_id` and nothing else, because that is the only rule
+            // `ReassignDriverAction` itself enforces. `is_available` is not checked
+            // there, and a list stricter than the action hides captains the operator
+            // could have picked — which is the defect this whole method just had.
             ->filter(fn ($c) => $includeOffline
                 ? $c['driver']->active_order_id === null
-                : $c['distance_km'] <= $radiusKm && $c['state'] !== 'offline')
+                // The radius ranks; it must not hide. A **live** captain is assignable at
+                // any distance — `ReassignDriverAction` accepts them — so filtering on it
+                // removed the one captain actually on the road, twenty kilometres out,
+                // and kept four who had not pinged in a week but sat inside the circle.
+                // The operator was told nobody was online while `ADM-19` showed one.
+                : $c['state'] === 'live'
+                    || ($c['state'] === 'stale' && ($c['distance_km'] === null || $c['distance_km'] <= $radiusKm)))
             // Live first, then stale, then offline; nearest first inside each group. An
             // unknown position sorts last rather than as "zero km away".
             ->sortBy(fn ($c) => [
@@ -229,5 +260,24 @@ class DispatchService
             ->update(['result' => 'expired']);
 
         $this->dispatchRound($order, $order->dispatch_round + 1);
+    }
+
+    /**
+     * D-56 — a captain counts as live while the last ping is younger than this.
+     *
+     * `SettingsSeeder` writes the number twice: `dispatch.location_stale_seconds` (90,
+     * the decision, and what both dashboards and `Driver::isLive()` use) and
+     * `driver.location_stale_seconds` (60). Dispatch read the 60 and nothing read the
+     * 90, so a captain quiet for 70 seconds was «متصل ومتفرغ» on `ADM-19`, «متصل» on the
+     * fleet map, and invisible to dispatch — one captain, three answers. The 90 wins;
+     * the older key stays readable so an operator who edited it is not overruled.
+     *
+     * @param  Collection<string, mixed>  $settings
+     */
+    private static function staleSeconds(Collection $settings): int
+    {
+        return (int) ($settings['dispatch.location_stale_seconds']
+            ?? $settings['driver.location_stale_seconds']
+            ?? 90);
     }
 }

@@ -14,6 +14,7 @@ use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\UpdateMeRequest;
 use App\Http\Resources\UserResource;
+use App\Models\User;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,7 @@ class AuthController extends Controller
     }
 
     /** @return array<string, bool> */
-    private function notificationPreferences(\App\Models\User $user): array
+    private function notificationPreferences(User $user): array
     {
         return [
             'order_updates' => (bool) $user->notify_orders,
@@ -79,6 +80,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        self::endCaptainShift($request->user());
         $request->user()->currentAccessToken()->delete();
 
         return ApiResponse::success(message: 'تم تسجيل الخروج');
@@ -86,9 +88,29 @@ class AuthController extends Controller
 
     public function logoutAll(Request $request): JsonResponse
     {
+        self::endCaptainShift($request->user());
         $request->user()->tokens()->delete();
 
         return ApiResponse::success(message: 'تم تسجيل الخروج من كل الأجهزة');
+    }
+
+    /**
+     * Signing out ends the shift.
+     *
+     * `is_online` was only ever written by `POST /driver/status`, so a captain who
+     * signed out stayed online in the database for good: `ADM-19` showed them «متصل
+     * ومتفرغ», the fleet map put a marker where they last were, and `DispatchService`
+     * kept offering them orders that no longer had anywhere to arrive. Nothing expired
+     * it either — the 90-second staleness rule only downgrades a captain to «موقعه
+     * قديم», it never takes them offline.
+     *
+     * `is_available` and `active_order_id` are deliberately untouched: a captain who
+     * signs out mid-delivery still holds that order, and clearing it here would silently
+     * unassign it outside `UnassignDriverAction` and its audit trail.
+     */
+    private static function endCaptainShift(User $user): void
+    {
+        $user->driver?->update(['is_online' => false, 'online_since' => null]);
     }
 
     public function forgotPassword(ForgotPasswordRequest $request, ForgotPasswordAction $action): JsonResponse

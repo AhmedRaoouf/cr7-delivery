@@ -5,6 +5,7 @@ namespace App\Actions\Admin;
 use App\Enums\UserType;
 use App\Models\Driver;
 use App\Models\User;
+use App\Support\Settings;
 use App\Support\TempPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -32,10 +33,17 @@ class CreateDriverAction
                 'user_id' => $user->id,
                 'city_id' => $data['city_id'],
                 'national_id' => $data['national_id'] ?? null,
-                'vehicle_type' => $data['vehicle_type'],
+                'vehicle_type' => $data['vehicle_type'] ?? 'motorcycle',
                 'vehicle_plate' => $data['vehicle_plate'] ?? null,
-                'earning_type' => $data['earning_type'],
-                'earning_value' => $data['earning_value'],
+                // D-71 — `percent_of_delivery_fee` at 0 is not «no earnings»: it means
+                // «the standard split», and {@see \App\Support\DriverEarningCalculator}
+                // reads the rate from `delivery.platform_commission_rate`. Keeping the
+                // percentage off the driver row is what lets the operator move 15 → 20
+                // in one field instead of once per captain.
+                'earning_type' => $data['earning_type']
+                    ?? Settings::get('driver.default_earning_type', 'percent_of_delivery_fee'),
+                'earning_value' => $data['earning_value']
+                    ?? Settings::get('driver.default_earning_value', 0),
                 'is_online' => false,
                 'is_available' => true,
                 'is_active' => true,

@@ -16,12 +16,18 @@ class CaptainApplication extends Model
     protected $fillable = [
         'reference', 'full_name', 'phone', 'email', 'national_id', 'city_id',
         'city_text', 'vehicle_type', 'vehicle_plate', 'licence_file',
-        'national_id_file', 'note', 'status', 'rejection_reason', 'reviewed_by',
+        'national_id_file', 'national_id_back_file', 'note', 'status', 'rejection_reason', 'reviewed_by',
         'reviewed_at', 'created_driver_id',
     ];
 
-    /** The licence and ID scans are private-disk paths — never on a public response. */
-    protected $hidden = ['licence_file', 'national_id_file'];
+    /**
+     * The licence and the two ID sides are private-disk paths — never on a public
+     * response, and never on an admin one either. An admin reads them through
+     * `GET /admin/captain-applications/{id}/files/{kind}`, which checks the scope
+     * first; a path in a payload is a file anyone who can read the payload can guess
+     * their way to.
+     */
+    protected $hidden = ['licence_file', 'national_id_file', 'national_id_back_file'];
 
     protected function casts(): array
     {

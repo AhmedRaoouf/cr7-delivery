@@ -14,7 +14,7 @@ class StoreDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['required', 'in:national_id,license,vehicle_license,criminal_record,other'],
+            'type' => ['required', 'in:national_id,national_id_back,license,vehicle_license,criminal_record,other'],
             'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
             'expires_at' => ['nullable', 'date'],
         ];

@@ -63,7 +63,13 @@ class StoreCaptainApplicationRequest extends FormRequest
             'vehicle_type' => ['nullable', 'in:motorcycle,bicycle,car,scooter'],
             'vehicle_plate' => ['nullable', 'string', 'max:20'],
             'licence_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
-            'national_id_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            // Both sides, and both required: the front carries the name and the number,
+            // the back carries the address and the expiry, and one of the two is half a
+            // document. The applicant is holding the card while they fill this in — the
+            // Admin creating an account over the phone is not, which is why the same
+            // pair is optional on `ADM-16` and flagged on the captain's own screen.
+            'national_id_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'national_id_back_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             'note' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -74,6 +80,8 @@ class StoreCaptainApplicationRequest extends FormRequest
             'phone.regex' => 'رقم الهاتف غير صحيح — 11 رقمًا تبدأ بـ 010 أو 011 أو 012 أو 015',
             'phone.unique' => 'هذا الرقم مسجل بالفعل. سجّل الدخول بدلًا من تقديم طلب جديد.',
             'email.unique' => 'هذا البريد مسجل بالفعل. سجّل الدخول بدلًا من تقديم طلب جديد.',
+            'national_id_file.required' => 'أرفق صورة وجه البطاقة',
+            'national_id_back_file.required' => 'أرفق صورة ظهر البطاقة',
         ];
     }
 }

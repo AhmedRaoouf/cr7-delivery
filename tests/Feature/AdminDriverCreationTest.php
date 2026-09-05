@@ -5,10 +5,16 @@ namespace Tests\Feature;
 use App\Enums\AdminScopeType;
 use App\Models\CaptainApplication;
 use App\Models\Driver;
+use App\Models\ServiceZone;
 use App\Models\User;
+use Database\Seeders\OperatorSettingsSeeder;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -63,6 +69,53 @@ class AdminDriverCreationTest extends TestCase
         ], $overrides);
     }
 
+    public function test_a_captain_can_be_created_with_nothing_but_a_name_a_phone_and_a_city(): void
+    {
+        $this->admin();
+        $this->seed(SettingsSeeder::class);
+        $this->seed(OperatorSettingsSeeder::class);
+
+        // The vehicle, the plate and the earning rule left the Admin form: the first two
+        // belong to the captain's own application and the third is a platform setting.
+        // What must not happen is the form losing them and the request being rejected.
+        $response = $this->withHeaders(['X-App' => 'admin'])
+            ->postJson('/api/v1/admin/drivers', [
+                'name' => 'وائل محمد',
+                'phone' => '01012345678',
+                'city_id' => $this->city->id,
+            ])
+            ->assertCreated();
+
+        $driver = Driver::query()->findOrFail($response->json('data.driver.id'));
+
+        $this->assertSame('motorcycle', $driver->vehicle_type->value ?? $driver->vehicle_type);
+        $this->assertSame('percent_of_delivery_fee', $driver->earning_type->value ?? $driver->earning_type);
+        // 0 is «the standard split», read from `delivery.platform_commission_rate` — not
+        // «this captain earns nothing».
+        $this->assertSame(0.0, (float) $driver->earning_value);
+    }
+
+    public function test_the_areas_a_captain_covers_are_saved_with_the_account(): void
+    {
+        $this->admin();
+
+        $zones = ServiceZone::query()->where('city_id', $this->city->id)->limit(2)->pluck('id');
+        $this->assertNotEmpty($zones, 'the location seed must provide at least one zone');
+
+        $response = $this->withHeaders(['X-App' => 'admin'])
+            ->postJson('/api/v1/admin/drivers', [
+                'name' => 'وائل محمد',
+                'phone' => '01012345679',
+                'city_id' => $this->city->id,
+                'zone_ids' => $zones->all(),
+            ])
+            ->assertCreated();
+
+        $driver = Driver::query()->findOrFail($response->json('data.driver.id'));
+
+        $this->assertEqualsCanonicalizing($zones->all(), $driver->assignedZones()->pluck('service_zones.id')->all());
+    }
+
     public function test_a_phone_written_the_way_a_person_writes_it_is_accepted(): void
     {
         $this->admin();
@@ -100,7 +153,16 @@ class AdminDriverCreationTest extends TestCase
             ->assertJsonPath('errors.phone.0', 'رقم الهاتف غير صحيح — 11 رقمًا تبدأ بـ 010 أو 011 أو 012 أو 015');
     }
 
-    public function test_the_earning_fields_are_required_and_named(): void
+    /**
+     * Reversed on purpose, 2026-09-05.
+     *
+     * This used to assert that omitting the earning rule was a 422 — written when the
+     * form had no fields for it and three unplaced errors read as a phone problem. The
+     * fields have since left the form deliberately: the rule is a platform setting, and
+     * a required-per-captain percentage is how a fleet ends up on four different splits.
+     * A value that *is* sent still has to be one of the three types.
+     */
+    public function test_an_omitted_earning_rule_falls_back_and_a_wrong_one_is_still_refused(): void
     {
         $this->admin();
 
@@ -109,8 +171,15 @@ class AdminDriverCreationTest extends TestCase
 
         $this->withHeaders(['X-App' => 'admin'])
             ->postJson('/api/v1/admin/drivers', $payload)
+            ->assertCreated();
+
+        $this->withHeaders(['X-App' => 'admin'])
+            ->postJson('/api/v1/admin/drivers', $this->payload([
+                'phone' => '01090009598',
+                'earning_type' => 'whatever',
+            ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['earning_type', 'earning_value']);
+            ->assertJsonValidationErrors(['earning_type']);
     }
 
     public function test_the_created_account_signs_in_with_the_configured_first_password(): void
@@ -189,16 +258,30 @@ class AdminDriverCreationTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * `APP-03` as the app sends it — multipart, with both sides of the national ID.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    private function apply(array $overrides = []): TestResponse
+    {
+        Storage::fake('local');
+
+        return $this->post('/api/v1/captain-applications', array_merge([
+            'full_name' => 'محمود سعيد',
+            'phone' => '01090009599',
+            'city' => 'جمصة',
+            'vehicle' => 'motorcycle',
+            'national_id_file' => UploadedFile::fake()->image('id-front.jpg'),
+            'national_id_back_file' => UploadedFile::fake()->image('id-back.jpg'),
+        ], $overrides), ['Accept' => 'application/json']);
+    }
+
     public function test_a_registered_phone_cannot_file_an_application(): void
     {
         User::factory()->create(['phone' => '01090009599', 'type' => 'customer']);
 
-        $this->postJson('/api/v1/captain-applications', [
-            'full_name' => 'محمود سعيد',
-            'phone' => '+20 109 000 9599',
-            'city' => 'جمصة',
-            'vehicle' => 'motorcycle',
-        ])
+        $this->apply(['phone' => '+20 109 000 9599'])
             ->assertStatus(422)
             ->assertJsonPath('errors.phone.0', 'هذا الرقم مسجل بالفعل. سجّل الدخول بدلًا من تقديم طلب جديد.');
 
@@ -207,18 +290,11 @@ class AdminDriverCreationTest extends TestCase
 
     public function test_the_same_number_cannot_queue_twice(): void
     {
-        $body = [
-            'full_name' => 'محمود سعيد',
-            'phone' => '01090009599',
-            'city' => 'جمصة',
-            'vehicle' => 'motorcycle',
-        ];
-
-        $this->postJson('/api/v1/captain-applications', $body)->assertCreated();
+        $this->apply()->assertCreated();
 
         // A different sentence from the registered-phone one: there is no account to sign
         // in to yet, and telling an applicant to sign in to nothing is worse than silence.
-        $this->postJson('/api/v1/captain-applications', $body)
+        $this->apply()
             ->assertStatus(422)
             ->assertJsonPath('errors.phone.0', 'لديك طلب قيد المراجعة بهذا الرقم. انتظر الرد قبل تقديم طلب جديد.');
 
@@ -227,18 +303,11 @@ class AdminDriverCreationTest extends TestCase
 
     public function test_a_rejected_applicant_may_apply_again(): void
     {
-        $body = [
-            'full_name' => 'محمود سعيد',
-            'phone' => '01090009599',
-            'city' => 'جمصة',
-            'vehicle' => 'motorcycle',
-        ];
-
-        $this->postJson('/api/v1/captain-applications', $body)->assertCreated();
+        $this->apply()->assertCreated();
         CaptainApplication::query()->firstOrFail()->update(['status' => 'rejected']);
 
         // Only a live queue blocks. A refusal is not a life sentence.
-        $this->postJson('/api/v1/captain-applications', $body)->assertCreated();
+        $this->apply()->assertCreated();
         $this->assertSame(2, CaptainApplication::query()->count());
     }
 }

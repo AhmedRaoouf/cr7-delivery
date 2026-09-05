@@ -15,6 +15,8 @@ use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * ADM-30..ADM-32 — the captain application queue. Approving one is what creates the
@@ -42,19 +44,65 @@ class CaptainApplicationController extends Controller
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($applications->items(), meta: [
-            'current_page' => $applications->currentPage(),
-            'per_page' => $applications->perPage(),
-            'total' => $applications->total(),
-            'last_page' => $applications->lastPage(),
-        ]);
+        return ApiResponse::success(
+            array_map(fn (CaptainApplication $row) => $this->withFileUrls($row), $applications->items()),
+            meta: [
+                'current_page' => $applications->currentPage(),
+                'per_page' => $applications->perPage(),
+                'total' => $applications->total(),
+                'last_page' => $applications->lastPage(),
+            ]);
     }
+
+    /** The three private-disk paths, keyed by the segment `file()` accepts. */
+    private const FILES = [
+        'national_id' => 'national_id_file',
+        'national_id_back' => 'national_id_back_file',
+        'licence' => 'licence_file',
+    ];
 
     public function show(Request $request, int $application): JsonResponse
     {
         $row = $this->scoped($request)->with(['city', 'reviewer:id,name', 'createdDriver'])->findOrFail($application);
 
-        return ApiResponse::success($row);
+        return ApiResponse::success($this->withFileUrls($row));
+    }
+
+    /**
+     * The columns themselves stay `$hidden`: what the dashboard gets is a URL it can
+     * fetch through the BFF, and only for the sides that were actually uploaded. An
+     * absent key is «no photo», which is what the review screen has to say out loud
+     * rather than rendering a broken image.
+     *
+     * On the list as well as the detail, because the review dialog opens from the list
+     * and deciding on an applicant is looking at their card.
+     */
+    private function withFileUrls(CaptainApplication $row): array
+    {
+        return $row->toArray() + [
+            'files' => collect(self::FILES)
+                ->filter(fn (string $column) => filled($row->getAttribute($column)))
+                ->map(fn (string $column, string $kind) => "admin/captain-applications/{$row->id}/files/{$kind}")
+                ->all(),
+        ];
+    }
+
+    /**
+     * doc 12 §5 — an identity document is Admin-only and never gets a public URL.
+     *
+     * Scoped like every other read here, so a regional admin cannot pull the ID card of
+     * an applicant in a city they do not run by guessing an id.
+     */
+    public function file(Request $request, int $application, string $kind): StreamedResponse
+    {
+        abort_unless(array_key_exists($kind, self::FILES), 404);
+
+        $row = $this->scoped($request)->findOrFail($application);
+        $path = $row->getAttribute(self::FILES[$kind]);
+
+        abort_unless(filled($path) && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path);
     }
 
     public function review(ReviewCaptainApplicationRequest $request, int $application): JsonResponse
@@ -87,6 +135,27 @@ class CaptainApplicationController extends Controller
 
                 $row->created_driver_id = $created['driver']->id;
                 $tempPassword = $created['temp_password'];
+
+                // The scans the applicant sent follow them onto the account. Without this
+                // an approved captain's documents card was empty and the only copy of
+                // their ID stayed on a row nobody opens again.
+                foreach ([
+                    'national_id' => $row->national_id_file,
+                    'national_id_back' => $row->national_id_back_file,
+                    'license' => $row->licence_file,
+                ] as $type => $path) {
+                    if (blank($path)) {
+                        continue;
+                    }
+
+                    $created['driver']->documents()->create([
+                        'type' => $type,
+                        'file' => $path,
+                        // Approving the application is the review. Filing them as
+                        // `pending` would ask an admin to approve the same photo twice.
+                        'status' => 'approved',
+                    ]);
+                }
             }
 
             $row->fill([

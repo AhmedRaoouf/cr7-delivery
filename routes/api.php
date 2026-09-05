@@ -424,6 +424,9 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:driver_applications.view')->group(function () {
             Route::get('/captain-applications', [AdminCaptainApplicationController::class, 'index']);
             Route::get('/captain-applications/{application}', [AdminCaptainApplicationController::class, 'show']);
+            // doc 12 §5 — the only way to see an applicant's ID or licence. Scoped, so a
+            // regional admin cannot read a card from a city they do not run.
+            Route::get('/captain-applications/{application}/files/{kind}', [AdminCaptainApplicationController::class, 'file']);
         });
         Route::post('/captain-applications/{application}/review', [AdminCaptainApplicationController::class, 'review'])
             ->middleware('permission:driver_applications.review');

@@ -9,6 +9,9 @@ use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -24,14 +27,33 @@ class CaptainApplicationTest extends TestCase
         $this->seed([PermissionsSeeder::class, RolesSeeder::class]);
     }
 
-    public function test_anyone_can_apply_without_an_account(): void
+    /**
+     * `APP-03` as the app sends it — multipart, both sides of the national ID attached.
+     *
+     * They are required now (2026-09-05): the front carries the name and the number, the
+     * back the address and the expiry, and one photo of a card is half a document. The
+     * applicant is holding it while they fill the form in, so this is the one place the
+     * pair can be insisted on.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    private function apply(array $overrides = []): TestResponse
     {
-        $response = $this->postJson('/api/v1/captain-applications', [
+        Storage::fake('local');
+
+        return $this->post('/api/v1/captain-applications', array_merge([
             'full_name' => 'محمود سعيد',
             'phone' => '01012345678',
             'city' => 'جمصة',
             'vehicle' => 'motorcycle',
-        ])->assertCreated();
+            'national_id_file' => UploadedFile::fake()->image('id-front.jpg'),
+            'national_id_back_file' => UploadedFile::fake()->image('id-back.jpg'),
+        ], $overrides), ['Accept' => 'application/json']);
+    }
+
+    public function test_anyone_can_apply_without_an_account(): void
+    {
+        $response = $this->apply()->assertCreated();
 
         $reference = $response->json('data.reference');
 
@@ -48,30 +70,19 @@ class CaptainApplicationTest extends TestCase
 
     public function test_a_malformed_phone_is_refused(): void
     {
-        $this->postJson('/api/v1/captain-applications', [
-            'full_name' => 'محمود سعيد',
-            'phone' => '0123',
-        ])->assertStatus(422);
+        $this->apply(['phone' => '0123'])->assertStatus(422);
     }
 
     public function test_a_phone_with_separators_or_a_country_code_is_normalised(): void
     {
-        $this->postJson('/api/v1/captain-applications', [
-            'full_name' => 'محمود سعيد',
-            'phone' => '+20 101 234 5678',
-        ])->assertCreated();
+        $this->apply(['phone' => '+20 101 234 5678'])->assertCreated();
 
         $this->assertSame('01012345678', CaptainApplication::query()->value('phone'));
     }
 
     public function test_approving_an_application_creates_the_captain_account(): void
     {
-        $this->postJson('/api/v1/captain-applications', [
-            'full_name' => 'محمود سعيد',
-            'phone' => '01012345678',
-            'city' => 'جمصة',
-            'vehicle' => 'motorcycle',
-        ])->assertCreated();
+        $this->apply()->assertCreated();
 
         $application = CaptainApplication::query()->firstOrFail();
         $admin = $this->makeAdmin();
@@ -112,6 +123,82 @@ class CaptainApplicationTest extends TestCase
                 'city_id' => $this->city->id,
             ])->assertStatus(422)
             ->assertJsonPath('error', 'application_already_reviewed');
+    }
+
+    // ------------------------------------------------------- the ID card
+
+    public function test_the_two_id_photos_are_required(): void
+    {
+        // One side of a card is half a document: the front carries the name and the
+        // number, the back the address and the expiry.
+        $this->apply(['national_id_back_file' => null])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.national_id_back_file.0', 'أرفق صورة ظهر البطاقة');
+
+        $this->apply(['national_id_file' => null])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.national_id_file.0', 'أرفق صورة وجه البطاقة');
+
+        $this->assertSame(0, CaptainApplication::query()->count());
+    }
+
+    public function test_an_admin_can_open_both_sides_and_the_paths_never_leave_the_server(): void
+    {
+        $this->apply()->assertCreated();
+
+        $application = CaptainApplication::query()->firstOrFail();
+        Sanctum::actingAs($this->makeAdmin());
+
+        $response = $this->withHeader('X-App', 'admin')
+            ->getJson("/api/v1/admin/captain-applications/{$application->id}")
+            ->assertOk();
+
+        // A private-disk path in a payload is a file anyone reading the payload can walk
+        // to. What travels is a URL the admin fetches back through this API.
+        $this->assertNull($response->json('data.national_id_file'));
+        $this->assertNull($response->json('data.national_id_back_file'));
+        $this->assertSame(
+            "admin/captain-applications/{$application->id}/files/national_id",
+            $response->json('data.files.national_id'),
+        );
+
+        foreach (['national_id', 'national_id_back'] as $kind) {
+            $this->withHeader('X-App', 'admin')
+                ->get("/api/v1/admin/captain-applications/{$application->id}/files/{$kind}")
+                ->assertOk();
+        }
+
+        // A side that was never uploaded is absent, not a broken image.
+        $this->assertArrayNotHasKey('licence', $response->json('data.files'));
+
+        $this->withHeader('X-App', 'admin')
+            ->getJson("/api/v1/admin/captain-applications/{$application->id}/files/passport")
+            ->assertNotFound();
+    }
+
+    public function test_approving_carries_the_id_photos_onto_the_captains_account(): void
+    {
+        $this->apply()->assertCreated();
+
+        $application = CaptainApplication::query()->firstOrFail();
+        Sanctum::actingAs($this->makeAdmin());
+
+        $this->withHeader('X-App', 'admin')
+            ->postJson("/api/v1/admin/captain-applications/{$application->id}/review", [
+                'status' => 'approved',
+                'city_id' => $this->city->id,
+            ])->assertOk();
+
+        $driver = Driver::query()->findOrFail($application->fresh()->created_driver_id);
+        $types = $driver->documents()->pluck('type')->map(fn ($type) => $type->value ?? $type)->all();
+
+        // Without this the approved captain's documents card was empty and the only copy
+        // of their ID stayed on a row nobody opens again.
+        $this->assertEqualsCanonicalizing(['national_id', 'national_id_back'], $types);
+        $this->assertSame(
+            ['approved', 'approved'],
+            $driver->documents()->pluck('status')->map(fn ($status) => $status->value ?? $status)->all(),
+        );
     }
 
     private function makeAdmin(): User

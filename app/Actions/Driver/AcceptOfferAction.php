@@ -27,6 +27,25 @@ class AcceptOfferAction
             return DB::transaction(function () use ($driver, $orderId) {
                 $order = Order::whereKey($orderId)->lockForUpdate()->firstOrFail();
 
+                // A captain carries one order at a time. `DispatchService` already
+                // excludes a busy captain from the pool, but an offer *already in their
+                // hand* when they accepted the previous one stays answerable — and
+                // without this the second accept silently overwrote `active_order_id`.
+                // The first order kept `driver_id` and `driver_assigned` and became
+                // unreachable: `/driver/orders/active` reads `active_order_id`, so the
+                // captain could never open it, never deliver it, and nobody was told.
+                // `ReassignDriverAction` has always refused this; the accept path never did.
+                $active = $driver->fresh()->active_order_id;
+
+                if ($active !== null && $active !== $order->id) {
+                    throw new ApiException(
+                        'already_on_a_trip',
+                        'لديك طلب جارٍ بالفعل — أنهِ التوصيلة الحالية أولًا',
+                        409,
+                        meta: ['active_order_id' => $active],
+                    );
+                }
+
                 if ($order->driver_id !== null) {
                     throw new ApiException('already_assigned', 'تم قبول الطلب بواسطة كابتن آخر', 409);
                 }

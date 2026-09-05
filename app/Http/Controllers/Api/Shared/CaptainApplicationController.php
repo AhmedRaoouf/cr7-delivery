@@ -56,6 +56,7 @@ class CaptainApplicationController extends Controller
         // documents, so they never gain a public URL.
         $payload = $this->withPrivateUpload($payload, $request, 'licence_file', 'captain-applications');
         $payload = $this->withPrivateUpload($payload, $request, 'national_id_file', 'captain-applications');
+        $payload = $this->withPrivateUpload($payload, $request, 'national_id_back_file', 'captain-applications');
 
         $application = DB::transaction(function () use ($payload) {
             $payload['reference'] = CaptainApplication::nextReference();

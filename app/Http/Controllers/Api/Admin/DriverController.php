@@ -12,6 +12,7 @@ use App\Models\Driver;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\FileUploader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -51,7 +52,31 @@ class DriverController extends Controller
 
     public function store(StoreDriverRequest $request, CreateDriverAction $action): JsonResponse
     {
-        $result = $action->execute($request->validated());
+        $data = $request->validated();
+
+        // The files are not columns on `drivers`; they become `driver_documents` rows
+        // once the account exists, which is the same place an approved application puts
+        // them and the same place `ADM-18` reads them from.
+        $documents = [];
+        foreach (['national_id' => 'national_id_file', 'national_id_back' => 'national_id_back_file'] as $type => $field) {
+            unset($data[$field]);
+
+            if ($request->hasFile($field)) {
+                $documents[$type] = FileUploader::storePrivate($request->file($field), 'driver-documents');
+            }
+        }
+
+        $result = $action->execute($data);
+
+        foreach ($documents as $type => $path) {
+            $result['driver']->documents()->create([
+                'type' => $type,
+                'file' => $path,
+                // An Admin who uploaded it has seen it. Filing it as `pending` would ask
+                // them to review their own upload.
+                'status' => 'approved',
+            ]);
+        }
 
         return ApiResponse::success([
             'driver' => $result['driver'],

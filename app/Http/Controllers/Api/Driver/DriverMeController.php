@@ -90,7 +90,23 @@ class DriverMeController extends Controller
 
         $this->broadcastLocation($driver);
 
-        return ApiResponse::success(['location_updated_at' => $driver->location_updated_at]);
+        // The ping carries the duty flag back because it is the one request a
+        // captain's app makes continuously, and because the two can disagree
+        // without either side noticing.
+        //
+        // `is_online` lives on the server and is written by four different
+        // things: the captain's own toggle, sign-out, an admin, and an accepted
+        // order. The app writes it once, at the toggle, and then believes itself
+        // for the rest of the shift. So a captain whose shift was ended anywhere
+        // else sits looking at «أنت متصل الآن», pings every 45 seconds, and is
+        // invisible to every dispatch round — because dispatch reads this column,
+        // not the screen. Found on a live captain on 2026-09-05: pinging every 13
+        // seconds with `is_online = false`, and told nothing.
+        return ApiResponse::success([
+            'location_updated_at' => $driver->location_updated_at,
+            'is_online' => (bool) $driver->is_online,
+            'is_available' => (bool) $driver->is_available,
+        ]);
     }
 
     /**

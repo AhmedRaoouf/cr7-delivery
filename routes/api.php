@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Admin\DeliveryPricingRuleController;
 use App\Http\Controllers\Api\Admin\DirectOrderController as AdminDirectOrderController;
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\DriverDocumentController;
+use App\Http\Controllers\Api\Admin\DriverFinanceController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
@@ -173,6 +174,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/orders/{orderGroup}/payment', [PaymentController::class, 'show']);
         Route::post('/orders/{orderGroup}/payment/proof', [PaymentController::class, 'submitProof']);
+        Route::get('/orders/{orderGroup}/payment/proofs/{proof}/file', [PaymentController::class, 'proofFile']);
         Route::post('/orders/{orderGroup}/payment/method', [PaymentController::class, 'switchToCash']);
 
         Route::get('/complaints', [CustomerComplaintController::class, 'index']);
@@ -401,8 +403,14 @@ Route::prefix('v1')->group(function () {
         // Drivers
         Route::middleware('permission:drivers.view')->group(function () {
             Route::get('/drivers', [DriverController::class, 'index']);
+            // Before `/drivers/{driver}`, or `finance` binds as a captain id and 404s.
+            Route::get('/finance/drivers', [DriverFinanceController::class, 'index']);
             Route::get('/drivers/{driver}', [DriverController::class, 'show']);
+            Route::get('/drivers/{driver}/ledger', [DriverFinanceController::class, 'ledger']);
         });
+        // D-71 — the office received cash from a captain and/or paid one. Same permission
+        // as a manual balance adjustment, because that is exactly what it is.
+        Route::post('/drivers/{driver}/settle', [DriverFinanceController::class, 'settle'])->middleware('permission:drivers.adjust_balance');
         Route::post('/drivers', [DriverController::class, 'store']);
         Route::patch('/drivers/{driver}', [DriverController::class, 'update']);
         Route::post('/drivers/{driver}/status', [DriverController::class, 'status'])->middleware('permission:drivers.toggle_status');

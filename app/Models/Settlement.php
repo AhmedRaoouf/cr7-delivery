@@ -12,7 +12,7 @@ class Settlement extends Model
 {
     protected $fillable = [
         'party_type', 'party_id', 'period_start', 'period_end', 'gross_sales',
-        'refunds_total', 'commission_total', 'delivery_fees_total', 'platform_fee_total',
+        'refunds_total', 'commission_total', 'delivery_fees_total', 'platform_delivery_margin_total', 'platform_fee_total',
         'cash_collected',
         'net_amount', 'status', 'payment_reference', 'note', 'created_by', 'paid_at',
     ];
@@ -28,6 +28,7 @@ class Settlement extends Model
             'refunds_total' => 'decimal:2',
             'commission_total' => 'decimal:2',
             'delivery_fees_total' => 'decimal:2',
+            'platform_delivery_margin_total' => 'decimal:2',
             'platform_fee_total' => 'decimal:2',
             'cash_collected' => 'decimal:2',
             'net_amount' => 'decimal:2',

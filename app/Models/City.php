@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class City extends Model
 {
     protected $fillable = [
-        'name_ar', 'name_en', 'center_lat', 'center_lng', 'pricing_type',
+        'name_ar', 'name_en', 'center_lat', 'center_lng', 'radius_km', 'pricing_type',
         'default_min_order', 'is_active', 'sort_order',
     ];
 
@@ -19,6 +19,7 @@ class City extends Model
             'pricing_type' => CityPricingType::class,
             'center_lat' => 'decimal:7',
             'center_lng' => 'decimal:7',
+            'radius_km' => 'decimal:3',
             'default_min_order' => 'decimal:2',
             'is_active' => 'boolean',
         ];

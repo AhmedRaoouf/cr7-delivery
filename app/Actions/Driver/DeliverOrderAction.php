@@ -7,6 +7,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Support\DriverLedger;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -53,24 +54,15 @@ class DeliverOrderAction
 
             $driver->update(['is_available' => true, 'active_order_id' => null, 'completed_orders' => $driver->completed_orders + 1]);
 
-            $driver->transactions()->create([
-                'order_id' => $order->id,
-                'type' => 'order_earning',
-                'amount' => $order->driver_earning,
-                'balance_after' => $driver->wallet_balance + $order->driver_earning,
-                'created_by' => null,
-            ]);
-            $driver->increment('wallet_balance', $order->driver_earning);
+            // D-71 — two meters, never one. `wallet_balance` is the captain's own money;
+            // `cash_in_hand` is the platform's money they are carrying. The old code wrote
+            // the cash row's `balance_after` from the wallet, so a cash trip logged a
+            // wallet figure the wallet had never held.
+            DriverLedger::recordEarning($driver, $order);
 
             if ($order->payment_method->value === 'cash') {
                 $cashTotal = $collectedAmount ?? (float) $order->total;
-                $driver->increment('cash_in_hand', $cashTotal);
-                $driver->transactions()->create([
-                    'order_id' => $order->id,
-                    'type' => 'cash_settlement',
-                    'amount' => -$cashTotal,
-                    'balance_after' => $driver->wallet_balance,
-                ]);
+                DriverLedger::recordCashCollected($driver, $order, $cashTotal);
 
                 if ($order->orderGroup->payment) {
                     $order->orderGroup->payment->update(['status' => 'paid', 'collected_amount' => $cashTotal, 'paid_at' => now()]);

@@ -23,6 +23,7 @@ use App\Models\Settlement;
 use App\Models\SettlementItem;
 use App\Models\User;
 use App\Models\UserAddress;
+use App\Support\DeliveryCommission;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -198,8 +199,11 @@ class DemoDataSeeder extends Seeder
                     'national_id' => '2900'.substr($phone, -7),
                     'vehicle_type' => 'motorcycle',
                     'vehicle_plate' => $plate,
-                    'earning_type' => 'per_km',
-                    'earning_value' => 4.0,
+                    // D-70 — the standard split. `0` means «whatever
+                    // `delivery.platform_commission_rate` says», so demo captains
+                    // earn the same 85 % the real ones do.
+                    'earning_type' => 'percent_of_delivery_fee',
+                    'earning_value' => 0,
                     'is_active' => true,
                 ],
             );
@@ -388,7 +392,7 @@ class DemoDataSeeder extends Seeder
         $address = $customer->addresses()->first();
         $commissionRate = (float) $restaurant->commission_rate;
         $deliveryFee = $this->zoneFee($address?->service_zone_id);
-        $driverEarning = round($deliveryFee * 0.84, 2);
+        $driverEarning = DeliveryCommission::driverShare($deliveryFee);
         $total = round($subtotal + $deliveryFee + self::PLATFORM_FEE, 2);
 
         $group = OrderGroup::query()->create([
@@ -448,7 +452,7 @@ class DemoDataSeeder extends Seeder
             'commission_rate_snapshot' => $commissionRate,
             'commission_amount' => round($subtotal * $commissionRate / 100, 2),
             'driver_earning' => $driver === null ? 0 : $driverEarning,
-            'platform_delivery_margin' => $driver === null ? 0 : round($deliveryFee - $driverEarning, 2),
+            'platform_delivery_margin' => $driver === null ? 0 : DeliveryCommission::platformShare($deliveryFee),
             'pickup_otp' => '1234',
             // doc 05 §8 — the customer's code only exists once the food is in the bag.
             'delivery_otp' => $this->hasPassed($status, OrderStatus::PickedUp) ? '1234' : null,
@@ -568,8 +572,8 @@ class DemoDataSeeder extends Seeder
             // D-48 — zero commission on food the platform never sold.
             'commission_rate_snapshot' => 0,
             'commission_amount' => 0,
-            'driver_earning' => round($deliveryFee * 0.84, 2),
-            'platform_delivery_margin' => round($deliveryFee * 0.16, 2),
+            'driver_earning' => DeliveryCommission::driverShare($deliveryFee),
+            'platform_delivery_margin' => DeliveryCommission::platformShare($deliveryFee),
             'pickup_otp' => '1234',
             'delivery_otp' => null,
             'business_date' => $placedAt->toDateString(),

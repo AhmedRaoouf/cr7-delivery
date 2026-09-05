@@ -16,6 +16,14 @@ class DatabaseSeeder extends Seeder
             RolesSeeder::class,
             SettingsSeeder::class,
             LocationSeeder::class,
+            // The four cities the platform actually delivers in…
+            ServiceAreaSeeder::class,
+            // …and, over them, the operator's printed price list: 31 named areas with
+            // their own fees, plus the city coverage circles those areas rely on (D-70).
+            OperatorZonePricingSeeder::class,
+            // Real contact and wallet numbers over the launch placeholders, and the
+            // 15 % delivery split every captain is on (D-70, D-71).
+            OperatorSettingsSeeder::class,
             AdminUserSeeder::class,
             ContentSeeder::class,
             // doc 17 — the real Gamasa catalogue. Without it every browse screen is

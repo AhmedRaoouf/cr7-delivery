@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Admin;
 
+use App\Http\Resources\Shared\PaymentProofResource;
 use App\Support\RefundPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -28,6 +29,10 @@ class OrderResource extends JsonResource
                 'group_number' => $this->orderGroup->group_number,
                 'rollup_status' => $this->orderGroup->rollup_status,
                 'payment' => $this->orderGroup->payment,
+                // The transfer receipts behind that payment. A payment belongs to the
+                // group, so a three-restaurant basket shows the same receipts on each of
+                // its sub-orders — which is right: there was one transfer.
+                'receipts' => PaymentProofResource::forAdmin($this->orderGroup->payment?->proofs ?? []),
             ]),
         ];
     }

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\Customer;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\SubmitPaymentProofRequest;
+use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\OrderGroup;
+use App\Models\PaymentProof;
 use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\FileUploader;
@@ -13,6 +15,8 @@ use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** doc 08 §4 — payments (customer side). doc 12 §5 — the proof image is "Admin only", stored on the private disk. */
 class PaymentController extends Controller
@@ -37,7 +41,30 @@ class PaymentController extends Controller
             'opened_at' => $payment->gate_opened_at,
             'deadline_at' => $payment->deadline_at,
             'seconds_remaining' => $payment->deadline_at ? max(0, now()->diffInSeconds($payment->deadline_at, false)) : null,
+            // Every receipt sent for this order, newest first, with the reviewer's note
+            // on any that were rejected. The customer sending a second receipt without
+            // being told what was wrong with the first is how a payment stalls.
+            'receipts' => PaymentProofResource::forCustomer(
+                $payment->proofs()->latest()->get(),
+                $orderGroup->id,
+            ),
         ]);
+    }
+
+    /**
+     * The customer's own receipt image. Same private disk as the admin's gate, a
+     * different door: this one checks that the order group belongs to the caller **and**
+     * that the receipt belongs to that group's payment — either check alone would let a
+     * signed-in customer read someone else's transfer by id.
+     */
+    public function proofFile(Request $request, OrderGroup $orderGroup, PaymentProof $proof): StreamedResponse
+    {
+        $this->ensureOwned($request, $orderGroup);
+
+        abort_unless($orderGroup->payment && $proof->payment_id === $orderGroup->payment->id, 404);
+        abort_unless(Storage::disk('local')->exists($proof->image), 404);
+
+        return Storage::disk('local')->response($proof->image);
     }
 
     public function submitProof(SubmitPaymentProofRequest $request, OrderGroup $orderGroup): JsonResponse
@@ -64,7 +91,11 @@ class PaymentController extends Controller
             return $proof;
         });
 
-        return ApiResponse::success($proof, 'تم إرسال إيصال الدفع وجارٍ المراجعة', status: 201);
+        return ApiResponse::success(
+            PaymentProofResource::forCustomer([$proof], $orderGroup->id)[0],
+            'تم إرسال إيصال الدفع وجارٍ المراجعة',
+            status: 201,
+        );
     }
 
     public function switchToCash(Request $request, OrderGroup $orderGroup): JsonResponse

@@ -32,6 +32,11 @@ class ServiceZoneResource extends JsonResource
             'min_order_value' => (float) $this->min_order_value,
             'avg_delivery_minutes' => (int) $this->avg_delivery_minutes,
             'is_active' => (bool) $this->is_active,
+            // D-70 — false on the wide legacy circles, which resolve a pin but are not
+            // one of the operator's priced areas. A picker that shows them puts a fee on
+            // screen that is not on the flyer.
+            'is_selectable' => (bool) $this->is_selectable,
+            'sort_order' => (int) $this->sort_order,
         ];
     }
 }

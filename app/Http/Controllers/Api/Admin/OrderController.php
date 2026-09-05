@@ -61,7 +61,7 @@ class OrderController extends Controller
         $this->ensureInScope($request, $order);
 
         return ApiResponse::success(new OrderResource($order->load([
-            'restaurant', 'driver.user', 'user', 'items.options', 'statusHistory', 'driverAttempts.driver.user', 'refunds', 'orderGroup.payment',
+            'restaurant', 'driver.user', 'user', 'items.options', 'statusHistory', 'driverAttempts.driver.user', 'refunds', 'orderGroup.payment.proofs.reviewedBy',
         ])));
     }
 

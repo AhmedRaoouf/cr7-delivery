@@ -46,7 +46,10 @@ class AcceptOfferAction
                     'status' => OrderStatus::DriverAssigned,
                     'driver_assigned_at' => now(),
                     'driver_earning' => DriverEarningCalculator::calculate($order, $driver),
-                    'platform_delivery_margin' => round((float) $order->delivery_fee_share - DriverEarningCalculator::calculate($order, $driver), 2),
+                    // D-70 — the two halves of the delivery fee, snapshotted together so
+                    // moving `delivery.platform_commission_rate` can never re-price a
+                    // trip that has already been accepted.
+                    'platform_delivery_margin' => DriverEarningCalculator::platformMargin($order, $driver),
                 ]);
 
                 $driver->update(['is_available' => false, 'active_order_id' => $order->id]);

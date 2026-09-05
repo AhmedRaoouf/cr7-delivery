@@ -12,7 +12,7 @@ class ServiceZone extends Model
     protected $fillable = [
         'city_id', 'name_ar', 'name_en', 'polygon', 'center_lat', 'center_lng',
         'radius_km', 'delivery_fee', 'free_delivery_over', 'min_order_value',
-        'avg_delivery_minutes', 'is_active',
+        'avg_delivery_minutes', 'is_active', 'is_selectable', 'sort_order',
     ];
 
     protected function casts(): array
@@ -26,6 +26,7 @@ class ServiceZone extends Model
             'free_delivery_over' => 'decimal:2',
             'min_order_value' => 'decimal:2',
             'is_active' => 'boolean',
+            'is_selectable' => 'boolean',
         ];
     }
 

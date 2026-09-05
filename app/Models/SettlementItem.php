@@ -10,7 +10,7 @@ class SettlementItem extends Model
 {
     protected $fillable = [
         'settlement_id', 'order_id', 'type', 'gross', 'commission',
-        'delivery_fee', 'platform_fee', 'driver_earning', 'net',
+        'delivery_fee', 'platform_delivery_margin', 'platform_fee', 'driver_earning', 'net',
     ];
 
     protected function casts(): array
@@ -21,6 +21,7 @@ class SettlementItem extends Model
             'commission' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
             'platform_fee' => 'decimal:2',
+            'platform_delivery_margin' => 'decimal:2',
             'driver_earning' => 'decimal:2',
             'net' => 'decimal:2',
         ];

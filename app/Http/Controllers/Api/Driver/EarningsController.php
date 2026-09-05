@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Settlement;
 use App\Support\ApiResponse;
+use App\Support\DeliveryCommission;
+use App\Support\DriverLedger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,15 +24,23 @@ class EarningsController extends Controller
         $transactions = $driver->transactions()->whereBetween('created_at', [$from, $to])->latest()->get();
 
         return ApiResponse::success([
-            'wallet_balance' => (float) $driver->wallet_balance,
-            'cash_in_hand' => (float) $driver->cash_in_hand,
+            ...DriverLedger::balances($driver),
             'total_earned' => (float) $transactions->where('type', 'order_earning')->sum('amount'),
             'orders_count' => $transactions->where('type', 'order_earning')->count(),
+            // What the captain handed the office inside the window, and what the office
+            // handed them. Without these the balances look like they drift on their own.
+            'cash_handed_over' => round(abs((float) $transactions->where('type', 'cash_handover')->sum('amount')), 2),
+            'paid_out' => round(abs((float) $transactions->where('type', 'payout')->sum('amount')), 2),
+            'commission_rate' => DeliveryCommission::rate(),
             'breakdown' => $transactions->map(fn ($t) => [
                 'id' => $t->id,
                 'order_id' => $t->order_id,
                 'type' => $t->type,
+                // D-71 — the only question a captain actually has about a row:
+                // `wallet` is their own money, `cash` is the platform's, in their pocket.
+                'meter' => DriverLedger::meterOf($t->type),
                 'amount' => (float) $t->amount,
+                'balance_after' => (float) $t->balance_after,
                 'note' => $t->note,
                 'created_at' => $t->created_at,
             ]),
@@ -53,12 +63,23 @@ class EarningsController extends Controller
             'delivered_at' => $order->delivered_at,
             'driver_earning' => (float) $order->driver_earning,
             'payment_method' => $order->payment_method,
+            // D-70 — the fee split three ways on one screen, so «ليه أخدت 21 من 25»
+            // never has to be asked. The margin is the platform's share of the fee,
+            // snapshotted at assignment.
+            'delivery_fee' => (float) $order->delivery_fee_share,
+            'platform_margin' => (float) $order->platform_delivery_margin,
+            'commission_rate' => DeliveryCommission::rate(),
             // On a cash trip the captain holds the whole customer total, not just the
             // delivery fee — that is what the settlement nets off.
             'cash_collected' => $order->payment_method->value === 'cash' ? (float) $order->total : 0.0,
+            // …and of that total, this much is not theirs to keep.
+            'owed_to_platform' => $order->payment_method->value === 'cash'
+                ? round((float) $order->total - (float) $order->driver_earning, 2)
+                : round(-(float) $order->driver_earning, 2),
             'transactions' => $transactions->map(fn ($t) => [
                 'id' => $t->id,
                 'type' => $t->type,
+                'meter' => DriverLedger::meterOf($t->type),
                 'amount' => (float) $t->amount,
                 'note' => $t->note,
                 'created_at' => $t->created_at,

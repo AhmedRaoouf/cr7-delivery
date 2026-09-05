@@ -26,6 +26,10 @@ class GenerateSettlementAction
             $grossSales = (float) $orders->sum('subtotal');
             $commissionTotal = (float) $orders->sum('commission_amount');
             $deliveryFeesTotal = (float) $orders->sum('delivery_fee_share');
+            // D-70 — the platform's 15 % of those fees, summed from the per-order
+            // snapshots rather than re-derived, so a rate change after the fact cannot
+            // move a period that has already been settled.
+            $platformDeliveryMarginTotal = (float) $orders->sum('platform_delivery_margin');
             // D-63 — reported, never paid out. It stays outside `net_amount` for both
             // party types: neither the restaurant nor the captain earned it.
             $platformFeeTotal = (float) $orders->sum('platform_fee_share');
@@ -45,6 +49,7 @@ class GenerateSettlementAction
                 'refunds_total' => $refundsTotal,
                 'commission_total' => $commissionTotal,
                 'delivery_fees_total' => $deliveryFeesTotal,
+                'platform_delivery_margin_total' => $platformDeliveryMarginTotal,
                 'platform_fee_total' => $platformFeeTotal,
                 // On a cash order the captain physically holds the service fee too —
                 // it is inside `orders.total` — so it is netted off what the platform
@@ -62,6 +67,7 @@ class GenerateSettlementAction
                     'gross' => $order->subtotal,
                     'commission' => $order->commission_amount,
                     'delivery_fee' => $order->delivery_fee_share,
+                    'platform_delivery_margin' => $order->platform_delivery_margin,
                     'platform_fee' => $order->platform_fee_share,
                     'driver_earning' => $order->driver_earning,
                     'net' => $partyType === 'restaurant'

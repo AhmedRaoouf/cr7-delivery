@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Shared\ServiceZoneResource;
+use App\Models\City;
 use App\Models\ServiceZone;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\Router;
 use App\Support\ApiResponse;
 use App\Support\Geo;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -48,15 +51,73 @@ class GeoController extends Controller
                 return false;
             });
 
-        if (! $zone) {
-            return ApiResponse::success(['city' => null, 'zone' => null, 'is_serviceable' => false]);
+        if ($zone) {
+            return ApiResponse::success([
+                'city' => $zone->city,
+                'zone' => $zone,
+                'is_serviceable' => true,
+                'requires_zone_choice' => ! $zone->is_selectable,
+                'zones' => ServiceZoneResource::collection($this->pricedZones($zone->city_id)),
+            ]);
+        }
+
+        // D-70 — the priced areas from the operator's flyer are names, not shapes: no
+        // geocoder can place «جنة 3» or «الصناعية الرابعة», so they carry no radius and
+        // no point ever falls inside one. Coverage is therefore the **city** circle, and
+        // the price is whichever area the customer picks off the list this returns.
+        // Without this fallback every address in New Mansoura resolved to «خارج نطاق
+        // التوصيل» the moment the wide legacy circles stopped being the price.
+        $city = City::query()
+            ->where('is_active', true)
+            ->whereNotNull('radius_km')
+            ->get()
+            ->map(fn (City $candidate) => [
+                'city' => $candidate,
+                'distance' => Geo::haversineKm((float) $candidate->center_lat, (float) $candidate->center_lng, $lat, $lng),
+            ])
+            ->filter(fn (array $row) => $row['distance'] <= (float) $row['city']->radius_km)
+            ->sortBy('distance')
+            ->first();
+
+        if (! $city) {
+            return ApiResponse::success([
+                'city' => null,
+                'zone' => null,
+                'is_serviceable' => false,
+                'requires_zone_choice' => false,
+                'zones' => [],
+            ]);
         }
 
         return ApiResponse::success([
-            'city' => $zone->city,
-            'zone' => $zone,
+            'city' => $city['city'],
+            // Deliberately null. The pin says which town; only the customer can say
+            // which area of it, and the fee follows that answer, not this one.
+            'zone' => null,
             'is_serviceable' => true,
+            'requires_zone_choice' => true,
+            'zones' => ServiceZoneResource::collection($this->pricedZones($city['city']->id)),
         ]);
+    }
+
+    /**
+     * The areas a customer may pick in a city, cheapest first — the flyer's own order.
+     *
+     * The wide legacy circles are excluded by `is_selectable`: they still resolve a pin
+     * and still anchor restaurants and captains, but offering one as a price would put a
+     * fee on the list that the operator never printed.
+     *
+     * @return Collection<int, ServiceZone>
+     */
+    private function pricedZones(int $cityId)
+    {
+        return ServiceZone::query()
+            ->where('city_id', $cityId)
+            ->where('is_active', true)
+            ->where('is_selectable', true)
+            ->orderBy('sort_order')
+            ->orderBy('delivery_fee')
+            ->get();
     }
 
     /**

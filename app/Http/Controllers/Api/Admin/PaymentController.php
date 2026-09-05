@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\Payment;
 use App\Models\PaymentProof;
 use App\Support\ApiResponse;
@@ -34,7 +35,16 @@ class PaymentController extends Controller
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($payments->items(), meta: [
+        // `proofs` carries a private-disk path; the resource swaps it for a gated URL.
+        $rows = collect($payments->items())->map(function (Payment $payment) {
+            $row = $payment->toArray();
+            $row['receipts'] = PaymentProofResource::forAdmin($payment->proofs);
+            unset($row['proofs']);
+
+            return $row;
+        });
+
+        return ApiResponse::success($rows, meta: [
             'current_page' => $payments->currentPage(),
             'per_page' => $payments->perPage(),
             'total' => $payments->total(),
@@ -44,7 +54,14 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): JsonResponse
     {
-        return ApiResponse::success($payment->load(['orderGroup.orders', 'proofs.reviewedBy']));
+        $payment->load(['orderGroup.orders', 'proofs.reviewedBy']);
+
+        $row = $payment->toArray();
+        $row['order_group'] = $payment->orderGroup;
+        $row['receipts'] = PaymentProofResource::forAdmin($payment->proofs);
+        unset($row['proofs']);
+
+        return ApiResponse::success($row);
     }
 
     public function approve(Request $request, Payment $payment): JsonResponse

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -76,13 +77,38 @@ class ProductRequiresConfigurationTest extends TestCase
         $this->assertFalse($product->requiresConfiguration());
     }
 
-    public function test_a_required_group_with_one_option_is_a_fact_not_a_choice(): void
+    public function test_a_required_group_with_one_option_still_has_to_be_answered(): void
     {
-        // Stopping the customer to confirm the only possible answer is friction
-        // for nothing, and the app's own rule says the same.
+        // Read from the device: «+» sent `{product_id: 122, quantity: 1}` and
+        // the cart answered 422 «يجب اختيار الحجم». Nothing anywhere fills in
+        // the only possible answer, so «the group offers no real choice» was a
+        // rule this side of the wire held alone.
         $product = $this->product(['required' => true, 'options' => 1]);
 
-        $this->assertFalse($product->requiresConfiguration());
+        $this->assertTrue($product->requiresConfiguration());
+    }
+
+    public function test_the_flag_and_the_cart_are_the_same_rule(): void
+    {
+        // The drift this closes: a row saying it can be quick-added, and a cart
+        // that refuses it. Whatever the flag says, the cart has to agree — so
+        // ask both about the same dish.
+        $product = $this->product(['required' => true, 'options' => 1]);
+
+        Sanctum::actingAs($this->makeCustomer());
+
+        $this->withHeaders(['X-App' => 'app', 'X-Role' => 'customer'])
+            ->postJson('/api/v1/cart/items', [
+                'product_id' => $product->id,
+                'quantity' => 1,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'validation_failed');
+
+        $this->assertTrue(
+            $product->requiresConfiguration(),
+            'the cart refused a dish the list row offered to add in one tap',
+        );
     }
 
     public function test_the_list_payload_carries_the_answer(): void

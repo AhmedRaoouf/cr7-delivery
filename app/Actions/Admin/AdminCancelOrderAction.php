@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\RefundPolicy;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -55,7 +56,7 @@ class AdminCancelOrderAction
                     // that judgement so the rule lives in one readable place.
                     $order->refunds()->create([
                         'payment_id' => $payment->id,
-                        'amount' => \App\Support\RefundPolicy::fullRefundAmount($order->fresh(), $reasonCode),
+                        'amount' => RefundPolicy::fullRefundAmount($order->fresh(), $reasonCode),
                         'type' => 'full',
                         'reason_code' => $reasonCode,
                         'note' => $note,

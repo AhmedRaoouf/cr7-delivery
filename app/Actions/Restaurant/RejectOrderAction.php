@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\DB;
 /** doc 08 §6 — POST /restaurant/orders/{id}/reject. doc 04 §6.3 — one restaurant declining never cancels the group. */
 class RejectOrderAction
 {
-    public function __construct(private readonly ConfirmationGateService $gate)
-    {
-    }
+    public function __construct(private readonly ConfirmationGateService $gate) {}
 
     public function execute(User $user, Order $order, string $reasonCode, ?string $note): Order
     {

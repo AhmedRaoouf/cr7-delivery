@@ -17,9 +17,7 @@ use Illuminate\Support\Facades\DB;
  */
 class AcceptOrderAction
 {
-    public function __construct(private readonly ConfirmationGateService $gate)
-    {
-    }
+    public function __construct(private readonly ConfirmationGateService $gate) {}
 
     public function execute(User $user, Order $order, int $prepMinutes, ?string $restaurantOrderRef): Order
     {

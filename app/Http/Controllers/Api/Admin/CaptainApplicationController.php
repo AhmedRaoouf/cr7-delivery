@@ -25,9 +25,7 @@ use Illuminate\Support\Facades\DB;
  */
 class CaptainApplicationController extends Controller
 {
-    public function __construct(private readonly CreateDriverAction $createDriver)
-    {
-    }
+    public function __construct(private readonly CreateDriverAction $createDriver) {}
 
     public function index(Request $request): JsonResponse
     {

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Refund;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\RefundPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -59,8 +60,8 @@ class RefundController extends Controller
         return ApiResponse::success($refund, 'تم إنشاء طلب الاسترداد', meta: [
             // D-65 — what the policy would have refunded, so a figure that departs
             // from it is a decision somebody made rather than an accident.
-            'policy_full_amount' => \App\Support\RefundPolicy::fullRefundAmount($order, $validated['reason_code'] ?? null),
-            'platform_fee_refundable' => \App\Support\RefundPolicy::feeIsRefundable($order, $validated['reason_code'] ?? null),
+            'policy_full_amount' => RefundPolicy::fullRefundAmount($order, $validated['reason_code'] ?? null),
+            'platform_fee_refundable' => RefundPolicy::feeIsRefundable($order, $validated['reason_code'] ?? null),
             'platform_fee_share' => (float) $order->platform_fee_share,
         ], status: 201);
     }

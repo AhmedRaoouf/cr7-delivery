@@ -101,16 +101,47 @@ class OrderBroadcastTest extends TestCase
         $this->assertSame('private-driver.5', $assigned[3]->name);
     }
 
-    public function test_every_order_status_maps_onto_exactly_one_queue(): void
+    /**
+     * `done` is deliberately not a column — it is the history filter's superset, and
+     * it overlaps `delivered` on purpose. Every *column* must still own its statuses
+     * outright, or `OrderChanged` cannot name the one column a card left.
+     */
+    public function test_every_order_status_maps_onto_exactly_one_board_column(): void
     {
+        $columns = array_diff_key(BoardQueue::QUEUES, ['done' => null]);
+
         foreach (OrderStatus::cases() as $status) {
             $matches = array_filter(
-                BoardQueue::QUEUES,
+                $columns,
                 fn (array $statuses) => in_array($status->value, $statuses, true),
             );
 
-            $this->assertCount(1, $matches, "{$status->value} belongs to ".count($matches).' queues');
+            // At most one, not exactly one: `cancelled` and `delivery_issue` leave the
+            // board entirely and live only in `done`. What must never happen is a status
+            // in two columns, because then a card would have two places to be.
+            $this->assertLessThanOrEqual(1, count($matches), "{$status->value} belongs to ".count($matches).' columns');
+
+            // And every status must still resolve to *some* queue, or `OrderChanged`
+            // would tell the board to refetch nothing when that card moved.
+            $this->assertArrayHasKey(
+                BoardQueue::forStatus($status),
+                BoardQueue::QUEUES,
+                "{$status->value} resolves to no queue at all",
+            );
         }
+    }
+
+    public function test_the_done_bucket_holds_every_terminal_status_and_nothing_else(): void
+    {
+        $this->assertSame(
+            ['delivered', 'cancelled', 'delivery_issue'],
+            BoardQueue::QUEUES['done'],
+        );
+
+        // `forStatus` reads the map top-down, so `delivered` must sit above `done`
+        // or a delivered card would tell the board to refetch a column it does not draw.
+        $this->assertSame('delivered', BoardQueue::forStatus('delivered'));
+        $this->assertSame('done', BoardQueue::forStatus('cancelled'));
     }
 
     public function test_the_board_queue_map_is_the_one_the_api_filters_on(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\NullGeocoder;
@@ -78,7 +79,7 @@ class MapsAndOtpTest extends TestCase
 
     public function test_reverse_geocoding_answers_nulls_rather_than_failing_without_a_provider(): void
     {
-        $this->app->instance(Geocoder::class, new NullGeocoder());
+        $this->app->instance(Geocoder::class, new NullGeocoder);
 
         $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
             ->assertOk()
@@ -100,7 +101,7 @@ class MapsAndOtpTest extends TestCase
                 ],
             ]],
         ])]);
-        $this->app->instance(Geocoder::class, new MapboxGeocoder());
+        $this->app->instance(Geocoder::class, new MapboxGeocoder);
 
         $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
             ->assertOk()
@@ -114,7 +115,7 @@ class MapsAndOtpTest extends TestCase
         config(['maps.mapbox.token' => 'pk.test-token']);
         Cache::flush();
         Http::fake(['api.mapbox.com/*' => Http::response(['features' => [['place_name' => 'جمصة']]])]);
-        $geocoder = new MapboxGeocoder();
+        $geocoder = new MapboxGeocoder;
 
         $geocoder->reverse(31.4472, 31.5142);
         $geocoder->reverse(31.4472, 31.5142);
@@ -129,7 +130,7 @@ class MapsAndOtpTest extends TestCase
         config(['maps.mapbox.token' => 'pk.test-token']);
         Cache::flush();
         Http::fake(['api.mapbox.com/*' => Http::response('gateway down', 502)]);
-        $this->app->instance(Geocoder::class, new MapboxGeocoder());
+        $this->app->instance(Geocoder::class, new MapboxGeocoder);
 
         $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
             ->assertOk()
@@ -147,7 +148,7 @@ class MapsAndOtpTest extends TestCase
                 'center' => [31.5142, 31.4472],
             ]],
         ])]);
-        $this->app->instance(Geocoder::class, new MapboxGeocoder());
+        $this->app->instance(Geocoder::class, new MapboxGeocoder);
 
         $this->getJson('/api/v1/geo/search?q='.urlencode('الكورنيش'))
             ->assertOk()
@@ -250,6 +251,6 @@ class MapsAndOtpTest extends TestCase
             ], ['Idempotency-Key' => 'static-otp-test'])
             ->assertCreated();
 
-        $this->assertSame('1234', \App\Models\Order::query()->firstOrFail()->getRawOriginal('pickup_otp'));
+        $this->assertSame('1234', Order::query()->firstOrFail()->getRawOriginal('pickup_otp'));
     }
 }

@@ -9,6 +9,7 @@ use App\Actions\Admin\UnassignDriverAction;
 use App\Actions\Restaurant\ExtendPrepTimeAction;
 use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
@@ -23,7 +24,7 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — order management + the doc 24 §3 intervention console. `{id}` addresses a sub-order (orders.id). */
 class OrderController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {

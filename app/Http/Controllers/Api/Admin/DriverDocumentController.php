@@ -10,6 +10,8 @@ use App\Models\DriverDocument;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** doc 12 §5 — driver documents are "Admin only": stored on the private disk, never a public URL. */
 class DriverDocumentController extends Controller
@@ -30,11 +32,11 @@ class DriverDocumentController extends Controller
     }
 
     /** doc 12 §5 — the only way to see a driver document: never a public URL. */
-    public function file(DriverDocument $driverDocument): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function file(DriverDocument $driverDocument): StreamedResponse
     {
-        abort_unless(\Illuminate\Support\Facades\Storage::disk('local')->exists($driverDocument->file), 404);
+        abort_unless(Storage::disk('local')->exists($driverDocument->file), 404);
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->response($driverDocument->file);
+        return Storage::disk('local')->response($driverDocument->file);
     }
 
     public function review(Request $request, DriverDocument $driverDocument): JsonResponse

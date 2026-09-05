@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Complaint;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Product;
 use App\Models\PromoCode;
 use App\Models\Refund;
 use App\Models\Restaurant;
+use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -51,7 +54,7 @@ class ReportController extends Controller
 
     public function products(Request $request): JsonResponse
     {
-        $products = \App\Models\Product::query()
+        $products = Product::query()
             ->orderByDesc('sold_count')
             ->paginate($request->integer('per_page', 20), ['id', 'restaurant_id', 'name_ar', 'name_en', 'price', 'sold_count', 'rating_avg']);
 
@@ -141,7 +144,7 @@ class ReportController extends Controller
     {
         $segment = $request->string('filter.segment')->value();
 
-        $customers = \App\Models\User::query()->where('type', 'customer');
+        $customers = User::query()->where('type', 'customer');
 
         $customers = match ($segment) {
             'new' => $customers->where('created_at', '>=', now()->subDays(30)),
@@ -163,7 +166,7 @@ class ReportController extends Controller
 
     public function customerCohorts(): JsonResponse
     {
-        $cohorts = \App\Models\User::query()
+        $cohorts = User::query()
             ->where('type', 'customer')
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as cohort_month, COUNT(*) as customers_count")
             ->groupBy('cohort_month')
@@ -182,7 +185,7 @@ class ReportController extends Controller
             'orders_waiting_for_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
             'orders_restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'orders_delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
-            'payments_under_review' => \App\Models\Payment::query()->where('status', 'under_review')->count(),
+            'payments_under_review' => Payment::query()->where('status', 'under_review')->count(),
             'stale_drivers_online' => AdminScope::applyToDrivers(Driver::query(), $request->user())
                 ->where('is_online', true)
                 ->where(fn ($q) => $q->whereNull('location_updated_at')->orWhere('location_updated_at', '<', now()->subSeconds(90)))

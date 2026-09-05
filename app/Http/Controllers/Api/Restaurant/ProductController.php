@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
@@ -13,8 +14,7 @@ use Illuminate\Http\Request;
 /** doc 08 §6 — GET/POST/PATCH/DELETE /restaurant/products[/{id}]: self-service, own restaurant only. */
 class ProductController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
-
+    use FiltersLists;
     use HandlesUploads;
 
     public function index(Request $request): JsonResponse

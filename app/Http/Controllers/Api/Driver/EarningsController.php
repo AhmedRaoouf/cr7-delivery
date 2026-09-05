@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Driver;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\Settlement;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -37,7 +38,7 @@ class EarningsController extends Controller
     }
 
     /** DRV-26 — the earning line for one order, with the trip it was paid for. */
-    public function earning(Request $request, \App\Models\Order $order): JsonResponse
+    public function earning(Request $request, Order $order): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
         abort_unless($order->driver_id === $driver->id, 404);

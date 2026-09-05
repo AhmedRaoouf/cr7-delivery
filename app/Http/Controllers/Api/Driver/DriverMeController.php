@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Driver;
 use App\Events\DriverLocationChanged;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -109,7 +110,7 @@ class DriverMeController extends Controller
      * the dispatcher both depend on this endpoint answering; a Pusher outage degrades the
      * map to its poll, which is why the poll is still there.
      */
-    private function broadcastLocation(\App\Models\Driver $driver): void
+    private function broadcastLocation(Driver $driver): void
     {
         $fresh = Cache::add('driver-location-broadcast:'.$driver->id, true, self::BROADCAST_EVERY_SECONDS);
 

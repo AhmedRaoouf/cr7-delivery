@@ -2,11 +2,27 @@
 
 namespace App\Providers;
 
+use App\Models\Banner;
+use App\Models\City;
+use App\Models\Cuisine;
+use App\Models\DeliveryPricingRule;
 use App\Models\Driver;
+use App\Models\DriverDocument;
+use App\Models\Faq;
+use App\Models\MenuCategory;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ProductOption;
+use App\Models\ProductOptionGroup;
+use App\Models\PromoCode;
 use App\Models\Restaurant;
+use App\Models\Role;
+use App\Models\ServiceZone;
+use App\Models\StaticPage;
 use App\Models\User;
+use App\Observers\AuditableObserver;
+use App\Observers\OrderObserver;
+use App\Observers\ProductObserver;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\NullGeocoder;
@@ -15,9 +31,10 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\Otp;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Telescope\Telescope;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -45,22 +62,22 @@ class AppServiceProvider extends ServiceProvider
      * lost if they are logged as a column diff, so they stay with `AuditLogger::record`.
      */
     private const AUDITED = [
-        \App\Models\Banner::class,
-        \App\Models\City::class,
-        \App\Models\Cuisine::class,
-        \App\Models\DeliveryPricingRule::class,
-        \App\Models\Driver::class,
-        \App\Models\DriverDocument::class,
-        \App\Models\Faq::class,
-        \App\Models\MenuCategory::class,
-        \App\Models\Product::class,
-        \App\Models\ProductOption::class,
-        \App\Models\ProductOptionGroup::class,
-        \App\Models\PromoCode::class,
-        \App\Models\Restaurant::class,
-        \App\Models\Role::class,
-        \App\Models\ServiceZone::class,
-        \App\Models\StaticPage::class,
+        Banner::class,
+        City::class,
+        Cuisine::class,
+        DeliveryPricingRule::class,
+        Driver::class,
+        DriverDocument::class,
+        Faq::class,
+        MenuCategory::class,
+        Product::class,
+        ProductOption::class,
+        ProductOptionGroup::class,
+        PromoCode::class,
+        Restaurant::class,
+        Role::class,
+        ServiceZone::class,
+        StaticPage::class,
     ];
 
     /**
@@ -80,7 +97,7 @@ class AppServiceProvider extends ServiceProvider
         //   * a token is set outside `local` — Telescope is a full read of every
         //     request body the API receives, and `AuthorizeTelescope` answers 404
         //     without one, so booting it would only cost memory.
-        $telescopeIsUsable = class_exists(\Laravel\Telescope\Telescope::class)
+        $telescopeIsUsable = class_exists(Telescope::class)
             && config('telescope.enabled') === true
             && ($this->app->environment('local') || config('telescope.auth_token') !== '');
 
@@ -98,8 +115,8 @@ class AppServiceProvider extends ServiceProvider
         // A token turns geocoding on; its absence turns it off. Nothing else
         // in the app has to know which of the two it is talking to.
         $this->app->singleton(Geocoder::class, fn () => filled(config('maps.mapbox.token'))
-            ? new MapboxGeocoder()
-            : new NullGeocoder());
+            ? new MapboxGeocoder
+            : new NullGeocoder);
     }
 
     /**
@@ -137,19 +154,19 @@ class AppServiceProvider extends ServiceProvider
 
         // D-60 — restaurants.price_band is derived from the menu, so it is recomputed
         // whenever a row that feeds the median moves.
-        Product::observe(\App\Observers\ProductObserver::class);
+        Product::observe(ProductObserver::class);
 
         // Realtime. Every open board, map and tracking screen learns that an order
         // moved from here — see App\Observers\OrderObserver for why the model event
         // is the hook rather than the nineteen call sites that write `status`.
-        Order::observe(\App\Observers\OrderObserver::class);
+        Order::observe(OrderObserver::class);
 
         // D-52 — «every admin action on a row writes an `audit_logs` row». Sixteen admin
         // controllers mutate these models and none of them said so; the model event is the
         // hook for the same reason it is above, and it covers the endpoint nobody has
         // written yet. Only an admin actor is recorded — see App\Observers\AuditableObserver.
         foreach (self::AUDITED as $model) {
-            $model::observe(\App\Observers\AuditableObserver::class);
+            $model::observe(AuditableObserver::class);
         }
 
         // Static OTP is correct on a staging server with no SMS gateway and is

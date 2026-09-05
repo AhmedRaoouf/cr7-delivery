@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\CreateDriverAction;
 use App\Actions\Admin\ResetUserPasswordAction;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDriverRequest;
 use App\Http\Requests\Admin\UpdateDriverRequest;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 
 class DriverController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Driver;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\DriverEarningCalculator;
 use Illuminate\Http\JsonResponse;

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AdminScopeType;
 use App\Models\AuditLog;
 use App\Models\Restaurant;
 use App\Models\Role;
@@ -147,7 +148,7 @@ class AdminAuditTrailTest extends TestCase
             'is_active' => true,
         ]);
         $limited->assignRole($narrow);
-        $limited->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $limited->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         Sanctum::actingAs($limited);
 
@@ -178,7 +179,7 @@ class AdminAuditTrailTest extends TestCase
         ]);
 
         $admin->assignRole('super_admin');
-        $admin->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         return $admin;
     }

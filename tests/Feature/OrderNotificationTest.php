@@ -10,6 +10,8 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\Notifications\Isolate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -223,7 +225,7 @@ class OrderNotificationTest extends TestCase
      */
     private function fakeFcm(mixed $fcm = null): void
     {
-        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::swap(new Factory);
         Http::preventStrayRequests();
 
         Http::fake([
@@ -234,7 +236,7 @@ class OrderNotificationTest extends TestCase
         // The access token is cached for 55 minutes, and the cache outlives a
         // single test in the array driver — so a test that wanted a fresh token
         // exchange would silently skip it.
-        \Illuminate\Support\Facades\Cache::forget('fcm:access-token');
+        Cache::forget('fcm:access-token');
     }
 
     private function assertNotified(User $user, string $type): void

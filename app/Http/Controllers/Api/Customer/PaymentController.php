@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\SubmitPaymentProofRequest;
 use App\Models\OrderGroup;
+use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\FileUploader;
 use App\Support\RollupStatus;
@@ -30,8 +31,8 @@ class PaymentController extends Controller
             'gate_open' => true,
             'method' => $payment->method,
             'status' => $payment->status,
-            'wallet_number' => \App\Models\Setting::query()->where('key', 'payment.vodafone_cash_number')->value('value'),
-            'instapay_handle' => \App\Models\Setting::query()->where('key', 'payment.instapay_handle')->value('value'),
+            'wallet_number' => Setting::query()->where('key', 'payment.vodafone_cash_number')->value('value'),
+            'instapay_handle' => Setting::query()->where('key', 'payment.instapay_handle')->value('value'),
             'amount' => $payment->amount !== null ? (float) $payment->amount : null,
             'opened_at' => $payment->gate_opened_at,
             'deadline_at' => $payment->deadline_at,

@@ -8,10 +8,12 @@ use App\Models\City;
 use App\Models\Cuisine;
 use App\Models\MenuCategory;
 use App\Models\Product;
+use App\Models\PromoCode;
 use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Models\User;
 use App\Support\PriceBand;
+use App\Support\Settings;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -138,7 +140,7 @@ class CatalogSeeder extends Seeder
                 'address' => $row['address'],
                 'latitude' => $row['latitude'],
                 'longitude' => $row['longitude'],
-                'commission_rate' => (float) \App\Support\Settings::get('commission.default_rate', 10.00),
+                'commission_rate' => (float) Settings::get('commission.default_rate', 10.00),
                 'min_order_value' => $row['min_order_value'],
                 'avg_prep_minutes' => $row['avg_prep_minutes'],
                 'rating_avg' => $row['rating_avg'],
@@ -274,7 +276,7 @@ class CatalogSeeder extends Seeder
     /** doc 22 §6 — the promo of record, and the only one any screen quotes. */
     private function seedPromoCodes(City $city): void
     {
-        \App\Models\PromoCode::query()->updateOrCreate(
+        PromoCode::query()->updateOrCreate(
             ['code' => 'WELCOME20'],
             [
                 'title_ar' => 'خصم 20% على أول طلب',
@@ -291,7 +293,7 @@ class CatalogSeeder extends Seeder
             ],
         );
 
-        \App\Models\PromoCode::query()->updateOrCreate(
+        PromoCode::query()->updateOrCreate(
             ['code' => 'FREEDEL'],
             [
                 'title_ar' => 'توصيل مجاني',

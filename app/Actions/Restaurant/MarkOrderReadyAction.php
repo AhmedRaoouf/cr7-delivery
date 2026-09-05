@@ -13,9 +13,7 @@ use Illuminate\Support\Facades\DB;
 /** doc 04 §10 / doc 05 §1 — preparing -> ready triggers dispatch to the nearest 3 drivers. */
 class MarkOrderReadyAction
 {
-    public function __construct(private readonly DispatchService $dispatch)
-    {
-    }
+    public function __construct(private readonly DispatchService $dispatch) {}
 
     public function execute(User $user, Order $order, string $source = 'restaurant'): Order
     {

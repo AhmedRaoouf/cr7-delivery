@@ -18,13 +18,14 @@ use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Models\Rating;
 use App\Models\Restaurant;
-use App\Models\Settlement;
 use App\Models\ServiceZone;
+use App\Models\Settlement;
 use App\Models\SettlementItem;
 use App\Models\User;
 use App\Models\UserAddress;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -262,7 +263,7 @@ class DemoDataSeeder extends Seeder
     /**
      * @param  array<int, User>  $customers
      * @param  array<int, Driver>  $drivers
-     * @param  \Illuminate\Support\Collection<int, Restaurant>  $restaurants
+     * @param  Collection<int, Restaurant>  $restaurants
      * @return array<int, Order>
      */
     private function orders(array $customers, array $drivers, $restaurants): array
@@ -903,7 +904,7 @@ class DemoDataSeeder extends Seeder
      * have a row and `RES-23` has lines to open.
      *
      * @param  array<int, Order>  $orders
-     * @param  \Illuminate\Support\Collection<int, Restaurant>  $restaurants
+     * @param  Collection<int, Restaurant>  $restaurants
      */
     private function settlement(array $orders, $restaurants): void
     {

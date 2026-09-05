@@ -5,7 +5,7 @@ namespace App\Support;
 use App\Enums\OrderStatus;
 
 /**
- * doc 08 §6.1 — the seven queue buckets the restaurant board filters on.
+ * doc 08 §6.1 — the queue buckets the restaurant board filters on.
  *
  * This map used to live as a private constant inside
  * `Api\Restaurant\OrderController`. It moved here because the broadcast path needs
@@ -22,6 +22,10 @@ class BoardQueue
         'preparing' => ['preparing'],
         'ready' => ['ready', 'searching_driver', 'waiting_for_driver'],
         'with_driver' => ['driver_assigned', 'arrived_restaurant', 'waiting_at_restaurant', 'picked_up', 'on_the_way', 'arrived_customer'],
+        // Ahead of `done`, because `forStatus()` returns the first match and a delivered
+        // order now has a column of its own. `done` stays exactly as it was so the
+        // history filter and any saved link keep meaning «off the board».
+        'delivered' => ['delivered'],
         'done' => ['delivered', 'cancelled', 'delivery_issue'],
     ];
 

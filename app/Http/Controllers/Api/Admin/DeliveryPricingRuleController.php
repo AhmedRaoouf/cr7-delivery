@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDeliveryPricingRuleRequest;
 use App\Http\Requests\Admin\UpdateDeliveryPricingRuleRequest;
@@ -15,7 +16,7 @@ use Illuminate\Http\Request;
 
 class DeliveryPricingRuleController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {
@@ -106,5 +107,4 @@ class DeliveryPricingRuleController extends Controller
             404,
         );
     }
-
 }

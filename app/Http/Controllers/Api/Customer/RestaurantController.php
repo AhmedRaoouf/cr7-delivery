@@ -7,6 +7,7 @@ use App\Http\Resources\Customer\ProductResource;
 use App\Http\Resources\Customer\RestaurantDetailResource;
 use App\Http\Resources\Customer\RestaurantResource;
 use App\Models\Restaurant;
+use App\Models\ServiceZone;
 use App\Support\ApiResponse;
 use App\Support\Locale;
 use Illuminate\Http\JsonResponse;
@@ -54,7 +55,7 @@ class RestaurantController extends Controller
                     // A correlated subquery rather than a join: joining `service_zones`
                     // makes the `is_active` above ambiguous, and both tables have one.
                     'fastest' => $q->orderBy(
-                        \App\Models\ServiceZone::query()
+                        ServiceZone::query()
                             ->select('avg_delivery_minutes')
                             ->whereColumn('service_zones.id', 'restaurants.service_zone_id'),
                     ),

@@ -18,9 +18,7 @@ class UnassignDriverAction
 {
     private const BLOCKED_FROM = ['picked_up', 'on_the_way', 'arrived_customer', 'delivered', 'cancelled'];
 
-    public function __construct(private readonly DispatchService $dispatch)
-    {
-    }
+    public function __construct(private readonly DispatchService $dispatch) {}
 
     public function execute(User $admin, Order $order, string $reasonCode, ?string $note, bool $requeue): Order
     {

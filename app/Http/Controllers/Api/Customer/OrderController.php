@@ -16,14 +16,20 @@ use App\Http\Resources\Customer\OrderGroupCreatedResource;
 use App\Http\Resources\Customer\OrderGroupDetailResource;
 use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
+use App\Models\Product;
+use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\Locale;
+use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /** doc 08 §4 — checkout & orders. `{id}` in every route below is an order_groups.id. */
 class OrderController extends Controller
 {
+    public function __construct(private readonly NotificationDispatcher $notifications) {}
+
     public function store(CreateOrderRequest $request, CreateOrderAction $action): JsonResponse
     {
         $group = $action->execute($request->user(), $request->validated(), $request->idempotencyKey());
@@ -163,14 +169,39 @@ class OrderController extends Controller
             throw new ApiException('order_not_confirmed', 'لا يوجد كود تسليم نشط لهذا الطلب حاليًا', 422);
         }
 
-        $maxResends = (int) (\App\Models\Setting::query()->where('key', 'order.delivery_otp_resend_max')->value('value') ?? 3);
+        $maxResends = (int) (Setting::query()->where('key', 'order.delivery_otp_resend_max')->value('value') ?? 3);
 
         if ($order->delivery_otp_resends >= $maxResends) {
             throw new ApiException('delivery_otp_resend_limit', 'تم تجاوز الحد الأقصى لإعادة إرسال كود التسليم', 422);
         }
 
         $order->increment('delivery_otp_resends');
-        \Illuminate\Support\Facades\Log::info("[DELIVERY-OTP] order {$order->order_number} -> {$order->delivery_otp}");
+
+        // This used to be `Log::info("[DELIVERY-OTP] {$order->delivery_otp}")` and
+        // nothing else, which was two faults in one line.
+        //
+        // It **leaked the code**: `TELESCOPE_RECORD_ALL=true` on this deployment writes
+        // a row per log entry and the panel is reachable over the network, so the four
+        // digits that close any live order sat in readable storage. A code is a secret
+        // for as long as the order is open; the log records that it was sent, never what
+        // it was.
+        //
+        // And it **resent nothing**. The button counted against its own three-resend
+        // limit (E-41) and the customer's phone stayed silent — the one notification in
+        // the system a customer explicitly asks for.
+        $this->notifications->send(
+            $order->user,
+            'order.picked_up',
+            ['delivery_otp' => $order->delivery_otp],
+            'cr7://order/'.$order->order_group_id,
+            $order->id,
+            ['order_id' => (string) $order->id, 'group_id' => (string) $order->order_group_id],
+        );
+
+        Log::info('delivery code resent', [
+            'order_id' => $order->id,
+            'resend' => $order->delivery_otp_resends,
+        ]);
 
         return ApiResponse::success(message: 'تم إعادة إرسال كود التسليم');
     }
@@ -197,7 +228,7 @@ class OrderController extends Controller
 
         foreach ($orderGroup->orders()->with('items.options')->get() as $order) {
             foreach ($order->items as $item) {
-                $product = \App\Models\Product::find($item->product_id);
+                $product = Product::find($item->product_id);
 
                 if (! $product || ! $product->is_available) {
                     $skipped[] = $item->product_name_ar_snapshot;

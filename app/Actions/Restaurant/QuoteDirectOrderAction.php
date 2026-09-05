@@ -5,6 +5,7 @@ namespace App\Actions\Restaurant;
 use App\Exceptions\ApiException;
 use App\Models\DeliveryPricingRule;
 use App\Models\Restaurant;
+use App\Models\ServiceZone;
 use App\Models\Setting;
 use App\Support\Geo;
 
@@ -15,7 +16,7 @@ class QuoteDirectOrderAction
     {
         $servedZoneIds = $restaurant->servedZones()->pluck('service_zones.id')->push($restaurant->service_zone_id)->unique();
 
-        $zone = \App\Models\ServiceZone::query()->whereIn('id', $servedZoneIds)->where('is_active', true)->get()
+        $zone = ServiceZone::query()->whereIn('id', $servedZoneIds)->where('is_active', true)->get()
             ->first(function ($zone) use ($lat, $lng) {
                 if ($zone->polygon) {
                     return Geo::pointInPolygon($lat, $lng, $zone->polygon[0] ?? $zone->polygon);
@@ -25,7 +26,7 @@ class QuoteDirectOrderAction
             });
 
         if (! $zone) {
-            $nearest = \App\Models\ServiceZone::query()->whereIn('id', $servedZoneIds)->first();
+            $nearest = ServiceZone::query()->whereIn('id', $servedZoneIds)->first();
 
             throw new ApiException('address_outside_coverage', 'هذا العنوان خارج نطاق التغطية', 422, meta: [
                 'nearest_zone' => $nearest?->only(['id', 'name_ar', 'name_en']),

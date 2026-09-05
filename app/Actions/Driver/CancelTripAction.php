@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\DB;
 /** doc 05 §6 — allowed only up to waiting_at_restaurant; blocked once picked_up. Same round, driver excluded. */
 class CancelTripAction
 {
-    public function __construct(private readonly DispatchService $dispatch)
-    {
-    }
+    public function __construct(private readonly DispatchService $dispatch) {}
 
     public function execute(Driver $driver, Order $order, string $reasonCode, ?string $note): Order
     {

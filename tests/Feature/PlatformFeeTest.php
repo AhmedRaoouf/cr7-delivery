@@ -2,11 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Admin\GenerateSettlementAction;
 use App\Actions\Customer\CreateOrderAction;
+use App\Actions\Restaurant\QuoteDirectOrderAction;
+use App\Http\Resources\Customer\OrderGroupCreatedResource;
+use App\Models\Driver;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\PromoCode;
 use App\Support\CheckoutPricer;
+use App\Support\DriverEarningCalculator;
+use App\Support\RefundPolicy;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -215,7 +221,7 @@ class PlatformFeeTest extends TestCase
 
         $driverUser = $this->makeCustomer();
         $driverUser->update(['type' => 'driver']);
-        $driver = \App\Models\Driver::query()->create([
+        $driver = Driver::query()->create([
             'user_id' => $driverUser->id,
             'city_id' => $this->city->id,
             'vehicle_type' => 'motorcycle',
@@ -226,7 +232,7 @@ class PlatformFeeTest extends TestCase
         // 100% of the delivery fee share, and nothing at all of the service fee.
         $this->assertSame(
             (float) $order->delivery_fee_share,
-            \App\Support\DriverEarningCalculator::calculate($order, $driver),
+            DriverEarningCalculator::calculate($order, $driver),
         );
     }
 
@@ -249,13 +255,13 @@ class PlatformFeeTest extends TestCase
 
         // D-65 — the platform did not deliver the service it charged for.
         $order->update(['cancelled_by' => 'admin', 'cancellation_reason_code' => 'no_driver_found']);
-        $this->assertTrue(\App\Support\RefundPolicy::feeIsRefundable($order->fresh()));
-        $this->assertSame($total, \App\Support\RefundPolicy::fullRefundAmount($order->fresh()));
+        $this->assertTrue(RefundPolicy::feeIsRefundable($order->fresh()));
+        $this->assertSame($total, RefundPolicy::fullRefundAmount($order->fresh()));
 
         // The customer changed their mind on an order already worked on.
         $order->update(['cancelled_by' => 'customer', 'cancellation_reason_code' => 'changed_my_mind']);
-        $this->assertFalse(\App\Support\RefundPolicy::feeIsRefundable($order->fresh()));
-        $this->assertSame($total - 5.0, \App\Support\RefundPolicy::fullRefundAmount($order->fresh()));
+        $this->assertFalse(RefundPolicy::feeIsRefundable($order->fresh()));
+        $this->assertSame($total - 5.0, RefundPolicy::fullRefundAmount($order->fresh()));
     }
 
     public function test_the_settlement_reports_the_fee_without_paying_it_out(): void
@@ -278,7 +284,7 @@ class PlatformFeeTest extends TestCase
         $admin = $this->makeCustomer();
         $admin->update(['type' => 'admin']);
 
-        $settlement = app(\App\Actions\Admin\GenerateSettlementAction::class)->execute(
+        $settlement = app(GenerateSettlementAction::class)->execute(
             $admin, 'restaurant', $restaurant->id, now()->toDateString(), now()->toDateString(),
         );
 
@@ -302,7 +308,7 @@ class PlatformFeeTest extends TestCase
         $restaurant = $this->makeRestaurant('ناصر القياس');
         $restaurant->servedZones()->attach($this->zone->id);
 
-        $quote = app(\App\Actions\Restaurant\QuoteDirectOrderAction::class)
+        $quote = app(QuoteDirectOrderAction::class)
             ->execute($restaurant->fresh(), 31.3835, 31.4835);
 
         $this->assertSame(5.0, $quote['platform_fee']);
@@ -310,7 +316,7 @@ class PlatformFeeTest extends TestCase
 
         Settings::set('platform.order_fee_applies_to_direct', false);
 
-        $quote = app(\App\Actions\Restaurant\QuoteDirectOrderAction::class)
+        $quote = app(QuoteDirectOrderAction::class)
             ->execute($restaurant->fresh(), 31.3835, 31.4835);
 
         $this->assertSame(0.0, $quote['platform_fee']);
@@ -331,7 +337,7 @@ class PlatformFeeTest extends TestCase
             'idem-'.uniqid(),
         );
 
-        $payload = (new \App\Http\Resources\Customer\OrderGroupCreatedResource(
+        $payload = (new OrderGroupCreatedResource(
             OrderGroup::query()->with(['orders.restaurant', 'payment'])->find($group->id),
         ))->toArray(request());
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\UserType;
 use App\Http\Controllers\Controller;
+use App\Models\Notification;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -44,7 +45,7 @@ class NotificationBroadcastController extends Controller
         ])->all();
 
         foreach (array_chunk($rows, 500) as $chunk) {
-            \App\Models\Notification::insert($chunk);
+            Notification::insert($chunk);
         }
 
         AuditLogger::record($request->user(), 'notifications.broadcast', $request->user(), ['audience' => $validated['audience'], 'recipients' => count($rows)]);

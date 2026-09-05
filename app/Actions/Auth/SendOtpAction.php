@@ -16,9 +16,7 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class SendOtpAction
 {
-    public function __construct(private readonly OtpChannel $channel)
-    {
-    }
+    public function __construct(private readonly OtpChannel $channel) {}
 
     public function execute(string $phone, OtpPurpose $purpose): void
     {

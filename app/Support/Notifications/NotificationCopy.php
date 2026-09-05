@@ -69,6 +69,17 @@ class NotificationCopy
             'ar' => ['تم إلغاء الطلب', 'تم إلغاء الطلب {order_number}'],
             'en' => ['Order cancelled', 'Order {order_number} was cancelled'],
         ],
+        // The restaurant let the accept window run out. Until `cr7:tick` existed
+        // nothing wrote this status, so this copy is new with the sweeper.
+        'order.timeout' => [
+            'ar' => ['لم يردّ المطعم بعد', 'طلبك {order_number} ما زال بانتظار ردّ {restaurant} — يمكنك إلغاؤه'],
+            'en' => ['The restaurant has not answered', 'Your order {order_number} is still waiting on {restaurant} — you may cancel it'],
+        ],
+        // doc 04 E-71 — every round is spent and nobody took it.
+        'order.no_driver' => [
+            'ar' => ['نبحث عن كابتن', 'لم نجد كابتنًا متاحًا لطلبك {order_number} بعد — نعيد المحاولة الآن'],
+            'en' => ['Looking for a captain', 'No captain is available for {order_number} yet — we are retrying'],
+        ],
         'order.issue' => [
             'ar' => ['توجد مشكلة في طلبك', 'سيتواصل معك فريق الدعم فورًا'],
             'en' => ["There's an issue with your order", 'Support is contacting you now'],
@@ -90,6 +101,25 @@ class NotificationCopy
         'order.prep_timer_expired' => [
             'ar' => ['⏱️ انتهى وقت تحضير الطلب {order_number}', 'تم إشعار أقرب الكباتن'],
             'en' => ['⏱️ Prep time is up for {order_number}', 'The nearest captains have been notified'],
+        ],
+        // The other side of `order.timeout`: the kitchen is the one holding it up.
+        'order.timeout_restaurant' => [
+            'ar' => ['⏰ الطلب {order_number} بانتظار ردّك', 'انتهت مهلة الرد — اقبل الطلب أو ارفضه الآن'],
+            'en' => ['⏰ Order {order_number} is waiting for you', 'The accept window is over — accept or reject it now'],
+        ],
+        'order.no_driver_restaurant' => [
+            'ar' => ['لم نجد كابتنًا متاحًا', 'الطلب {order_number} جاهز ولم يقبله أي كابتن — نعيد المحاولة'],
+            'en' => ['No captain available', 'Order {order_number} is ready and unclaimed — we are retrying'],
+        ],
+        // The board already draws «وصل الكابتن إلى المطعم». Nothing told a kitchen
+        // that was not looking at the board.
+        'order.driver_at_restaurant' => [
+            'ar' => ['🛵 وصل الكابتن للاستلام', 'الطلب {order_number} — سلّمه للكابتن {driver} بعد كود الاستلام'],
+            'en' => ['🛵 The captain has arrived', 'Order {order_number} — hand it to {driver} after the pickup code'],
+        ],
+        'order.delivered_restaurant' => [
+            'ar' => ['تم تسليم الطلب {order_number} ✅', 'اكتمل الطلب وسيظهر في تسوياتك'],
+            'en' => ['Order {order_number} delivered ✅', 'It is complete and will appear in your settlements'],
         ],
         'order.cancelled_restaurant' => [
             'ar' => ['تم إلغاء الطلب {order_number}', 'لا حاجة لتحضيره'],

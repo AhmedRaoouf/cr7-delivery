@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Restaurant;
@@ -14,7 +15,7 @@ use Illuminate\Http\Request;
 /** doc 08 §7 / doc 22 §4.6 — cross-restaurant direct-order oversight. */
 class DirectOrderController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {

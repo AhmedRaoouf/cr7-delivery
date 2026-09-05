@@ -10,9 +10,7 @@ use Illuminate\Support\Facades\DB;
 /** doc 05 §5 — rejection excludes the driver from every future round; if it was the last open offer, start the next round immediately. */
 class RejectOfferAction
 {
-    public function __construct(private readonly DispatchService $dispatch)
-    {
-    }
+    public function __construct(private readonly DispatchService $dispatch) {}
 
     public function execute(Driver $driver, int $orderId, string $reasonCode): void
     {

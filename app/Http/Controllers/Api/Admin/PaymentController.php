@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\PaymentProof;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,7 +84,7 @@ class PaymentController extends Controller
                 'rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status')),
             ]);
 
-            \App\Support\AuditLogger::record($request->user(), 'payments.verify', $payment, ['status' => 'paid']);
+            AuditLogger::record($request->user(), 'payments.verify', $payment, ['status' => 'paid']);
         });
 
         return ApiResponse::success($payment->fresh(), 'تم اعتماد الدفع بنجاح');
@@ -107,7 +108,7 @@ class PaymentController extends Controller
 
             $payment->update(['status' => 'awaiting_proof', 'failure_reason' => $validated['reason']]);
 
-            \App\Support\AuditLogger::record($request->user(), 'payments.verify', $payment, ['status' => 'rejected', 'reason' => $validated['reason']]);
+            AuditLogger::record($request->user(), 'payments.verify', $payment, ['status' => 'rejected', 'reason' => $validated['reason']]);
         });
 
         return ApiResponse::success($payment->fresh(), 'تم رفض الإيصال، بانتظار إيصال جديد من العميل');

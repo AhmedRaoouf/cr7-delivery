@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\Customer;
 
+use App\Http\Controllers\Controller;
 use App\Http\Resources\Customer\ProductResource;
 use App\Http\Resources\Customer\RestaurantResource;
-use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\ApiResponse;

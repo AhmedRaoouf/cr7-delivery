@@ -53,7 +53,11 @@ class OrderController extends Controller
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($orders->items(), meta: [
+        // `RES-03` reads the code straight off the card. Order::$hidden keeps it off
+        // every other payload; this is the one reader entitled to it.
+        $items = array_map(fn (Order $o) => $o->revealPickupOtp(), $orders->items());
+
+        return ApiResponse::success($items, meta: [
             'current_page' => $orders->currentPage(),
             'per_page' => $orders->perPage(),
             'total' => $orders->total(),
@@ -83,7 +87,7 @@ class OrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        $payload = $order->load(['items.options', 'driver.user', 'statusHistory'])->toArray();
+        $payload = $order->load(['items.options', 'driver.user', 'statusHistory'])->revealPickupOtp()->toArray();
         $payload['awaiting_customer_payment'] = $order->orderGroup->rollup_status === 'awaiting_payment';
         $payload['payment_deadline_at'] = $order->orderGroup->payment?->deadline_at;
 
@@ -163,7 +167,7 @@ class OrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        if (! in_array($order->status->value, ['ready', 'searching_driver', 'waiting_for_driver', 'driver_assigned', 'arrived_restaurant', 'waiting_at_restaurant'], true)) {
+        if (! in_array($order->status->value, Order::PICKUP_OTP_VISIBLE_STATUSES, true)) {
             throw new ApiException('invalid_transition', 'كود الاستلام غير متاح في هذه المرحلة', 422);
         }
 

@@ -19,7 +19,7 @@ class FavoriteController extends Controller
     {
         $favorites = $request->user()->favorites()->with('favoritable')->latest()->get();
 
-        $data = $favorites->map(function (Favorite $favorite) use ($request) {
+        $data = $favorites->map(function (Favorite $favorite) {
             $type = $favorite->favoritable_type;
 
             return [

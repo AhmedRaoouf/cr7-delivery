@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
+use App\Models\Product;
 use App\Support\FileUploader;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -97,18 +101,18 @@ class UploadHardeningTest extends TestCase
         // and «change the picture» is the most repeated action in the whole dashboard.
         $controller = new class
         {
-            use \App\Http\Controllers\Concerns\HandlesUploads;
+            use HandlesUploads;
 
-            public function call(array $data, \Illuminate\Http\Request $request, ?\Illuminate\Database\Eloquent\Model $existing): array
+            public function call(array $data, Request $request, ?Model $existing): array
             {
                 return $this->withPublicUpload($data, $request, 'image', 'products', $existing);
             }
         };
 
         $first = FileUploader::storePublic(UploadedFile::fake()->image('a.png'), 'products');
-        $product = new \App\Models\Product(['image' => $first]);
+        $product = new Product(['image' => $first]);
 
-        $request = \Illuminate\Http\Request::create('/', 'POST', [], [], [
+        $request = Request::create('/', 'POST', [], [], [
             'image' => UploadedFile::fake()->image('b.png'),
         ]);
 
@@ -127,18 +131,18 @@ class UploadHardeningTest extends TestCase
     {
         $controller = new class
         {
-            use \App\Http\Controllers\Concerns\HandlesUploads;
+            use HandlesUploads;
 
-            public function call(array $data, \Illuminate\Http\Request $request, ?\Illuminate\Database\Eloquent\Model $existing): array
+            public function call(array $data, Request $request, ?Model $existing): array
             {
                 return $this->withPublicUpload($data, $request, 'image', 'products', $existing);
             }
         };
 
         $url = FileUploader::storePublic(UploadedFile::fake()->image('a.png'), 'products');
-        $product = new \App\Models\Product(['image' => $url]);
+        $product = new Product(['image' => $url]);
 
-        $request = \Illuminate\Http\Request::create('/', 'POST', ['remove_image' => '1']);
+        $request = Request::create('/', 'POST', ['remove_image' => '1']);
 
         $data = $controller->call([], $request, $product);
 

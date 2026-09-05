@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Customer\CreateOrderAction;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -73,7 +75,7 @@ class DriverHistoryRangeTest extends TestCase
         $this->assertSame(1, $today->json('meta.total'));
     }
 
-    /** @return array{0: Driver, 1: \App\Models\Restaurant} */
+    /** @return array{0: Driver, 1: Restaurant} */
     private function makeDriverWithRestaurant(): array
     {
         $user = User::query()->create([
@@ -100,7 +102,7 @@ class DriverHistoryRangeTest extends TestCase
         $product = $this->makeProduct($restaurant, 'سندوتش', 40);
         $this->makeCart($customer, [[$restaurant, $product, 1]]);
 
-        $group = app(\App\Actions\Customer\CreateOrderAction::class)->execute(
+        $group = app(CreateOrderAction::class)->execute(
             $customer,
             ['address_id' => $address->id, 'payment_method' => 'cash'],
             'idem-'.uniqid(),

@@ -20,6 +20,10 @@ class SettingsSeeder extends Seeder
             'dispatch.mode_multi_restaurant' => ['driver_per_restaurant', 'dispatch'],
             'dispatch.multi_pickup_ready_window_seconds' => [600, 'dispatch'],
             'dispatch.location_stale_seconds' => [90, 'dispatch'],
+            // doc 04 E-71 — how long a stranded order waits before `cr7:tick` offers it
+            // to the nearest captains again. Long enough not to re-ring the same three
+            // phones every pass, short enough that a captain coming online is used.
+            'dispatch.retry_interval_seconds' => [90, 'dispatch'],
 
             'driver.location_stale_seconds' => [60, 'driver'],
             'driver.unresponsive_seconds' => [300, 'driver'],

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\UserType;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\AdminScope;
@@ -14,7 +15,7 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — GET /admin/customers, /{id}, POST /{id}/status, GET /{id}/orders|addresses|complaints. */
 class CustomerController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {

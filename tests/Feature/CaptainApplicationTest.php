@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AdminScopeType;
 use App\Models\CaptainApplication;
 use App\Models\Driver;
 use App\Models\User;
@@ -123,7 +124,7 @@ class CaptainApplicationTest extends TestCase
         ]);
 
         $admin->assignRole('super_admin');
-        $admin->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         return $admin;
     }

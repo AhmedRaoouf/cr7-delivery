@@ -3,8 +3,10 @@
 namespace App\Actions\Admin;
 
 use App\Models\Order;
+use App\Models\Refund;
 use App\Models\Settlement;
 use App\Models\User;
+use App\Support\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +29,7 @@ class GenerateSettlementAction
             // D-63 — reported, never paid out. It stays outside `net_amount` for both
             // party types: neither the restaurant nor the captain earned it.
             $platformFeeTotal = (float) $orders->sum('platform_fee_share');
-            $refundsTotal = (float) \App\Models\Refund::query()->whereIn('order_id', $orders->pluck('id'))->where('status', 'processed')->sum('amount');
+            $refundsTotal = (float) Refund::query()->whereIn('order_id', $orders->pluck('id'))->where('status', 'processed')->sum('amount');
             $cashCollected = (float) $orders->where('payment_method', 'cash')->sum('total');
 
             $netAmount = $partyType === 'restaurant'
@@ -68,7 +70,7 @@ class GenerateSettlementAction
                 ]);
             }
 
-            \App\Support\AuditLogger::record($admin, 'settlements.generate', $settlement, ['party_type' => $partyType, 'party_id' => $partyId]);
+            AuditLogger::record($admin, 'settlements.generate', $settlement, ['party_type' => $partyType, 'party_id' => $partyId]);
 
             return $settlement->load('items');
         });

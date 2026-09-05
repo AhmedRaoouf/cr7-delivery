@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Enums\OrderNoteCallOutcome;
 use App\Enums\OrderNoteCalledParty;
+use App\Enums\OrderNoteCallOutcome;
 use App\Enums\OrderNoteKind;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

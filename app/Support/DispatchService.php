@@ -14,13 +14,27 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * doc 05 §1-3 — dispatch starts the instant an order becomes `ready`, offering to the
- * nearest 3 online drivers. This is the synchronous, single-request-cycle version:
- * a real deployment schedules ExpireRound/ExpirePrepTimer as queued jobs (doc 04 §4.4,
- * doc 05 §3) — not wired up in this pass, see the round-advance note below.
+ * nearest 3 online drivers.
+ *
+ * **Time now passes between rounds.** This class used to say that ExpireRound and
+ * ExpirePrepTimer were «not wired up in this pass», and they were not: `dispatchRound`
+ * recursed straight into round 2 and 3 when a round came up empty, so all three rounds
+ * ran inside one millisecond against the same set of captains. The radius grew and
+ * nothing else did. A captain who came online eleven seconds later was never asked,
+ * and the order was already in `waiting_for_driver` with nothing left to advance it.
+ *
+ * `App\Console\Commands\TickCommand` is that missing clock. `dispatchRound` no longer
+ * recurses; it parks the order and the sweeper comes back to it.
  */
 class DispatchService
 {
-    public function dispatchRound(Order $order, int $round): void
+    /**
+     * @param  bool  $retry  A retry of a stranded order rather than the next round of a
+     *                       live search. A captain who let an offer expire — phone in a
+     *                       pocket, ten minutes ago — is a candidate again; one who
+     *                       pressed «رفض» is not, and stays excluded either way.
+     */
+    public function dispatchRound(Order $order, int $round, bool $retry = false): void
     {
         $settings = Setting::query()->whereIn('key', [
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
@@ -37,7 +51,9 @@ class DispatchService
 
         $radius = $baseRadius + ($round - 1) * $radiusExpand;
 
-        $excludedDriverIds = $order->driverAttempts()->pluck('driver_id');
+        $excludedDriverIds = $order->driverAttempts()
+            ->when($retry, fn ($q) => $q->whereIn('result', ['rejected', 'cancelled_after_accept']))
+            ->pluck('driver_id');
 
         $candidates = Driver::query()
             ->where('is_active', true)
@@ -70,13 +86,16 @@ class DispatchService
             ->take($batchSize);
 
         if ($candidates->isEmpty()) {
-            if ($round < $maxRounds) {
-                $this->dispatchRound($order, $round + 1);
-
-                return;
-            }
-
-            $order->update(['status' => OrderStatus::WaitingForDriver, 'dispatch_round' => $round]);
+            // Recursing here is what made rounds free. The next round is a wider circle
+            // *and* a later moment; collapsing the two into one request meant the widest
+            // circle was searched at the same instant as the narrowest, and an order
+            // whose captain logged in half a minute later never heard from anyone.
+            // `cr7:tick` calls back in with `$round + 1` once the TTL has actually run.
+            $order->update([
+                'status' => OrderStatus::WaitingForDriver,
+                'dispatch_round' => $round,
+                'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+            ]);
             $this->syncGroupRollup($order);
 
             return;
@@ -247,17 +266,33 @@ class DispatchService
             return;
         }
 
-        $openAttempts = $order->driverAttempts()->where('round', $order->dispatch_round)->where('result', 'sent')->count();
+        // The expiry sweep used to run *after* the early return, so a round whose three
+        // offers had all timed out counted three open attempts and advanced to nothing.
+        // Only an explicit «رفض» from every captain could move a round on. Marking the
+        // lapsed rows first is the whole fix.
+        $order->driverAttempts()
+            ->where('round', $order->dispatch_round)
+            ->where('result', 'sent')
+            ->where('expires_at', '<=', now())
+            ->update(['result' => 'expired', 'responded_at' => now()]);
+
+        $openAttempts = $order->driverAttempts()
+            ->where('round', $order->dispatch_round)
+            ->where('result', 'sent')
+            ->count();
 
         if ($openAttempts > 0) {
             return;
         }
 
-        $order->driverAttempts()
-            ->where('round', $order->dispatch_round)
-            ->where('result', 'sent')
-            ->where('expires_at', '<=', now())
-            ->update(['result' => 'expired']);
+        $maxRounds = (int) (Setting::query()->where('key', 'dispatch.max_rounds')->value('value') ?? 3);
+
+        if ($order->dispatch_round >= $maxRounds) {
+            $order->update(['status' => OrderStatus::WaitingForDriver]);
+            $this->syncGroupRollup($order);
+
+            return;
+        }
 
         $this->dispatchRound($order, $order->dispatch_round + 1);
     }

@@ -78,7 +78,7 @@ class DirectOrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        return ApiResponse::success($order->load(['driver.user', 'statusHistory']));
+        return ApiResponse::success($order->load(['driver.user', 'statusHistory'])->revealPickupOtp());
     }
 
     public function ready(Request $request, Order $order, MarkOrderReadyAction $action): JsonResponse

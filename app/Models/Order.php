@@ -41,6 +41,30 @@ class Order extends Model
 
     protected $hidden = ['pickup_otp', 'delivery_otp'];
 
+    /**
+     * doc 04 §11.1 — the states in which the pickup OTP belongs to the restaurant.
+     *
+     * Before `ready` there is nothing to hand over; after the captain has quoted it
+     * the code is spent. `GET /restaurant/orders/{order}/pickup-otp` has always
+     * enforced exactly this list — it lives here so the board payload and the
+     * endpoint cannot drift apart, which is how `RES-03` came to render «——» on
+     * every ready card while the endpoint beside it returned the number.
+     */
+    public const PICKUP_OTP_VISIBLE_STATUSES = [
+        'ready', 'searching_driver', 'waiting_for_driver',
+        'driver_assigned', 'arrived_restaurant', 'waiting_at_restaurant',
+    ];
+
+    /** Reveals `pickup_otp` on a payload bound for the restaurant that owns the order. */
+    public function revealPickupOtp(): static
+    {
+        if (in_array($this->status->value, self::PICKUP_OTP_VISIBLE_STATUSES, true)) {
+            $this->makeVisible('pickup_otp');
+        }
+
+        return $this;
+    }
+
     protected function casts(): array
     {
         return [

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\CreateRestaurantAction;
 use App\Actions\Admin\ResetUserPasswordAction;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRestaurantRequest;
@@ -17,8 +18,7 @@ use Illuminate\Http\Request;
 
 class RestaurantController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
-
+    use FiltersLists;
     use HandlesUploads;
 
     public function index(Request $request): JsonResponse

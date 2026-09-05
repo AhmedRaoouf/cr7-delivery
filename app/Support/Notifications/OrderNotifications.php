@@ -3,6 +3,7 @@
 namespace App\Support\Notifications;
 
 use App\Enums\OrderStatus;
+use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
 
@@ -21,6 +22,9 @@ use App\Models\User;
  */
 class OrderNotifications
 {
+    /** How long `order.no_driver` stays quiet after it has spoken once for an order. */
+    private const NO_DRIVER_REPEAT_MINUTES = 15;
+
     public function __construct(private readonly NotificationDispatcher $dispatcher) {}
 
     public function handle(Order $order, ?string $previousStatus): void
@@ -49,11 +53,15 @@ class OrderNotifications
         }
 
         match ($status) {
+            OrderStatus::RestaurantTimeout => $this->restaurantTimeout($order),
             OrderStatus::AwaitingCustomerConfirmation => $this->awaitingConfirmation($order),
+            OrderStatus::AwaitingPayment => $this->awaitingPayment($order),
             OrderStatus::Confirmed => $this->confirmed($order),
             OrderStatus::Preparing => $this->preparing($order),
             OrderStatus::Ready => $this->ready($order),
+            OrderStatus::WaitingForDriver => $this->noDriver($order),
             OrderStatus::DriverAssigned => $this->driverAssigned($order),
+            OrderStatus::ArrivedRestaurant => $this->driverAtRestaurant($order),
             OrderStatus::PickedUp => $this->pickedUp($order),
             OrderStatus::ArrivedCustomer => $this->arrived($order),
             OrderStatus::Delivered => $this->delivered($order),
@@ -82,6 +90,67 @@ class OrderNotifications
             'order_number' => $order->order_number,
             'items' => $order->items()->count(),
             'total' => $this->money($order->total),
+        ]);
+    }
+
+    /**
+     * The accept window ran out. Both sides are told, and neither is told the
+     * order is dead — `restaurant_timeout` is still a live order the restaurant
+     * can accept (OrderStatus::Pending's transition list allows the way back).
+     */
+    private function restaurantTimeout(Order $order): void
+    {
+        $this->toCustomer($order, 'order.timeout', [
+            'order_number' => $order->order_number,
+            'restaurant' => $this->restaurantName($order),
+        ]);
+
+        $this->toRestaurant($order, 'order.timeout_restaurant', [
+            'order_number' => $order->order_number,
+        ]);
+    }
+
+    /**
+     * D-38 — the transfer window opens here, and `payment.due` has existed in
+     * `NotificationCopy` since it was written without a single caller. A customer
+     * who put the phone down after checkout learned about the deadline by
+     * missing it.
+     */
+    private function awaitingPayment(Order $order): void
+    {
+        if (! $this->isLastToAnswer($order)) {
+            return;
+        }
+
+        $this->toCustomer($order, 'payment.due', [
+            'amount' => $this->money($order->orderGroup?->total ?? $order->total),
+        ], deepLink: 'cr7://order/'.$order->order_group_id.'/pay');
+    }
+
+    /**
+     * doc 04 E-71 — every round is spent and nobody took it.
+     *
+     * `cr7:tick` retries a stranded order for as long as it is stranded, and each
+     * failed retry lands back on this status. Without the cooling-off window below
+     * that is one push a minute, all night, to a restaurant and a customer who
+     * already know. The retry itself is silent; only the first hour-mark speaks.
+     */
+    private function noDriver(Order $order): void
+    {
+        if ($this->sentWithin($order, 'order.no_driver', self::NO_DRIVER_REPEAT_MINUTES)) {
+            return;
+        }
+
+        $this->toCustomer($order, 'order.no_driver', ['order_number' => $order->order_number]);
+        $this->toRestaurant($order, 'order.no_driver_restaurant', ['order_number' => $order->order_number]);
+    }
+
+    /** The kitchen is not always looking at the board, and the handover starts now. */
+    private function driverAtRestaurant(Order $order): void
+    {
+        $this->toRestaurant($order, 'order.driver_at_restaurant', [
+            'order_number' => $order->order_number,
+            'driver' => $order->driver?->user?->name,
         ]);
     }
 
@@ -121,6 +190,15 @@ class OrderNotifications
     private function ready(Order $order): void
     {
         $this->toCustomer($order, 'order.ready');
+
+        // doc 04 §10.4 — the timer, not the kitchen, moved this one. That is the
+        // whole point of the countdown, and the restaurant is owed the fact.
+        // `order.prep_timer_expired` had no caller before `cr7:tick` could fire it.
+        if (($order->ready_source?->value ?? $order->ready_source) === 'timer') {
+            $this->toRestaurant($order, 'order.prep_timer_expired', [
+                'order_number' => $order->order_number,
+            ]);
+        }
 
         // The captain waiting at the counter is the one person for whom «ready»
         // is an instruction rather than a status.
@@ -168,6 +246,10 @@ class OrderNotifications
     private function delivered(Order $order): void
     {
         $this->toCustomer($order, 'order.delivered', deepLink: 'cr7://order/'.$order->order_group_id.'/rate');
+
+        $this->toRestaurant($order, 'order.delivered_restaurant', [
+            'order_number' => $order->order_number,
+        ]);
     }
 
     private function cancelled(Order $order): void
@@ -267,6 +349,16 @@ class OrderNotifications
             $order->id,
             ['order_id' => (string) $order->id],
         );
+    }
+
+    /** True when this order already produced this notification inside the window. */
+    private function sentWithin(Order $order, string $type, int $minutes): bool
+    {
+        return Notification::query()
+            ->where('order_id', $order->id)
+            ->where('type', $type)
+            ->where('created_at', '>=', now()->subMinutes($minutes))
+            ->exists();
     }
 
     private function restaurantName(Order $order): ?string

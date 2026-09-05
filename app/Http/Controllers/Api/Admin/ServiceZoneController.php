@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreServiceZoneRequest;
 use App\Http\Requests\Admin\UpdateServiceZoneRequest;
@@ -13,7 +14,7 @@ use Illuminate\Http\Request;
 
 class ServiceZoneController extends Controller
 {
-    use \App\Http\Controllers\Concerns\FiltersLists;
+    use FiltersLists;
 
     public function index(Request $request): JsonResponse
     {

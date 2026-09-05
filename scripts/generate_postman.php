@@ -354,7 +354,7 @@ foreach ($routes as $route) {
 
             $request['body'] = ['mode' => 'formdata', 'formdata' => $formdata];
         } elseif (in_array($method, ['POST', 'PATCH', 'PUT'], true)) {
-            $body = exampleBody($method, $uri) ?? new stdClass();
+            $body = exampleBody($method, $uri) ?? new stdClass;
             $request['body'] = [
                 'mode' => 'raw',
                 'raw' => json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),

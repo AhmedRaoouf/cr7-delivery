@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AdminScopeType;
 use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
@@ -165,7 +166,7 @@ class ListFiltersTest extends TestCase
         ]);
 
         $admin->assignRole('super_admin');
-        $admin->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         return $admin;
     }

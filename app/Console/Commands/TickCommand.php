@@ -209,12 +209,21 @@ class TickCommand extends Command
      * move was «إعادة توزيع الطلب» by hand, one order at a time, which is what the
      * seventeen stranded orders on the deployment were waiting for.
      *
-     * The retry starts at round 1 — a fresh circle, not a wider one — and forgives a
-     * captain who let an offer lapse while excluding one who declined it.
+     * The retry **climbs the ladder** rather than restarting it. Starting at round 1
+     * again was the whole reason a lonely order never found anyone: a round that finds
+     * nobody parks the order here with zero attempts, `advanceRounds` only looks at
+     * orders with an *expired* offer, and so the radius that exists to be widened was
+     * re-searched at its narrowest every ninety seconds, forever. Measured on the
+     * deployment: one captain on shift, 7.42 km out, a 5 km circle retried until an
+     * operator assigned by hand.
+     *
+     * It still forgives a captain who let an offer lapse and still excludes one who
+     * declined it.
      */
     private function retryStranded(DispatchService $dispatch): int
     {
         $seconds = (int) (Setting::query()->where('key', 'dispatch.retry_interval_seconds')->value('value') ?? 90);
+        $maxRounds = (int) (Setting::query()->where('key', 'dispatch.max_rounds')->value('value') ?? 3);
 
         $orders = Order::query()
             ->where('status', OrderStatus::WaitingForDriver)
@@ -227,7 +236,8 @@ class TickCommand extends Command
             ->get();
 
         foreach ($orders as $order) {
-            $dispatch->dispatchRound($order, 1, retry: true);
+            $next = min(max(1, (int) $order->dispatch_round + 1), max(1, $maxRounds));
+            $dispatch->dispatchRound($order, $next, retry: true);
         }
 
         return $orders->count();

@@ -40,6 +40,7 @@ class DispatchService
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
             'dispatch.offer_ttl_seconds', 'dispatch.max_rounds',
             'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
+            'dispatch.last_call_all_drivers',
         ])->pluck('value', 'key');
 
         $batchSize = (int) ($settings['dispatch.batch_size'] ?? 3);
@@ -50,6 +51,16 @@ class DispatchService
         $staleSeconds = self::staleSeconds($settings);
 
         $radius = $baseRadius + ($round - 1) * $radiusExpand;
+
+        // The last round is a last call: no circle and no batch cap, so an order
+        // cannot end up unreachable merely because every free captain is further
+        // out than the ladder happened to climb. Read from the device that found
+        // this: the only captain on shift stood 7.42 km from the restaurant, the
+        // ladder reached 5 then 7, and nobody was ever asked. Ranking is
+        // untouched — nearest first, then rating, then completed orders — so the
+        // captain who would have won a normal round still hears first.
+        $lastCall = $round >= $maxRounds
+            && filter_var($settings['dispatch.last_call_all_drivers'] ?? true, FILTER_VALIDATE_BOOL);
 
         $excludedDriverIds = $order->driverAttempts()
             ->when($retry, fn ($q) => $q->whereIn('result', ['rejected', 'cancelled_after_accept']))
@@ -77,13 +88,14 @@ class DispatchService
                 'driver' => $driver,
                 'distance_km' => Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
             ])
-            ->filter(fn ($c) => $c['distance_km'] <= $radius)
+            ->filter(fn ($c) => $lastCall || $c['distance_km'] <= $radius)
             ->sortBy([
                 fn ($a, $b) => $a['distance_km'] <=> $b['distance_km'],
                 fn ($a, $b) => $b['driver']->rating_avg <=> $a['driver']->rating_avg,
                 fn ($a, $b) => $b['driver']->completed_orders <=> $a['driver']->completed_orders,
-            ])
-            ->take($batchSize);
+            ]);
+
+        $candidates = $lastCall ? $candidates : $candidates->take($batchSize);
 
         if ($candidates->isEmpty()) {
             // Recursing here is what made rounds free. The next round is a wider circle

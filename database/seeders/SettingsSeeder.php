@@ -24,6 +24,11 @@ class SettingsSeeder extends Seeder
             // to the nearest captains again. Long enough not to re-ring the same three
             // phones every pass, short enough that a captain coming online is used.
             'dispatch.retry_interval_seconds' => [90, 'dispatch'],
+            // The last round drops the circle and the batch cap: whoever is free
+            // hears about it, ranked nearest-first as always. Turn it off and an
+            // order can sit unreachable while a captain one kilometre past the
+            // ladder waits with an empty screen.
+            'dispatch.last_call_all_drivers' => [1, 'dispatch'],
 
             'driver.location_stale_seconds' => [60, 'driver'],
             'driver.unresponsive_seconds' => [300, 'driver'],

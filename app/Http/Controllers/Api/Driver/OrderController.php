@@ -145,6 +145,14 @@ class OrderController extends Controller
         return ApiResponse::success($order->load(['restaurant', 'items.options', 'orderGroup.address']));
     }
 
+    /**
+     * What «كل الحالات» means on `DRV-27`: the trips that are over.
+     *
+     * `delivery_issue` is deliberately out — it is an open problem an operator
+     * is still working, not a delivery, and the card would file it as one.
+     */
+    private const HISTORY_STATUSES = ['delivered', 'cancelled'];
+
     public function history(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
@@ -162,9 +170,19 @@ class OrderController extends Controller
         // after midnight.
         $from = $request->date('filter.from');
 
+        $status = $request->string('filter.status');
+
         $orders = $driver->orders()
             ->with('restaurant')
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
+            // `DRV-27` is finished work — its own filters are «كل الحالات /
+            // المسلَّمة / الملغاة», and its card has exactly two things it can
+            // say. Handing it a live order made it say «تم التسليم» over an
+            // order the captain had not collected yet, complete with the
+            // earning and «لم يقيمك». The order being carried is served by
+            // `/driver/orders/active` and drawn by the home screen; this list
+            // is the archive.
+            ->when($status->isEmpty(), fn ($q) => $q->whereIn('status', self::HISTORY_STATUSES))
+            ->when($status->isNotEmpty(), fn ($q) => $q->where('status', $status))
             ->when($from, fn ($q) => $q->where(fn ($scope) => $scope
                 ->where('delivered_at', '>=', $from)
                 ->orWhere(fn ($fallback) => $fallback->whereNull('delivered_at')->where('created_at', '>=', $from))))

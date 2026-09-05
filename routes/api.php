@@ -564,6 +564,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard/charts', [AdminDashboardController::class, 'charts']);
         Route::get('/dashboard/alerts', [AdminDashboardController::class, 'alerts']);
         Route::get('/dashboard/live-orders', [AdminDashboardController::class, 'liveOrders']);
+        Route::get('/dashboard/open-alerts', [AdminDashboardController::class, 'openAlerts']);
         Route::get('/dashboard/live-drivers', [AdminDashboardController::class, 'liveDrivers'])->middleware('permission:drivers.view_location');
 
         // Customers

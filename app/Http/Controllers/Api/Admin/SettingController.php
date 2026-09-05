@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Setting;
 use App\Support\ApiResponse;
+use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +32,13 @@ class SettingController extends Controller
 
             $before[$key] = $setting->value;
             $setting->update(['value' => $value]);
+
+            // {@see \App\Support\Settings::get} caches every key with
+            // `rememberForever`, so writing the row is only half the edit. Without
+            // this the operator moves `delivery.platform_commission_rate` to 20 in
+            // `ADM-46`, sees 20 on the screen, and every captain keeps being paid at
+            // 15 until somebody thinks to run `cache:clear`.
+            Settings::forget($key);
         }
 
         AuditLog::create([

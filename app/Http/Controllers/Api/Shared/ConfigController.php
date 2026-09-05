@@ -30,8 +30,13 @@ class ConfigController extends Controller
             ],
             'support' => [
                 'phone' => $settings->get('support.phone'),
+                // The flyer prints two numbers, so the app renders two rows. A
+                // missing or blank alt is dropped by the client, not shown as a
+                // second row that dials nothing.
+                'phone_alt' => $settings->get('support.phone_alt'),
                 'whatsapp' => $settings->get('support.whatsapp'),
                 'email' => $settings->get('support.email'),
+                'hours_note' => $settings->get('support.hours_note'),
             ],
             'payment' => [
                 'vodafone_cash_number' => $settings->get('payment.vodafone_cash_number'),

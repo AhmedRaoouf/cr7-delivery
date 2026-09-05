@@ -20,9 +20,11 @@ use Illuminate\Support\Facades\Cache;
  * Numbers are from the company flyer, 2026-09-05: 01099450110 and 01095958686.
  * Both are Vodafone prefixes (010), which is why the wallet number is one of them.
  *
- * ⚠️ `payment.instapay_handle` is deliberately **not** set here. The flyer prints no
- * InstaPay address and inventing one would send customers' money to a handle that does
- * not exist. It stays at its placeholder until the operator gives the real one.
+ * `payment.instapay_handle` holds the same primary number, on the operator's instruction
+ * of 2026-09-05: «ممكن تعمل إنستا بي برضه أي رقم من اللي فوق دول حالياً لحد ما نشوف». An
+ * Egyptian mobile number **is** a valid InstaPay address, so this is a real destination
+ * rather than a stand-in — but it is the wallet number, not a dedicated handle. Replace it
+ * from `ADM-46` the moment a real one exists.
  */
 class OperatorSettingsSeeder extends Seeder
 {
@@ -31,7 +33,7 @@ class OperatorSettingsSeeder extends Seeder
     private const SECONDARY_PHONE = '01095958686';
 
     /** Values that mean «nobody has set this yet» and may be overwritten. */
-    private const PLACEHOLDERS = ['01000000000', '', '0', 'null'];
+    private const PLACEHOLDERS = ['01000000000', 'cr7delivery@instapay', '', '0', 'null'];
 
     public function run(): void
     {
@@ -40,12 +42,16 @@ class OperatorSettingsSeeder extends Seeder
 
         $this->put('support.phone_alt', self::SECONDARY_PHONE, 'support');
         $this->put('payment.vodafone_cash_number_alt', self::SECONDARY_PHONE, 'payment');
-        $this->put('support.hours_note', 'متواجدون لخدمتكم 24 ساعة', 'support');
+        // doc 13 §4 — a number inside an Arabic sentence is an LTR run. The first
+        // seeding of this line shipped a bare `24`, so the un-isolated string is
+        // itself treated as a placeholder and corrected on the next run.
+        $this->replaceKnown('support.hours_note', 'متواجدون لخدمتكم ‪24‬ ساعة', 'support', ['متواجدون لخدمتكم 24 ساعة']);
 
         // Corrections — applied only over a placeholder.
         $this->replacePlaceholder('support.phone', self::PRIMARY_PHONE, 'support');
         $this->replacePlaceholder('support.whatsapp', self::PRIMARY_PHONE, 'support');
         $this->replacePlaceholder('payment.vodafone_cash_number', self::PRIMARY_PHONE, 'payment');
+        $this->replacePlaceholder('payment.instapay_handle', self::PRIMARY_PHONE, 'payment');
 
         // D-70 — the standard captain rule. `earning_value = 0` is not «no earnings»:
         // it means «the standard split», and {@see \App\Support\DriverEarningCalculator}
@@ -80,6 +86,18 @@ class OperatorSettingsSeeder extends Seeder
         $current = Setting::query()->where('key', $key)->value('value');
 
         if ($current === null || in_array((string) $current, self::PLACEHOLDERS, true)) {
+            $this->force($key, $value, $group);
+        }
+    }
+
+    /** As {@see replacePlaceholder}, plus values a previous run of this seeder wrote. */
+    private function replaceKnown(string $key, mixed $value, string $group, array $superseded): void
+    {
+        $current = Setting::query()->where('key', $key)->value('value');
+
+        if ($current === null
+            || in_array((string) $current, self::PLACEHOLDERS, true)
+            || in_array((string) $current, $superseded, true)) {
             $this->force($key, $value, $group);
         }
     }

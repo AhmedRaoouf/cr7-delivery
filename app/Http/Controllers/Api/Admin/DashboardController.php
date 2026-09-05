@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Payment;
@@ -16,6 +17,9 @@ use Illuminate\Support\Carbon;
 /** doc 08 §7 — dashboard & alerts. */
 class DashboardController extends Controller
 {
+    /** Per kind. The panel is a wake-up call, not a work queue. */
+    private const ALERT_LIMIT = 20;
+
     public function summary(Request $request): JsonResponse
     {
         // «اليوم» is a Cairo day, not a UTC one — see `BusinessTime`.
@@ -77,6 +81,100 @@ class DashboardController extends Controller
             'delivery_issues' => (clone $orders)->where('status', 'delivery_issue')->count(),
             'payments_to_verify' => Payment::query()->where('status', 'under_review')->count(),
         ]);
+    }
+
+    /**
+     * `GET /admin/dashboard/open-alerts` — the same four alerts as {@see self::alerts()},
+     * but as the rows themselves rather than four numbers.
+     *
+     * Operator, 2026-09-05: «التنبيهات المفتوحة … لازم أقبلها بسرعة أو أرفضها بسرعة …
+     * فما تنفعش تبقى مستخبية». A count tells an operator that something is wrong and
+     * then makes them go and find it; a payment awaiting review is worth money and is
+     * on a fifteen-minute deadline, and it needs to arrive with its receipt attached
+     * and its two buttons on it.
+     *
+     * Ordered by urgency, then by age: money first, then an order nobody has taken,
+     * then a restaurant that never answered, then a delivery in trouble. Capped, because
+     * this is a wake-up call and not a work queue — the full lists live on their pages.
+     */
+    public function openAlerts(Request $request): JsonResponse
+    {
+        $orders = AdminScope::applyToOrders(Order::query(), $request->user());
+
+        $payments = Payment::query()
+            ->where('status', 'under_review')
+            ->with(['proofs' => fn ($q) => $q->latest(), 'orderGroup:id,group_number,user_id'])
+            ->latest()
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (Payment $payment) => [
+                'kind' => 'payment_review',
+                'id' => $payment->id,
+                'title' => 'تحويل بانتظار المراجعة',
+                'reference' => $payment->orderGroup?->group_number,
+                'order_group_id' => $payment->order_group_id,
+                'amount' => (float) $payment->amount,
+                'method' => $payment->method,
+                'deadline_at' => $payment->deadline_at,
+                'created_at' => $payment->created_at,
+                'href' => '/money/payments',
+                // The receipt travels with the alert. Making the operator open a
+                // second screen to see the image is the thing that made this slow.
+                'receipts' => PaymentProofResource::forAdmin($payment->proofs),
+            ]);
+
+        $stranded = (clone $orders)
+            ->where('status', 'waiting_for_driver')
+            ->with('restaurant:id,name_ar')
+            ->latest('updated_at')
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (Order $order) => $this->orderAlert($order, 'no_driver', 'لم يقبل الطلب أي كابتن'));
+
+        $timedOut = (clone $orders)
+            ->where('status', 'restaurant_timeout')
+            ->with('restaurant:id,name_ar')
+            ->latest('updated_at')
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (Order $order) => $this->orderAlert($order, 'restaurant_timeout', 'المطعم لم يرد على الطلب'));
+
+        $issues = (clone $orders)
+            ->where('status', 'delivery_issue')
+            ->with('restaurant:id,name_ar')
+            ->latest('updated_at')
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (Order $order) => $this->orderAlert($order, 'delivery_issue', 'مشكلة في التوصيل'));
+
+        $items = $payments->concat($stranded)->concat($timedOut)->concat($issues);
+
+        return ApiResponse::success([
+            'total' => $items->count(),
+            'counts' => [
+                'payment_review' => $payments->count(),
+                'no_driver' => $stranded->count(),
+                'restaurant_timeout' => $timedOut->count(),
+                'delivery_issue' => $issues->count(),
+            ],
+            'items' => $items->values(),
+        ]);
+    }
+
+    private function orderAlert(Order $order, string $kind, string $title): array
+    {
+        return [
+            'kind' => $kind,
+            'id' => $order->id,
+            'title' => $title,
+            'reference' => $order->order_number,
+            'order_group_id' => $order->order_group_id,
+            'amount' => (float) $order->total,
+            'restaurant' => $order->restaurant?->name_ar,
+            'created_at' => $order->updated_at,
+            'href' => '/orders/'.$order->id,
+            'receipts' => [],
+        ];
     }
 
     public function liveOrders(Request $request): JsonResponse

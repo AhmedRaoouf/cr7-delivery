@@ -178,20 +178,63 @@ was run before the `.env` edit.
 
 ---
 
-## 9. Queue and scheduler
+## 9. The scheduler — **required**
 
 ```bash
-php artisan queue:work --queue=default --tries=3    # under supervisor
-* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/u136483260/domains/cr7-delivery.com/cr7-delivery && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-> Corrected 2026-09-03. This section used to say that the dispatch rounds, the
-> prep-time countdown and the settlement generator are scheduled jobs and that
-> orders sit in `waiting_for_driver` without the cron entry. They are not:
-> `grep -rn "Schedule::" app bootstrap routes` finds nothing, `app/Jobs` does not
-> exist, and all three run synchronously inside `app/Actions` and `app/Services`.
-> **Ordering works with no cron and no queue worker at all.** The one thing the
-> cron entry now does is prune Telescope — §10.
+Set it in hPanel → **Advanced → Cron Jobs**. Verify it with:
+
+```bash
+php artisan schedule:list          # cr7:tick every minute, telescope:prune daily
+php artisan cr7:tick --once -v     # run one pass by hand and read what it swept
+```
+
+> **Corrected again 2026-09-05, and this time in the other direction.** The note
+> that used to sit here said «ordering works with no cron and no queue worker at
+> all». That was true only of the path where a human presses every button on time.
+>
+> Four deadlines are written on every order — `prep_due_at`, the offer TTL, the
+> restaurant's accept window, and the retry interval for an order nobody took —
+> and until `cr7:tick` existed **not one of them was ever read**. A kitchen that
+> forgot left the order in `preparing` forever. Three captains who let an offer
+> lapse left it in `searching_driver` forever. An order that found nobody sat in
+> `waiting_for_driver` until an operator reassigned it by hand, which is what the
+> seventeen stranded orders on this deployment were doing.
+>
+> **Without this cron entry the order machine still stops.** It is not an
+> optimisation and it is not only Telescope's pruning any more.
+
+There is still **no queue worker and no `app/Jobs`**. `cr7:tick` is a plain
+command; pushes go out `afterResponse()` in the same PHP process. Nothing here
+needs supervisor.
+
+---
+
+## 9b. Push notifications — the service-account file
+
+Push is the one feature that fails **silently and completely** when it is not
+configured: `NotificationDispatcher` writes the in-app row first and swallows
+every delivery error on purpose, so a missing credentials file looks exactly like
+a phone that is switched off.
+
+```bash
+php artisan cr7:push-doctor              # says which of the three links is broken
+php artisan cr7:push-doctor --to=<user>  # and sends a real one
+```
+
+The file goes at `storage/app/firebase/service-account.json` (or wherever
+`FIREBASE_CREDENTIALS` points).
+
+**It is a real secret.** Anyone holding it can send a notification to every phone
+on the platform. It must never live under `public/` or `storage/app/public/`, must
+never be committed, and should be `chmod 600`. Upload it over SFTP — not by
+pasting it into a terminal that keeps history.
+
+```bash
+chmod 600 storage/app/firebase/service-account.json
+```
 
 ---
 

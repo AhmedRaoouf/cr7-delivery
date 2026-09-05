@@ -51,9 +51,16 @@ class PushDoctorCommand extends Command
         $this->newLine();
         $this->line('<options=bold>2 · registered devices</>');
 
+        // `->get()` on the model still applies the casts, so `app` and `platform` come
+        // back as `DeviceApp` and `DevicePlatform` — and `table()` refuses anything that
+        // is not a scalar or `Stringable`. This is the third time an enum-cast column has
+        // bitten on this path: `DeviceController::store()` answered 500 for it, and the
+        // `ready_source === 'timer'` comparison was silently false for it. `toBase()`
+        // returns plain rows and casts nothing.
         $rows = DeviceToken::query()
             ->selectRaw('app, platform, count(*) as total, max(last_used_at) as newest')
             ->groupBy('app', 'platform')
+            ->toBase()
             ->get();
 
         if ($rows->isEmpty()) {
@@ -63,7 +70,12 @@ class PushDoctorCommand extends Command
         } else {
             $this->table(
                 ['app', 'platform', 'tokens', 'newest'],
-                $rows->map(fn ($r) => [$r->app, $r->platform, $r->total, $r->newest])->all(),
+                $rows->map(fn ($r) => [
+                    (string) $r->app,
+                    (string) $r->platform,
+                    (int) $r->total,
+                    (string) ($r->newest ?? '—'),
+                ])->all(),
             );
         }
 

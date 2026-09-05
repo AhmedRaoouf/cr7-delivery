@@ -30,6 +30,15 @@ class ProductResource extends JsonResource
             // the restaurant it belongs to or it cannot be opened or added.
             'restaurant_id' => $this->restaurant_id,
             'restaurant_name' => $this->whenLoaded('restaurant', fn () => $this->restaurant->{"name_{$locale}"}),
+            // FR-MENU-08 — «+» on a list row may not add a dish that still has a
+            // choice to make; it has to open `CUS-15` instead. The app decided
+            // that by looking at `option_groups`, which **only the detail
+            // resource sends** — so on a list row the array was always empty, the
+            // question always answered «no», and a quick-add of a dish with a
+            // required size went to the server without one. A whole array per row
+            // to answer one boolean is the wrong trade on a search that returns
+            // dishes from every restaurant, so the boolean is what travels.
+            'requires_configuration' => $this->requiresConfiguration(),
         ];
     }
 }

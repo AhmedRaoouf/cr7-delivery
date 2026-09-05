@@ -43,6 +43,26 @@ class Product extends Model
         return $this->belongsTo(MenuCategory::class);
     }
 
+    /**
+     * Whether «+» on a list row has to open the dish rather than add it.
+     *
+     * Mirrors `Product.requiresConfiguration` in the app exactly: a group that is
+     * required and offers a real choice. A required group with one option is not
+     * a choice, it is a fact about the dish, and stopping the customer to confirm
+     * it is friction for nothing.
+     *
+     * Counted rather than loaded — this is called once per row on a search that
+     * can return dishes from every restaurant, and `withCount` at the call sites
+     * would be a second thing to remember.
+     */
+    public function requiresConfiguration(): bool
+    {
+        return $this->optionGroups()
+            ->where('is_required', true)
+            ->has('options', '>', 1)
+            ->exists();
+    }
+
     public function optionGroups(): HasMany
     {
         return $this->hasMany(ProductOptionGroup::class);

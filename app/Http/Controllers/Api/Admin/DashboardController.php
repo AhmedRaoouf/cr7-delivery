@@ -73,13 +73,15 @@ class DashboardController extends Controller
 
     public function alerts(Request $request): JsonResponse
     {
-        $orders = AdminScope::applyToOrders(Order::query(), $request->user());
+        // Same four numbers `openAlerts()` publishes, under `ADM-03`'s older names.
+        // One source, so the sidebar badge and the dock can never disagree.
+        $counts = $this->alertCounts($request);
 
         return ApiResponse::success([
-            'restaurant_timeouts' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
-            'no_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
-            'delivery_issues' => (clone $orders)->where('status', 'delivery_issue')->count(),
-            'payments_to_verify' => Payment::query()->where('status', 'under_review')->count(),
+            'restaurant_timeouts' => $counts['restaurant_timeout'],
+            'no_driver' => $counts['no_driver'],
+            'delivery_issues' => $counts['delivery_issue'],
+            'payments_to_verify' => $counts['payment_review'],
         ]);
     }
 
@@ -149,16 +151,42 @@ class DashboardController extends Controller
 
         $items = $payments->concat($stranded)->concat($timedOut)->concat($issues);
 
+        /*
+         * The counts are the **true** totals, not `$items->count()`.
+         *
+         * `items` is capped at `ALERT_LIMIT` per kind because the dock is a wake-up
+         * call, not a work queue. Deriving the badge from the capped list made the
+         * sidebar and the dock read «20» on a night with 137 stranded orders — a
+         * number that stops moving is read as «handled», which is the opposite of
+         * what an alert is for. `total > items->count()` is how the client knows to
+         * offer the full list.
+         */
+        $counts = $this->alertCounts($request);
+        $total = array_sum($counts);
+
         return ApiResponse::success([
-            'total' => $items->count(),
-            'counts' => [
-                'payment_review' => $payments->count(),
-                'no_driver' => $stranded->count(),
-                'restaurant_timeout' => $timedOut->count(),
-                'delivery_issue' => $issues->count(),
-            ],
+            'total' => $total,
+            'shown' => $items->count(),
+            'counts' => $counts,
             'items' => $items->values(),
         ]);
+    }
+
+    /**
+     * The four open-alert counts, scoped to the operator (D-50).
+     *
+     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int}
+     */
+    private function alertCounts(Request $request): array
+    {
+        $orders = AdminScope::applyToOrders(Order::query(), $request->user());
+
+        return [
+            'payment_review' => Payment::query()->where('status', 'under_review')->count(),
+            'no_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
+            'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
+            'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
+        ];
     }
 
     private function orderAlert(Order $order, string $kind, string $title): array

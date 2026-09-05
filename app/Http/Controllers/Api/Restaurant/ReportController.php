@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api\Restaurant;
 
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 
 /** doc 08 §6 — GET /restaurant/reports/summary | /sales | /top-products. */
 class ReportController extends Controller
@@ -36,7 +36,7 @@ class ReportController extends Controller
         $series = $restaurant->orders()
             ->where('status', 'delivered')
             ->whereBetween('created_at', [$from, $to])
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as gross_sales')
+            ->selectRaw('DATE('.BusinessTime::sqlLocal('created_at').') as date, COUNT(*) as orders_count, SUM(subtotal) as gross_sales')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
@@ -56,8 +56,8 @@ class ReportController extends Controller
     private function range(Request $request): array
     {
         return [
-            $request->date('from')?->startOfDay() ?? Carbon::now()->subDays(30)->startOfDay(),
-            $request->date('to')?->endOfDay() ?? Carbon::now()->endOfDay(),
+            BusinessTime::fromInput($request->date('from')) ?? BusinessTime::startOfDaysAgo(30),
+            BusinessTime::fromInput($request->date('to'), endOfDay: true) ?? BusinessTime::endOfToday(),
         ];
     }
 }

@@ -91,6 +91,24 @@ class Driver extends Model
         return $this->morphMany(Rating::class, 'rateable');
     }
 
+    /**
+     * Whether the stored coordinates are a place rather than an empty column.
+     *
+     * `0, 0` is a point in the Atlantic three thousand kilometres off West
+     * Africa. A captain row that has never had a fix serialises to it whenever
+     * the column holds a zero instead of a null, and the customer's map then
+     * drew the captain there with a line to their door across a continent —
+     * reported from a phone as «عامل إن هو في بلد عندنا تقريبًا أفريقيا». No
+     * service area of this platform is within a thousand kilometres of it, so
+     * it is missing data and is served as null.
+     */
+    public function hasFix(): bool
+    {
+        return $this->current_lat !== null
+            && $this->current_lng !== null
+            && (abs((float) $this->current_lat) > 0.0001 || abs((float) $this->current_lng) > 0.0001);
+    }
+
     /** doc 05 §2 / FR-DRV-20: online, available and a fresh-enough location ping. */
     public function isLive(int $staleSeconds = 90): bool
     {

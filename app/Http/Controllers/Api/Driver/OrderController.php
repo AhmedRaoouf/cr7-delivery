@@ -16,6 +16,7 @@ use App\Http\Requests\Driver\DeliverRequest;
 use App\Http\Requests\Driver\PickupRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -168,7 +169,9 @@ class OrderController extends Controller
         // when it was raised for a trip that never did — the same rule the app
         // used, so «اليوم» still holds an order taken at 23:50 and delivered
         // after midnight.
-        $from = $request->date('filter.from');
+        // «اليوم» on `DRV-27` is the captain's day, which starts at midnight in
+        // Gamasa and not at 02:00 there.
+        $from = BusinessTime::fromInput($request->date('filter.from'));
 
         $status = $request->string('filter.status');
 

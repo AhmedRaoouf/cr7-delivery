@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -17,8 +18,9 @@ class DashboardController extends Controller
 {
     public function summary(Request $request): JsonResponse
     {
-        $from = $request->date('filter.date_from') ?? Carbon::today();
-        $to = $request->date('filter.date_to') ?? Carbon::now();
+        // «اليوم» is a Cairo day, not a UTC one — see `BusinessTime`.
+        $from = BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfToday();
+        $to = BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? Carbon::now();
 
         $orders = AdminScope::applyToOrders(Order::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 
@@ -40,18 +42,22 @@ class DashboardController extends Controller
 
     public function charts(Request $request): JsonResponse
     {
-        $from = $request->date('filter.date_from') ?? Carbon::now()->subDays(7);
-        $to = $request->date('filter.date_to') ?? Carbon::now();
+        $from = BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfDaysAgo(7);
+        $to = BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? Carbon::now();
 
         $orders = AdminScope::applyToOrders(Order::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 
+        $localCreatedAt = BusinessTime::sqlLocal('created_at');
+
         $sales = (clone $orders)->where('status', 'delivered')
-            ->selectRaw('DATE(created_at) as date, SUM(subtotal) as gmv, COUNT(*) as orders_count')
+            ->selectRaw("DATE({$localCreatedAt}) as date, SUM(subtotal) as gmv, COUNT(*) as orders_count")
             ->groupBy('date')->orderBy('date')->get();
 
         $statuses = (clone $orders)->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
         $paymentMethods = (clone $orders)->selectRaw('payment_method, COUNT(*) as count')->groupBy('payment_method')->pluck('count', 'payment_method');
-        $peakHours = (clone $orders)->selectRaw('HOUR(created_at) as hour, COUNT(*) as count')->groupBy('hour')->orderBy('hour')->pluck('count', 'hour');
+        // «ساعات الذروة» is a wall-clock question. In UTC it named 20:00 for a
+        // rush the restaurants lived through at 22:00.
+        $peakHours = (clone $orders)->selectRaw("HOUR({$localCreatedAt}) as hour, COUNT(*) as count")->groupBy('hour')->orderBy('hour')->pluck('count', 'hour');
 
         return ApiResponse::success([
             'sales' => $sales,
@@ -94,7 +100,18 @@ class DashboardController extends Controller
             // every online captain as offline — three zeroed tiles, an empty list and a
             // map with no markers, while `ADM-19` beside it showed the same captain
             // «متصل ومتفرغ» because that screen selects the whole row.
-            ->get(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_online', 'is_available', 'is_active']);
+            ->get(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_online', 'is_available', 'is_active'])
+            // A captain with no fix has no marker. Serving the zeros put them in
+            // the Atlantic off West Africa and stretched `ADM-56`'s camera across
+            // an ocean to fit one of them in.
+            ->each(function (Driver $driver): void {
+                if ($driver->hasFix()) {
+                    return;
+                }
+
+                $driver->current_lat = null;
+                $driver->current_lng = null;
+            });
 
         return ApiResponse::success($drivers);
     }

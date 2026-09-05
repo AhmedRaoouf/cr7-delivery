@@ -59,13 +59,23 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | Storage is UTC, and deliberately **not** an environment decision.
+    |
+    | Egypt observes DST again since 2023, so a local-time column has a
+    | duplicated hour every October with nothing on the row to tell the two
+    | apart. The note under `business_timezone` has always said this column
+    | stays UTC on every deployment — and it did not: the deployed server ran
+    | UTC while a developer machine had `APP_TIMEZONE=Africa/Cairo` in its
+    | `.env`, so the same code wrote timestamps three hours apart depending on
+    | where it ran, and every test about a boundary passed locally for the wrong
+    | reason.
+    |
+    | What the business runs on is `business_timezone` below, applied at the
+    | moment a time is read rather than written — see `App\Support\BusinessTime`.
     |
     */
 
-    'timezone' => env('APP_TIMEZONE', 'UTC'),
+    'timezone' => 'UTC',
 
     /*
     |--------------------------------------------------------------------------

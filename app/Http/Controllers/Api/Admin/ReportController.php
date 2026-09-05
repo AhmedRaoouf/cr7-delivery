@@ -14,9 +14,9 @@ use App\Models\Restaurant;
 use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 
 /** doc 08 §7 / doc 14 — reports (scope-filtered, doc 24 §1.2). */
 class ReportController extends Controller
@@ -28,7 +28,7 @@ class ReportController extends Controller
         $series = AdminScope::applyToOrders(Order::query(), $request->user())
             ->where('status', 'delivered')
             ->whereBetween('created_at', [$from, $to])
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as gmv, SUM(commission_amount) as commission, SUM(delivery_fee_share) as delivery_fees, SUM(platform_fee_share) as platform_fees')
+            ->selectRaw('DATE('.BusinessTime::sqlLocal('created_at').') as date, COUNT(*) as orders_count, SUM(subtotal) as gmv, SUM(commission_amount) as commission, SUM(delivery_fee_share) as delivery_fees, SUM(platform_fee_share) as platform_fees')
             ->groupBy('date')->orderBy('date')->get();
 
         return ApiResponse::success($series);
@@ -147,7 +147,7 @@ class ReportController extends Controller
         $customers = User::query()->where('type', 'customer');
 
         $customers = match ($segment) {
-            'new' => $customers->where('created_at', '>=', now()->subDays(30)),
+            'new' => $customers->where('created_at', '>=', BusinessTime::startOfDaysAgo(30)),
             'returning' => $customers->whereHas('orderGroups', fn ($q) => $q->where('rollup_status', 'delivered'), '>=', 2),
             'restricted' => $customers->whereNotNull('cash_only_until')->where('cash_only_until', '>', now()),
             default => $customers,
@@ -198,8 +198,8 @@ class ReportController extends Controller
     private function range(Request $request): array
     {
         return [
-            $request->date('filter.date_from') ?? Carbon::now()->subDays(30)->startOfDay(),
-            $request->date('filter.date_to') ?? Carbon::now()->endOfDay(),
+            BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfDaysAgo(30),
+            BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? BusinessTime::endOfToday(),
         ];
     }
 }

@@ -41,4 +41,85 @@ final class BusinessTime
     {
         return self::now()->toDateString();
     }
+
+    // ------------------------------------------------------------ boundaries
+
+    /**
+     * The other half of the same idea: «اليوم» is a question about that wall
+     * clock too, and every answer below is returned in **UTC**, ready for a
+     * `where` clause. Only the boundary is computed in Cairo.
+     *
+     * `Carbon::today()` in a UTC process answers 22:00 the previous evening
+     * there, so `ADM-04`'s «اليوم» counted from two hours after Cairo midnight,
+     * the report ranges lost their first two hours at one end and picked up two
+     * of the previous day at the other, and the captain's «اليوم» chip on
+     * `DRV-27` did the same.
+     */
+    public static function startOfToday(): Carbon
+    {
+        return self::now()->startOfDay()->utc();
+    }
+
+    public static function startOfDaysAgo(int $days): Carbon
+    {
+        return self::now()->subDays($days)->startOfDay()->utc();
+    }
+
+    public static function endOfToday(): Carbon
+    {
+        return self::now()->endOfDay()->utc();
+    }
+
+    /**
+     * Re-read a date an operator typed as a date on that wall clock.
+     *
+     * `$request->date('filter.date_from')` parses «2026-09-05» at **UTC**
+     * midnight, which is 02:00 in Cairo — so a range given as one calendar day
+     * silently dropped its first two hours and picked up two from the day
+     * before at the far end.
+     *
+     * @param  bool  $endOfDay  Whether the date names the close of a range.
+     */
+    public static function fromInput(?Carbon $date, bool $endOfDay = false): ?Carbon
+    {
+        if ($date === null) {
+            return null;
+        }
+
+        $local = Carbon::create(
+            $date->year,
+            $date->month,
+            $date->day,
+            $date->hour,
+            $date->minute,
+            $date->second,
+            self::timezone(),
+        );
+
+        // A bare date carries no time, and the two ends of a range want opposite
+        // halves of it.
+        if ($date->hour === 0 && $date->minute === 0 && $date->second === 0) {
+            $local = $endOfDay ? $local->endOfDay() : $local->startOfDay();
+        }
+
+        return $local->utc();
+    }
+
+    /**
+     * A SQL expression that reads `$column` on that wall clock.
+     *
+     * `DATE(created_at)` and `HOUR(created_at)` are UTC, so the sales chart cut
+     * its days two hours late and «ساعات الذروة» pointed at 20:00 for a rush the
+     * restaurants lived through at 22:00. `CONVERT_TZ` would be the exact answer
+     * and needs MySQL's named-zone tables, which shared hosting usually does not
+     * load — so the current offset is applied instead. A range that straddles
+     * the October change is off by an hour on one side of it; every other range,
+     * which is all of them in practice, is exact.
+     */
+    public static function sqlLocal(string $column): string
+    {
+        $minutes = (int) self::now()->utcOffset();
+
+        return sprintf('DATE_ADD(%s, INTERVAL %d MINUTE)', $column, $minutes);
+    }
 }

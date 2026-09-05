@@ -67,6 +67,12 @@ class FileUploader
 
     public static function storePublic(UploadedFile $file, string $folder): string
     {
+        // Resolution first, bytes second — see `ImageOptimizer`. It returns the original
+        // file untouched whenever it cannot make it meaningfully smaller, so this is the
+        // one line that shrinks every public image the platform stores, from every
+        // client, without any of them having to cooperate.
+        $file = ImageOptimizer::optimise($file, ImageOptimizer::PUBLIC_MAX_EDGE);
+
         $disk = self::disk();
         $name = self::filename($file, self::SAFE_IMAGE_EXTENSIONS);
 
@@ -87,6 +93,11 @@ class FileUploader
     /** @return string the stored relative path (not a URL — the disk is not web-accessible). */
     public static function storePrivate(UploadedFile $file, string $folder): string
     {
+        // A larger cap than the public one: nobody looks at a product photo for detail,
+        // and everybody looks at a payment proof for a reference number. A PDF is not an
+        // image and passes straight through.
+        $file = ImageOptimizer::optimise($file, ImageOptimizer::PRIVATE_MAX_EDGE);
+
         return $file->storeAs($folder, self::filename($file, self::SAFE_DOCUMENT_EXTENSIONS), 'local');
     }
 

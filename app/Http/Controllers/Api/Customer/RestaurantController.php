@@ -9,6 +9,7 @@ use App\Http\Resources\Customer\RestaurantResource;
 use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Support\ApiResponse;
+use App\Support\ArabicSearch;
 use App\Support\Locale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,13 @@ class RestaurantController extends Controller
                 'serviceZone',
                 fn ($zq) => $zq->where('delivery_fee', '<=', (float) $filter['max_delivery_fee']),
             ))
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => $q->whereFullText(['name_ar', 'name_en'], $request->string('search')))
+            // Same folding + substring match `GET /search` uses — see `ArabicSearch`.
+            // A full-text index answers on whole words, so «كشر» found nothing.
+            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+                $q,
+                ['name_ar', 'name_en', 'description_ar', 'description_en'],
+                ArabicSearch::tokens((string) $request->string('search')->value()),
+            ))
             ->when($request->string('sort')->value(), function ($q, $sort) use ($lat, $lng) {
                 match ($sort) {
                     '-rating_avg' => $q->orderByDesc('rating_avg'),
@@ -118,7 +125,11 @@ class RestaurantController extends Controller
         $products = $restaurant->products()
             ->where('is_available', true)
             ->when($request->integer('category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => $q->whereFullText(['name_ar', 'name_en'], $request->string('search')))
+            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+                $q,
+                ['name_ar', 'name_en', 'description_ar', 'description_en'],
+                ArabicSearch::tokens((string) $request->string('search')->value()),
+            ))
             ->when($request->string('sort')->value(), function ($q, $sort) {
                 match ($sort) {
                     'price' => $q->orderBy('price'),

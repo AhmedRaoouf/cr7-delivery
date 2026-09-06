@@ -18,7 +18,13 @@ class StoreComplaintRequest extends FormRequest
             'order_id' => ['nullable', 'exists:orders,id'],
             'subject' => ['nullable', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:2000'],
-            'attachments' => ['nullable', 'array'],
+            // Files, not strings. `CUS-40` lets the customer attach up to three photos,
+            // and they used to be sent as **device paths** — `/data/user/0/…/x.jpg` —
+            // which were stored verbatim and rendered as a broken image everywhere the
+            // ticket was read. The column keeps holding URLs; the transport is now a
+            // multipart upload, so the URLs are ones this server wrote.
+            'attachments' => ['nullable', 'array', 'max:3'],
+            'attachments.*' => ['image', 'max:5120'],
         ];
     }
 }

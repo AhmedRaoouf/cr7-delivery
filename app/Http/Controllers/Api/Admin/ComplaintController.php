@@ -8,6 +8,7 @@ use App\Models\Complaint;
 use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\ComplaintAttachments;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,8 @@ class ComplaintController extends Controller
     {
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
-            'attachments' => ['nullable', 'array'],
+            'attachments' => ['nullable', 'array', 'max:3'],
+            'attachments.*' => ['image', 'max:5120'],
             'visibility' => ['nullable', 'in:all,internal'],
         ]);
 
@@ -59,7 +61,7 @@ class ComplaintController extends Controller
             'sender_role' => 'admin',
             'visibility' => $validated['visibility'] ?? 'all',
             'message' => $validated['message'],
-            'attachments' => $validated['attachments'] ?? null,
+            'attachments' => ComplaintAttachments::store($request) ?: null,
         ]);
 
         if (! $complaint->first_response_at) {

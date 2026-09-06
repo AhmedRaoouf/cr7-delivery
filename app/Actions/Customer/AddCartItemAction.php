@@ -4,6 +4,7 @@ namespace App\Actions\Customer;
 
 use App\Exceptions\ApiException;
 use App\Models\Cart;
+use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\User;
@@ -48,11 +49,35 @@ class AddCartItemAction
             $optionIds = $data['option_ids'] ?? [];
             $this->validateOptions($product, $optionIds);
 
+            $quantity = max(1, (int) ($data['quantity'] ?? 1));
+            $note = $data['note'] ?? null;
+
+            /*
+             * The same dish, configured the same way, is **one line with a count** — not a
+             * new row per tap.
+             *
+             * `create()` unconditionally was how «كانز» tapped three times became three
+             * separate lines of one each: the basket read as three items, the stepper on
+             * each said 1, and removing «the can» removed a third of it. Every delivery app
+             * merges here, and so does the app's own `+` on a line that already exists —
+             * so the two paths now agree.
+             *
+             * What counts as "the same" is product + option set + note. A different size or
+             * a «بدون بصل» note is a different thing to cook, so it stays its own line.
+             */
+            $existing = $this->findMergeable($cart, $product->id, $optionIds, $note);
+
+            if ($existing !== null) {
+                $existing->increment('quantity', $quantity);
+
+                return $cart->fresh();
+            }
+
             $item = $cart->items()->create([
                 'restaurant_id' => $product->restaurant_id,
                 'product_id' => $product->id,
-                'quantity' => $data['quantity'] ?? 1,
-                'note' => $data['note'] ?? null,
+                'quantity' => $quantity,
+                'note' => $note,
             ]);
 
             foreach ($optionIds as $optionId) {
@@ -61,6 +86,30 @@ class AddCartItemAction
 
             return $cart->fresh();
         });
+    }
+
+    /**
+     * The line this add should fold into, or null if it is a new configuration.
+     *
+     * @param  array<int, int|string>  $optionIds
+     */
+    private function findMergeable(Cart $cart, int $productId, array $optionIds, ?string $note): ?CartItem
+    {
+        $wanted = collect($optionIds)->map(fn ($id) => (int) $id)->sort()->values()->all();
+
+        return $cart->items()
+            ->where('product_id', $productId)
+            ->with('options')
+            ->get()
+            ->first(function (CartItem $item) use ($wanted, $note): bool {
+                if (($item->note ?? null) !== ($note ?? null)) {
+                    return false;
+                }
+
+                $have = $item->options->pluck('product_option_id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+
+                return $have === $wanted;
+            });
     }
 
     private function validateOptions(Product $product, array $optionIds): void

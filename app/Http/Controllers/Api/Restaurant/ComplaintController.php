@@ -9,6 +9,7 @@ use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Http\Resources\Restaurant\ComplaintResource;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
+use App\Support\ComplaintAttachments;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -52,14 +53,18 @@ class ComplaintController extends Controller
             throw new ApiException('not_mirrored', 'هذه الشكوى غير معروضة لك', 403);
         }
 
-        $validated = $request->validate(['message' => ['required', 'string', 'max:2000'], 'attachments' => ['nullable', 'array']]);
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+            'attachments' => ['nullable', 'array', 'max:3'],
+            'attachments.*' => ['image', 'max:5120'],
+        ]);
 
         $message = $complaint->messages()->create([
             'sender_id' => $request->user()->id,
             'sender_role' => 'restaurant',
             'visibility' => 'all',
             'message' => $validated['message'],
-            'attachments' => $validated['attachments'] ?? null,
+            'attachments' => ComplaintAttachments::store($request) ?: null,
         ]);
 
         $complaint->update(['restaurant_replied_at' => now()]);
@@ -69,10 +74,18 @@ class ComplaintController extends Controller
 
     public function store(StoreComplaintRequest $request, CreateComplaintAction $action): JsonResponse
     {
-        $complaint = $action->execute($request->user(), [...$request->validated(), 'order_id' => null]);
-        $complaint->update(['user_role' => 'restaurant', 'restaurant_id' => null, 'visible_to_restaurant' => false]);
+        // `user_role` goes **in**, not on afterwards: the action seeds the thread's
+        // first message with it, and a role patched after the fact would leave that
+        // message signed «customer» on a ticket the restaurant opened.
+        $complaint = $action->execute($request->user(), [
+            ...$request->validated(),
+            'order_id' => null,
+            'user_role' => 'restaurant',
+            'attachments' => ComplaintAttachments::store($request),
+        ]);
+        $complaint->update(['restaurant_id' => null, 'visible_to_restaurant' => false]);
 
-        return ApiResponse::success($complaint, 'تم إرسال الشكوى بنجاح', status: 201);
+        return ApiResponse::success($complaint->load('messages'), 'تم إرسال الشكوى بنجاح', status: 201);
     }
 
     public function unreadCount(Request $request): JsonResponse

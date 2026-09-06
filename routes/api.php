@@ -177,6 +177,20 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders/{orderGroup}/payment/proofs/{proof}/file', [PaymentController::class, 'proofFile']);
         Route::post('/orders/{orderGroup}/payment/method', [PaymentController::class, 'switchToCash']);
 
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | §4b Complaints — the same box for both halves of the one app.
+    |
+    | These four used to sit inside §4, behind `type:customer`. `DRV-32` sends a
+    | captain to «تذاكري» and «تذكرة جديدة» on the very same screens, so every
+    | captain who opened their own tickets was answered 403 by a screen the app
+    | had just offered them. `user_role` on the row keeps the two apart;
+    | `client.type` still refuses the dashboard binaries.
+    |----------------------------------------------------------------------
+    */
+    Route::middleware(['auth:sanctum', 'client.type', 'type:customer,driver'])->group(function () {
         Route::get('/complaints', [CustomerComplaintController::class, 'index']);
         Route::post('/complaints', [CustomerComplaintController::class, 'store']);
         Route::get('/complaints/{complaint}', [CustomerComplaintController::class, 'show']);

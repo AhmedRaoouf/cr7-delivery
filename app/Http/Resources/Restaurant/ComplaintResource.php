@@ -34,6 +34,9 @@ class ComplaintResource extends JsonResource
                 'id' => $m->id,
                 'sender_role' => $m->sender_role,
                 'message' => $m->message,
+                // The dashboards read `body`; the mobile client reads `message`. Both
+                // travel, so neither has to know about the other's name for the column.
+                'body' => $m->message,
                 'attachments' => $m->attachments,
                 'created_at' => $m->created_at,
             ])),

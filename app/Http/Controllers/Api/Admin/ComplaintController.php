@@ -8,6 +8,7 @@ use App\Models\Complaint;
 use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\ComplaintNotifier;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,6 +69,10 @@ class ComplaintController extends Controller
             $complaint->update(['first_response_at' => now()]);
         }
 
+        // An `internal` note stops at the operators — that is the whole meaning of the
+        // visibility column, and it has to hold in the push as well as on the screen.
+        app(ComplaintNotifier::class)->replied($complaint->fresh(['user', 'restaurant.owner']), $message);
+
         return ApiResponse::success($message, 'تم إرسال الرد', status: 201);
     }
 
@@ -88,6 +93,10 @@ class ComplaintController extends Controller
 
         $complaint->update($validated);
         AuditLogger::record($request->user(), 'complaints.update', $complaint, $validated);
+
+        if (($validated['status'] ?? null) === 'resolved') {
+            app(ComplaintNotifier::class)->resolved($complaint->fresh(['user']));
+        }
 
         return ApiResponse::success($complaint->fresh(), 'تم تحديث الشكوى بنجاح');
     }

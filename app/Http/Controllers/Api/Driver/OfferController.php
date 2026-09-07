@@ -15,10 +15,14 @@ class OfferController extends Controller
     {
         $driver = $request->user()->driver()->firstOrFail();
 
+        // An offer with no `expires_at` is open until it is answered (2026-09-08).
+        // The old `expires_at > now()` filter hid every one of them, so the recovery
+        // list a captain falls back to after a missed push would have come back empty
+        // for exactly the offers that are still theirs to take.
         $offers = $driver->driverAttempts()
             ->where('result', 'sent')
-            ->where('expires_at', '>', now())
-            ->with('order.restaurant')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->with(['order.restaurant', 'assignedBy:id,name'])
             ->get()
             ->map(fn ($attempt) => $this->formatOffer($attempt));
 
@@ -32,7 +36,8 @@ class OfferController extends Controller
         $attempt = $driver->driverAttempts()
             ->where('order_id', $orderId)
             ->where('result', 'sent')
-            ->with('order.restaurant')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->with(['order.restaurant', 'assignedBy:id,name'])
             ->firstOrFail();
 
         return ApiResponse::success($this->formatOffer($attempt));
@@ -65,8 +70,16 @@ class OfferController extends Controller
             'cash_to_collect' => $order->payment_method->value === 'cash' ? (float) $order->total : 0,
             'your_earning' => DriverEarningCalculator::calculate($order, $driver),
             'round' => $attempt->round,
+            // Both null on every offer written since 2026-09-08. The app reads that as
+            // «no countdown» and shows the offer until it is answered.
             'expires_at' => $attempt->expires_at,
-            'seconds_left' => max(0, now()->diffInSeconds($attempt->expires_at, false)),
+            'seconds_left' => $attempt->expires_at === null
+                ? null
+                : max(0, now()->diffInSeconds($attempt->expires_at, false)),
+            // An assignment is an offer with a name on it — `DRV-13` says who sent it,
+            // so the captain knows this one came from the office rather than the queue.
+            'assigned_by_admin' => $attempt->assigned_by !== null,
+            'assigned_by_name' => $attempt->assignedBy?->name,
         ];
     }
 }

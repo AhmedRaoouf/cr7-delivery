@@ -21,6 +21,7 @@ class ErrandRequest extends Model
         'purchases_amount', 'purchases_note', 'receipt_urls',
         'cancelled_by', 'cancel_reason',
         'assigned_at', 'picked_up_at', 'delivered_at', 'cancelled_at', 'admin_notified_at',
+        'notified_driver_ids', 'last_published_at',
     ];
 
     /**
@@ -43,6 +44,8 @@ class ErrandRequest extends Model
             'suggested_fee' => 'decimal:2',
             'purchases_amount' => 'decimal:2',
             'receipt_urls' => 'array',
+            'notified_driver_ids' => 'array',
+            'last_published_at' => 'datetime',
             'assigned_at' => 'datetime',
             'picked_up_at' => 'datetime',
             'delivered_at' => 'datetime',

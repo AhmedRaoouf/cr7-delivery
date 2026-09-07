@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\AdminCancelOrderAction;
 use App\Actions\Admin\ForceStatusAction;
+use App\Actions\Admin\OfferOrderToDriverAction;
 use App\Actions\Admin\ReassignDriverAction;
 use App\Actions\Admin\UnassignDriverAction;
 use App\Actions\Restaurant\ExtendPrepTimeAction;
@@ -113,19 +114,39 @@ class OrderController extends Controller
         return ApiResponse::success($order, 'تم إلغاء الطلب');
     }
 
-    public function reassignDriver(Request $request, Order $order, ReassignDriverAction $action): JsonResponse
-    {
+    /**
+     * Two ways to hand an order to a captain, and the polite one is the default.
+     *
+     * `mode = offer` (2026-09-08) sends it as an offer the captain accepts or refuses on
+     * `DRV-13`, with a push that says who sent it; a refusal comes back to the operator.
+     * `mode = force` is the old behaviour — the order simply becomes theirs, with no
+     * notification and no way to say no — and is right for a captain standing in the
+     * office and wrong for one whose phone is in a pocket.
+     */
+    public function reassignDriver(
+        Request $request,
+        Order $order,
+        ReassignDriverAction $action,
+        OfferOrderToDriverAction $offer,
+    ): JsonResponse {
         $this->ensureInScope($request, $order);
 
         $validated = $request->validate([
             'driver_id' => ['required', 'exists:drivers,id'],
             'reason_code' => ['required', 'string'],
             'note' => ['nullable', 'string', 'max:500'],
+            'mode' => ['nullable', 'in:offer,force'],
         ]);
 
-        $order = $action->execute($request->user(), $order, $validated['driver_id'], $validated['reason_code'], $validated['note'] ?? null);
+        if (($validated['mode'] ?? 'offer') === 'force') {
+            $order = $action->execute($request->user(), $order, $validated['driver_id'], $validated['reason_code'], $validated['note'] ?? null);
 
-        return ApiResponse::success($order, 'تم إسناد الطلب لكابتن آخر');
+            return ApiResponse::success($order, 'تم إسناد الطلب لكابتن آخر');
+        }
+
+        $order = $offer->execute($request->user(), $order, $validated['driver_id'], $validated['reason_code'], $validated['note'] ?? null);
+
+        return ApiResponse::success($order, 'تم إرسال الطلب إلى الكابتن — بانتظار قبوله');
     }
 
     public function unassignDriver(Request $request, Order $order, UnassignDriverAction $action): JsonResponse

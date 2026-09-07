@@ -73,7 +73,27 @@ class NotificationDispatcher
             'order_id' => $orderId,
         ]);
 
-        $this->push($recipient, $notification, $copy, $data + ['type' => $type], $channel);
+        /*
+         * The copy rides in `data` as well as in the `notification` block.
+         *
+         * Android draws a `notification` block itself and hands the app only
+         * `data`; a message that ever arrives data-only — a future silent push,
+         * a background isolate that wants to decide what to draw — would
+         * otherwise have a routing payload and no words in it. Two short
+         * strings, and the app never has to guess.
+         */
+        $this->push(
+            $recipient,
+            $notification,
+            $copy,
+            $data + [
+                'type' => $type,
+                'title' => $copy['title'],
+                'body' => $copy['body'],
+                'notification_id' => (string) $notification->id,
+            ],
+            $channel,
+        );
 
         return $notification;
     }

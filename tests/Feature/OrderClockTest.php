@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Restaurant\StartPreparingAction;
 use App\Enums\OrderStatus;
+use App\Enums\UserType;
 use App\Models\Driver;
 use App\Models\Notification;
 use App\Models\Order;
+use App\Models\OrderDriverAttempt;
 use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
@@ -196,27 +198,105 @@ class OrderClockTest extends TestCase
         $this->assertSame(1, $fresh->dispatch_round);
     }
 
-    public function test_a_lapsed_offer_ends_its_round_instead_of_holding_it_open_forever(): void
+    /**
+     * The 2026-09-08 reversal: an offer has no clock, and the *search* is what moves.
+     *
+     * This test used to assert the opposite — that a captain who said nothing for
+     * thirty-one seconds had their offer marked `expired` and the round advanced. The
+     * operator ruled against it: «ما يكونش 30 ثانية، هو يكون موجود لحد ما يرفض أو
+     * يقبل». So the row stays `sent`, the «قبول» button is still live on the captain's
+     * phone, and what happens on the clock instead is that more captains are asked.
+     */
+    public function test_an_unanswered_offer_stays_open_while_the_search_widens(): void
+    {
+        $restaurant = $this->makeRestaurant('ابن البلد');
+        $order = $this->makeOrder($restaurant);
+        $order->update(['status' => OrderStatus::Preparing]);
+        $rami = $this->makeDriver('كابتن رامي');
+
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+        $this->assertSame(OrderStatus::SearchingDriver, $order->fresh()->status);
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $rami->id,
+            'result' => 'sent',
+            'expires_at' => null,
+        ]);
+
+        // A minute passes with no answer, and a second captain comes on shift.
+        $this->travel(61)->seconds();
+        $sara = $this->makeDriver('كابتن سارة');
+        $this->artisan('cr7:tick --once');
+
+        // Rami's offer is untouched — still his to take.
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $rami->id,
+            'result' => 'sent',
+        ]);
+        // …and Sara has been asked as well.
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $sara->id,
+            'result' => 'sent',
+        ]);
+        // The order never left the search while that happened.
+        $this->assertSame(OrderStatus::SearchingDriver, $order->fresh()->status);
+    }
+
+    /** A captain holding an open offer is never rung twice for the same order. */
+    public function test_widening_does_not_re_offer_to_a_captain_who_already_holds_one(): void
+    {
+        $restaurant = $this->makeRestaurant('ابن البلد');
+        $order = $this->makeOrder($restaurant);
+        $order->update(['status' => OrderStatus::Preparing]);
+        $rami = $this->makeDriver('كابتن رامي');
+
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        $this->travel(61)->seconds();
+        $this->artisan('cr7:tick --once');
+        $this->travel(61)->seconds();
+        $this->artisan('cr7:tick --once');
+
+        $this->assertSame(1, OrderDriverAttempt::query()
+            ->where('order_id', $order->id)
+            ->where('driver_id', $rami->id)
+            ->count());
+    }
+
+    /**
+     * With no TTL, «ran out of rounds» can no longer be the thing that reaches an
+     * operator — so the escalation is on its own clock and says it once.
+     */
+    public function test_an_order_nobody_takes_reaches_the_operators_once(): void
     {
         $restaurant = $this->makeRestaurant('ابن البلد');
         $order = $this->makeOrder($restaurant);
         $order->update(['status' => OrderStatus::Preparing]);
         $this->makeDriver('كابتن رامي');
 
-        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
-        $this->assertSame(OrderStatus::SearchingDriver, $order->fresh()->status);
-        $this->assertDatabaseHas('order_driver_attempts', ['order_id' => $order->id, 'result' => 'sent']);
+        $admin = User::factory()->create(['type' => UserType::Admin, 'is_active' => true]);
 
-        // The captain never answers. The round's TTL runs out.
-        $this->travel(31)->seconds();
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        $this->travel(6)->minutes();
         $this->artisan('cr7:tick --once');
 
-        $this->assertDatabaseHas('order_driver_attempts', [
-            'order_id' => $order->id,
-            'round' => 1,
-            'result' => 'expired',
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $admin->id,
+            'type' => 'order.unclaimed_admin',
         ]);
-        $this->assertSame(2, $order->fresh()->dispatch_round);
+        $this->assertNotNull($order->fresh()->dispatch_admin_notified_at);
+
+        // A sweep that runs every minute must not send a push every minute.
+        $this->travel(6)->minutes();
+        $this->artisan('cr7:tick --once');
+
+        $this->assertSame(1, Notification::query()
+            ->where('user_id', $admin->id)
+            ->where('type', 'order.unclaimed_admin')
+            ->count());
     }
 
     public function test_a_stranded_order_is_offered_again_when_a_captain_appears(): void

@@ -25,6 +25,7 @@ class User extends Authenticatable
         'name', 'phone', 'email', 'password', 'type', 'avatar', 'gender',
         'birth_date', 'locale', 'theme', 'is_active', 'must_change_password',
         'default_address_id', 'notify_orders', 'notify_captain', 'notify_promos',
+        'blocked_at', 'blocked_reason', 'blocked_by',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -37,6 +38,7 @@ class User extends Authenticatable
             'theme' => Theme::class,
             'birth_date' => 'date',
             'is_active' => 'boolean',
+            'blocked_at' => 'datetime',
             'must_change_password' => 'boolean',
             'notify_orders' => 'boolean',
             'notify_captain' => 'boolean',
@@ -47,6 +49,25 @@ class User extends Authenticatable
             'cash_only_until' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * D-71 — one answer to «can this account still act?», read on every request.
+     *
+     * `is_active` has existed since the first migration and was read in exactly two
+     * places, both of them logins. An operator who suspended an account therefore
+     * suspended nothing until that account's token happened to expire: the phone in
+     * the blocked captain's hand kept accepting orders. `EnsureAccountIsActive` is
+     * the middleware; this is the question it asks.
+     */
+    public function isBlocked(): bool
+    {
+        return ! $this->is_active;
+    }
+
+    public function blockedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'blocked_by');
     }
 
     public function defaultAddress(): BelongsTo

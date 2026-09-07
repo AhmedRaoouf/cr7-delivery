@@ -5,6 +5,7 @@ namespace App\Actions\Customer;
 use App\Models\Complaint;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\ComplaintNotifier;
 use Illuminate\Support\Str;
 
 /**
@@ -14,6 +15,8 @@ use Illuminate\Support\Str;
 class CreateComplaintAction
 {
     private const AUTO_MIRROR_CATEGORIES = ['food_quality', 'missing_item', 'order_issue'];
+
+    public function __construct(private readonly ComplaintNotifier $notifier) {}
 
     public function execute(User $user, array $data): Complaint
     {
@@ -61,6 +64,11 @@ class CreateComplaintAction
             'message' => $data['description'],
             'attachments' => $attachments === [] ? null : $attachments,
         ]);
+
+        // D-53 was built with no notification anywhere in it, so a complaint was a row
+        // that waited for somebody to happen to open `ADM-41`. Operator, 2026-09-08:
+        // «طالما حد اشتكى على حد، المفروض يروح للأدمن».
+        $this->notifier->opened($complaint->fresh(['user', 'restaurant.owner']));
 
         return $complaint;
     }

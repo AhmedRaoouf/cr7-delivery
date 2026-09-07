@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Enums\ErrandStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\PaymentProofResource;
+use App\Models\Complaint;
 use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Models\Order;
@@ -174,7 +175,32 @@ class DashboardController extends Controller
                 'receipts' => [],
             ]);
 
-        $items = $payments->concat($stranded)->concat($timedOut)->concat($issues)->concat($errands);
+        // D-53 — a complaint is «something is waiting on a person and nobody has picked
+        // it up», which is exactly what this dock is for. It was the one open queue that
+        // had no way of reaching an operator who was not already on `ADM-41`.
+        $complaints = Complaint::query()
+            ->whereIn('status', ['open', 'in_progress'])
+            ->with('user:id,name')
+            ->oldest()
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (Complaint $complaint) => [
+                'kind' => 'complaint_open',
+                'id' => $complaint->id,
+                'title' => $complaint->priority?->value === 'high'
+                    ? 'شكوى عاجلة بانتظار الرد'
+                    : 'شكوى بانتظار الرد',
+                'reference' => $complaint->ticket_number,
+                'order_group_id' => $complaint->order_group_id,
+                'amount' => 0.0,
+                'restaurant' => $complaint->user?->name,
+                'created_at' => $complaint->created_at,
+                'href' => '/complaints/'.$complaint->id,
+                'receipts' => [],
+            ]);
+
+        $items = $payments->concat($stranded)->concat($timedOut)->concat($issues)
+            ->concat($errands)->concat($complaints);
 
         /*
          * The counts are the **true** totals, not `$items->count()`.
@@ -200,7 +226,7 @@ class DashboardController extends Controller
     /**
      * The four open-alert counts, scoped to the operator (D-50).
      *
-     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int, errand_unclaimed:int}
+     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int, errand_unclaimed:int, complaint_open:int}
      */
     private function alertCounts(Request $request): array
     {
@@ -215,6 +241,11 @@ class DashboardController extends Controller
                 ->where('status', ErrandStatus::Open->value)
                 ->whereNull('driver_id')
                 ->count(),
+            // Not scoped: `complaints` carries neither `city_id` nor `service_zone_id`,
+            // so `AdminScope::applyToOrders` has nothing to filter on. Scoping it means
+            // a column and a backfill, and a count an out-of-scope operator can see is
+            // a smaller problem than a complaint nobody sees at all.
+            'complaint_open' => Complaint::query()->whereIn('status', ['open', 'in_progress'])->count(),
         ];
     }
 

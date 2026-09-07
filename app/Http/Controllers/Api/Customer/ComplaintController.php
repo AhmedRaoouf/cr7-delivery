@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
+use App\Support\ComplaintNotifier;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -72,6 +73,8 @@ class ComplaintController extends Controller
             'message' => $validated['message'],
             'attachments' => UploadedImages::store($request, 'attachments', 'complaints') ?: null,
         ]);
+
+        app(ComplaintNotifier::class)->replied($complaint->fresh(['user', 'restaurant.owner']), $message);
 
         return ApiResponse::success($message, 'تم إرسال الرسالة', status: 201);
     }

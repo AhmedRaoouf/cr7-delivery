@@ -8,7 +8,6 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Support\Notifications\NotificationDispatcher;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -38,7 +37,7 @@ class DispatchService
     {
         $settings = Setting::query()->whereIn('key', [
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
-            'dispatch.offer_ttl_seconds', 'dispatch.max_rounds',
+            'dispatch.max_rounds',
             'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
             'dispatch.last_call_all_drivers', 'dispatch.offer_to_all_online',
         ])->pluck('value', 'key');
@@ -46,7 +45,6 @@ class DispatchService
         $batchSize = (int) ($settings['dispatch.batch_size'] ?? 3);
         $baseRadius = (float) ($settings['dispatch.radius_km'] ?? 5);
         $radiusExpand = (float) ($settings['dispatch.radius_expand_km'] ?? 2);
-        $ttlSeconds = (int) ($settings['dispatch.offer_ttl_seconds'] ?? 30);
         $maxRounds = (int) ($settings['dispatch.max_rounds'] ?? 3);
         $staleSeconds = self::staleSeconds($settings);
 
@@ -83,8 +81,14 @@ class DispatchService
             FILTER_VALIDATE_BOOL,
         );
 
+        // A captain who declined is out for good; a captain still *holding* an open
+        // offer must not be sent a second copy of it. Everyone else is a candidate
+        // again — including one who let a pre-2026-09-08 offer lapse, which is what
+        // `$retry` has always meant.
         $excludedDriverIds = $order->driverAttempts()
-            ->when($retry, fn ($q) => $q->whereIn('result', ['rejected', 'cancelled_after_accept']))
+            ->when($retry, fn ($q) => $q
+                ->whereIn('result', ['rejected', 'cancelled_after_accept'])
+                ->orWhere(fn ($open) => $open->where('result', 'sent')->whereNull('expires_at')))
             ->pluck('driver_id');
 
         $candidates = Driver::query()
@@ -129,6 +133,23 @@ class DispatchService
         $candidates = $broadcast ? $candidates : $candidates->take($batchSize);
 
         if ($candidates->isEmpty()) {
+            // Nobody *new* — which is not the same as nobody. An offer with no
+            // deadline is still in somebody's hand, and flipping the order to
+            // `waiting_for_driver` here would put «لم يقبل الطلب أي كابتن» on the
+            // board and in the operator's alert dock while three captains were
+            // still looking at a live «قبول» button. The widening sweep runs every
+            // minute, so without this guard it would do exactly that, every minute.
+            $stillOpen = $order->driverAttempts()->where('result', 'sent')->exists();
+
+            if ($stillOpen) {
+                $order->update([
+                    'dispatch_round' => $round,
+                    'dispatch_last_offer_at' => now(),
+                ]);
+
+                return;
+            }
+
             // Recursing here is what made rounds free. The next round is a wider circle
             // *and* a later moment; collapsing the two into one request meant the widest
             // circle was searched at the same instant as the narrowest, and an order
@@ -138,14 +159,25 @@ class DispatchService
                 'status' => OrderStatus::WaitingForDriver,
                 'dispatch_round' => $round,
                 'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+                'dispatch_last_offer_at' => now(),
             ]);
             $this->syncGroupRollup($order);
 
             return;
         }
 
-        $expiresAt = Carbon::now()->addSeconds($ttlSeconds);
-
+        /*
+         * **No `expires_at`.** Operator ruling, 2026-09-08: «ما يكونش 30 ثانية، هو
+         * يكون موجود لحد ما يرفض أو يقبل».
+         *
+         * The thirty-second TTL was doing two jobs and the second one was the reason
+         * it existed: it ended a round so the *next*, wider one could start. Nothing
+         * about that needed the offer to disappear from the captain's screen. So the
+         * clock moves off the offer and onto the order — `dispatch_last_offer_at`
+         * below — and `cr7:tick` widens the search a minute later while every offer
+         * already sent stays answerable. A captain who picks the phone up ten minutes
+         * on still has a live «قبول» button, and the order was never idle meanwhile.
+         */
         foreach ($candidates as $candidate) {
             $order->driverAttempts()->create([
                 'driver_id' => $candidate['driver']->id,
@@ -153,7 +185,7 @@ class DispatchService
                 'distance_km' => $candidate['distance_km'] === null ? null : round($candidate['distance_km'], 3),
                 'result' => 'sent',
                 'sent_at' => now(),
-                'expires_at' => $expiresAt,
+                'expires_at' => null,
             ]);
 
             // Wakes the captain's app instead of it asking every three seconds. A
@@ -164,7 +196,7 @@ class DispatchService
                     (int) $candidate['driver']->id,
                     (int) $order->id,
                     $round,
-                    $expiresAt->toIso8601String(),
+                    null,
                 );
             } catch (\Throwable $e) {
                 Log::warning('offer broadcast failed', [
@@ -177,7 +209,12 @@ class DispatchService
             $this->ring($order, $candidate);
         }
 
-        $order->update(['status' => OrderStatus::SearchingDriver, 'dispatch_round' => $round, 'dispatch_started_at' => $order->dispatch_started_at ?? now()]);
+        $order->update([
+            'status' => OrderStatus::SearchingDriver,
+            'dispatch_round' => $round,
+            'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+            'dispatch_last_offer_at' => now(),
+        ]);
         $this->syncGroupRollup($order);
     }
 
@@ -315,9 +352,13 @@ class DispatchService
         // offers had all timed out counted three open attempts and advanced to nothing.
         // Only an explicit «رفض» from every captain could move a round on. Marking the
         // lapsed rows first is the whole fix.
+        // Only rows written before the 2026-09-08 ruling carry a deadline. A null
+        // `expires_at` is an offer that is still in a captain's hand, and it must not
+        // be swept away by a clock that no longer applies to it.
         $order->driverAttempts()
             ->where('round', $order->dispatch_round)
             ->where('result', 'sent')
+            ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
             ->update(['result' => 'expired', 'responded_at' => now()]);
 
@@ -330,16 +371,36 @@ class DispatchService
             return;
         }
 
-        $maxRounds = (int) (Setting::query()->where('key', 'dispatch.max_rounds')->value('value') ?? 3);
+        $this->dispatchRound($order, $order->dispatch_round + 1, retry: true);
+    }
 
-        if ($order->dispatch_round >= $maxRounds) {
-            $order->update(['status' => OrderStatus::WaitingForDriver]);
-            $this->syncGroupRollup($order);
-
-            return;
+    /**
+     * The minute hand. «كل دقيقة تتشيك الأوردر، لحد قبل ولا لأ… تقوم بعت تاني، وهكذا.»
+     *
+     * Called by `cr7:tick` for every order still looking for a captain — one whose
+     * offers are all still open included. That last part is the whole point: before
+     * today an order in `searching_driver` with three unanswered offers was *waiting*,
+     * and nothing widened it until those three offers died. Now nothing dies, so the
+     * widening has to be the thing on the clock.
+     *
+     * It is **additive**. Every offer already sent stays exactly as it was; this only
+     * asks captains who have not been asked yet. A round that finds nobody new is not
+     * a failure and costs one query — the fourth captain may come on shift at minute
+     * nine, and this is what reaches them.
+     *
+     * @return bool whether anyone new was offered the order
+     */
+    public function widenSearch(Order $order): bool
+    {
+        if (! in_array($order->status, [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver], true)) {
+            return false;
         }
 
-        $this->dispatchRound($order, $order->dispatch_round + 1);
+        $before = $order->driverAttempts()->count();
+
+        $this->dispatchRound($order, $order->dispatch_round + 1, retry: true);
+
+        return $order->driverAttempts()->count() > $before;
     }
 
     /**

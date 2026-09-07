@@ -43,6 +43,9 @@ class FcmClient
     /** Long enough for a slow mobile network at Google's end, short enough not to hold a request. */
     private const TIMEOUT_SECONDS = 8;
 
+    /** `brand/base`. Tints the small icon and the app name in the shade. */
+    private const BRAND_COLOR = '#FFC800';
+
     /**
      * Parsed once per instance, not once per process.
      *
@@ -118,7 +121,52 @@ class FcmClient
     private function envelope(array $message): array
     {
         $isUrgent = ($message['channel'] ?? 'default') === 'offers';
+        $tag = $message['data']['order_id'] ?? $message['data']['errand_id'] ?? null;
 
+        /*
+         * **The icon is named here, not left to the manifest.**
+         *
+         * `com.google.firebase.messaging.default_notification_icon` is read only when
+         * the message omits `icon`, and only by the FCM SDK. The app draws its own
+         * notification while it is in the foreground and takes the icon from
+         * `AndroidInitializationSettings` instead — two code paths, two sources of
+         * truth. A mismatch does not raise anything: Android masks a status-bar icon
+         * to its alpha channel, so an opaque bitmap comes out as a solid **white
+         * square** in the shade. Naming it makes the system-drawn notification agree
+         * with the app-drawn one by construction.
+         */
+        $android = array_filter([
+            'channel_id' => $isUrgent ? 'cr7_offers' : 'cr7_default',
+            'sound' => $isUrgent ? 'offer' : 'default',
+            'icon' => 'ic_notification',
+            'color' => self::BRAND_COLOR,
+            'notification_priority' => $isUrgent ? 'PRIORITY_MAX' : 'PRIORITY_DEFAULT',
+            'default_vibrate_timings' => true,
+            'default_light_settings' => true,
+            // Shown in full on a locked screen. Nothing in this application's copy is
+            // a secret, and a notification that cannot be read without unlocking is
+            // one nobody acts on.
+            'visibility' => 'PUBLIC',
+            // A second push about the same order replaces the first rather than
+            // stacking a column of them.
+            'tag' => $tag,
+            // Without it the tap opens the launcher with no payload and the deep link
+            // is lost — the app routes on `data`, and this intent action is what
+            // carries it through the system-drawn path.
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        ], fn ($value) => $value !== null);
+
+        $aps = array_filter([
+            'sound' => $isUrgent ? 'offer.caf' : 'default',
+            'interruption-level' => $isUrgent ? 'time-sensitive' : 'active',
+            'thread-id' => $tag,
+            'mutable-content' => 1,
+        ], fn ($value) => $value !== null);
+
+        // FCM v1 validates the whole envelope and an explicit `null` is not always the
+        // same to it as an absent field. Both blocks are filtered above, so a message
+        // with no order id is a message with no `tag` rather than a 400 the call site
+        // cannot tell apart from a dead token.
         return [
             'token' => $message['token'],
             'notification' => [
@@ -131,26 +179,14 @@ class FcmClient
             ),
             'android' => [
                 'priority' => $isUrgent ? 'HIGH' : 'NORMAL',
-                'notification' => [
-                    'channel_id' => $isUrgent ? 'cr7_offers' : 'cr7_default',
-                    'sound' => $isUrgent ? 'offer' : 'default',
-                    // Tapping a second push for the same order replaces the first
-                    // rather than stacking a column of them in the shade.
-                    'tag' => $message['data']['order_id'] ?? null,
-                ],
+                'notification' => $android,
             ],
             'apns' => [
                 'headers' => [
                     'apns-priority' => '10',
                     'apns-push-type' => 'alert',
                 ],
-                'payload' => [
-                    'aps' => [
-                        'sound' => $isUrgent ? 'offer.caf' : 'default',
-                        'interruption-level' => $isUrgent ? 'time-sensitive' : 'active',
-                        'thread-id' => $message['data']['order_id'] ?? null,
-                    ],
-                ],
+                'payload' => ['aps' => $aps],
             ],
         ];
     }

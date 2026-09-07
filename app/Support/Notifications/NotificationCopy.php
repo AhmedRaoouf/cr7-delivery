@@ -175,6 +175,58 @@ class NotificationCopy
             'ar' => ['أُلغي المشوار', 'المشوار {reference} لم يعد في قائمتك'],
             'en' => ['Errand cancelled', 'Errand {reference} is no longer yours'],
         ],
+        // -------------------------------------- assignment, 2026-09-08 (D-72)
+        // An operator handed this order to this captain by name. It is still an offer:
+        // the same accept/reject screen, and a refusal goes back to whoever sent it.
+        'offer.assigned' => [
+            'ar' => ['📌 تم إسناد طلب لك', 'الطلب {order_number} من {restaurant} · أرباحك {earning} — اقبله أو ارفضه'],
+            'en' => ['📌 An order was assigned to you', 'Order {order_number} from {restaurant} · you earn {earning} — accept or decline'],
+        ],
+        'offer.assignment_declined' => [
+            'ar' => ['رفض الكابتن الإسناد', 'رفض {driver} الطلب {order_number} — السبب: {reason}'],
+            'en' => ['The captain declined', '{driver} declined order {order_number} — reason: {reason}'],
+        ],
+        // No offer expires any more, so «ran out of rounds» can no longer be the thing
+        // that reaches an operator. This is: still nobody, {minutes} minutes in.
+        'order.unclaimed_admin' => [
+            'ar' => ['طلب بلا كابتن منذ {minutes} دقيقة', 'الطلب {order_number} من {restaurant} ما زال بانتظار كابتن'],
+            'en' => ['Order unclaimed for {minutes} min', 'Order {order_number} from {restaurant} is still waiting for a captain'],
+        ],
+
+        // ------------------------------------------------ complaints (D-53)
+        'complaint.new_admin' => [
+            'ar' => ['شكوى جديدة {ticket}', '{name} — {category}: {excerpt}'],
+            'en' => ['New complaint {ticket}', '{name} — {category}: {excerpt}'],
+        ],
+        'complaint.reply' => [
+            'ar' => ['رد جديد على شكواك {ticket}', '{excerpt}'],
+            'en' => ['New reply on {ticket}', '{excerpt}'],
+        ],
+        'complaint.reply_admin' => [
+            'ar' => ['رد جديد على الشكوى {ticket}', '{name}: {excerpt}'],
+            'en' => ['New reply on complaint {ticket}', '{name}: {excerpt}'],
+        ],
+        'complaint.resolved' => [
+            'ar' => ['تم إغلاق شكواك {ticket}', '{outcome}'],
+            'en' => ['Your complaint {ticket} is closed', '{outcome}'],
+        ],
+
+        // ------------------------------------- account moderation (D-73)
+        // Sent before the tokens are deleted, or the person never learns why the app
+        // stopped letting them in.
+        'account.blocked' => [
+            'ar' => ['تم إيقاف حسابك', 'السبب: {reason} — للتواصل مع الدعم اتصل بنا'],
+            'en' => ['Your account has been suspended', 'Reason: {reason} — contact support for help'],
+        ],
+        'account.restored' => [
+            'ar' => ['تم إعادة تفعيل حسابك ✅', 'يمكنك استخدام التطبيق من جديد'],
+            'en' => ['Your account is active again ✅', 'You can use the app as usual'],
+        ],
+        'account.reset' => [
+            'ar' => ['تم إعادة تعيين بيانات حسابك', 'سجّل الدخول من جديد لإكمال بياناتك'],
+            'en' => ['Your account data was reset', 'Sign in again to complete your profile'],
+        ],
+
         // The escalation, doc 40 §3: nobody took it and the operator has to look.
         'errand.no_driver_admin' => [
             'ar' => ['مشوار بلا كابتن منذ {minutes} دقيقة', '{reference} — {pickup} ← {dropoff} · العميل يعرض {fee}'],

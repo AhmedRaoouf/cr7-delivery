@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureClientMatchesUserType;
 use App\Http\Middleware\EnsureUserType;
 use App\Http\Middleware\SetLocaleFromHeader;
@@ -39,6 +40,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'client.type' => EnsureClientMatchesUserType::class,
+            // D-73 — applied beside `client.type` on every authenticated group, for
+            // the same reason it is: it reads `$request->user()`, so it has to run
+            // after `auth:sanctum` and can never be global API middleware.
+            'account.active' => EnsureAccountIsActive::class,
             'type' => EnsureUserType::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,

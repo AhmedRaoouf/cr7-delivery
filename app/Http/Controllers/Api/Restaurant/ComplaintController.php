@@ -9,6 +9,7 @@ use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Http\Resources\Restaurant\ComplaintResource;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
+use App\Support\ComplaintNotifier;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,6 +69,8 @@ class ComplaintController extends Controller
         ]);
 
         $complaint->update(['restaurant_replied_at' => now()]);
+
+        app(ComplaintNotifier::class)->replied($complaint->fresh(['user', 'restaurant.owner']), $message);
 
         return ApiResponse::success($message, 'تم إرسال الرد', status: 201);
     }

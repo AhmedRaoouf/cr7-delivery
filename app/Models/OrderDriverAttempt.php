@@ -10,7 +10,7 @@ class OrderDriverAttempt extends Model
 {
     protected $fillable = [
         'order_id', 'driver_id', 'round', 'distance_km', 'result',
-        'reason_code', 'sent_at', 'expires_at', 'responded_at',
+        'reason_code', 'assigned_by', 'sent_at', 'expires_at', 'responded_at',
     ];
 
     protected function casts(): array
@@ -32,5 +32,22 @@ class OrderDriverAttempt extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    /** The operator who handed this order to this captain, when it was an assignment. */
+    public function assignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    /**
+     * An offer with no `expires_at` never lapses.
+     *
+     * Operator, 2026-09-08: «ما يكونش 30 ثانية، هو يكون موجود لحد ما يرفض أو يقبل».
+     * Rows written before that ruling still carry a deadline and still honour it.
+     */
+    public function hasLapsed(): bool
+    {
+        return $this->expires_at !== null && $this->expires_at->isPast();
     }
 }

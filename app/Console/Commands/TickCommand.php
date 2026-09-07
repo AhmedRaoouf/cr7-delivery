@@ -5,10 +5,13 @@ namespace App\Console\Commands;
 use App\Actions\Restaurant\MarkOrderReadyAction;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
+use App\Enums\UserType;
 use App\Models\Order;
 use App\Models\Setting;
+use App\Models\User;
 use App\Support\DispatchService;
 use App\Support\ErrandDispatcher;
+use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -96,10 +99,18 @@ class TickCommand extends Command
         $this->sweep('prep timers', fn () => $this->expirePrepTimers($markReady));
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
+        // 2026-09-08 — «لو ما حدش قبل في أول دقيقة ابعت لناس تانية… وهكذا». Offers no
+        // longer expire, so widening the search is on a clock of its own rather than
+        // riding on the back of a dead round.
+        $this->sweep('widen search', fn () => $this->widenSearches($dispatch));
+        $this->sweep('unclaimed orders', fn () => $this->escalateUnclaimed());
         $this->sweep('stranded orders', fn () => $this->retryStranded($dispatch));
         // doc 40 §3 — an errand nobody took. Notifies once and leaves it open: the
         // operator assigning it by hand is the fallback, not the only path.
         $this->sweep('stranded errands', fn () => $errands->escalateStranded());
+        // The errand half of the same ruling: a captain who came online after the
+        // request was published had never been told it existed.
+        $this->sweep('republish errands', fn () => $errands->republishOpen());
     }
 
     /** @param callable():int $work */
@@ -158,6 +169,9 @@ class TickCommand extends Command
             ->where('status', OrderStatus::SearchingDriver)
             ->whereHas('driverAttempts', fn ($q) => $q
                 ->where('result', 'sent')
+                // Legacy rows only. Since 2026-09-08 an offer has no deadline, and
+                // the widening sweep below is what keeps such an order moving.
+                ->whereNotNull('expires_at')
                 ->where('expires_at', '<=', now()))
             ->limit(50)
             ->get();
@@ -203,6 +217,96 @@ class TickCommand extends Command
         }
 
         return $orders->count();
+    }
+
+    /**
+     * Every minute, ask somebody new.
+     *
+     * The old ladder needed an offer to die before the next rung could be climbed, and
+     * offers no longer die. So the order carries the clock instead: `dispatch_last_offer_at`
+     * is when the last batch went out, and an order still looking for a captain a minute
+     * later gets another batch — the captains already holding an offer are skipped, not
+     * re-rung, and their offers stay live.
+     *
+     * `waiting_for_driver` is included on purpose. That status now means «nobody new was
+     * found on the last pass», which is a sentence about a moment, not about the order.
+     */
+    private function widenSearches(DispatchService $dispatch): int
+    {
+        $seconds = self::seconds('dispatch.rebroadcast_interval_seconds', 60);
+
+        $orders = Order::query()
+            ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->where(fn ($q) => $q
+                ->whereNull('dispatch_last_offer_at')
+                ->orWhere('dispatch_last_offer_at', '<=', now()->subSeconds($seconds)))
+            ->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS))
+            ->with('restaurant')
+            ->limit(25)
+            ->get();
+
+        $widened = 0;
+
+        foreach ($orders as $order) {
+            if ($dispatch->widenSearch($order)) {
+                $widened++;
+            }
+        }
+
+        return $widened;
+    }
+
+    /**
+     * Tell the operators once, and keep the order searching.
+     *
+     * With no TTL an order can no longer «run out of rounds», so the alert dock would
+     * never have heard about one nobody wanted. `dispatch_admin_notified_at` is the same
+     * once-only stamp `errand_requests.admin_notified_at` is, for the same reason: a
+     * sweep that runs every minute must not send a push every minute.
+     */
+    private function escalateUnclaimed(): int
+    {
+        $seconds = self::seconds('dispatch.escalate_after_seconds', 300);
+
+        $orders = Order::query()
+            ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereNull('dispatch_admin_notified_at')
+            ->whereNotNull('dispatch_started_at')
+            ->where('dispatch_started_at', '<=', now()->subSeconds($seconds))
+            ->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS))
+            ->with('restaurant')
+            ->limit(25)
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return 0;
+        }
+
+        $admins = User::query()->where('type', UserType::Admin)->where('is_active', true)->get();
+        $notifications = app(NotificationDispatcher::class);
+
+        foreach ($orders as $order) {
+            foreach ($admins as $admin) {
+                $notifications->send($admin, 'order.unclaimed_admin', [
+                    'order_number' => $order->order_number,
+                    'restaurant' => $order->restaurant?->name_ar,
+                    'minutes' => (int) ceil($seconds / 60),
+                ], deepLink: '/orders/'.$order->id, orderId: $order->id);
+            }
+
+            // Stamped whether or not anyone was there to tell — otherwise a deployment
+            // with no active operators rescans the same rows forever.
+            $order->forceFill(['dispatch_admin_notified_at' => now()])->save();
+        }
+
+        return $orders->count();
+    }
+
+    private static function seconds(string $key, int $fallback): int
+    {
+        $value = Setting::query()->where('key', $key)->value('value');
+
+        return is_numeric($value) ? max(15, (int) $value) : $fallback;
     }
 
     /**

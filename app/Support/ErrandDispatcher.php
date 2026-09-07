@@ -35,10 +35,21 @@ class ErrandDispatcher
 
     public function __construct(private readonly NotificationDispatcher $notifications) {}
 
-    /** Tell every available captain that a new errand is on the board. */
-    public function publish(ErrandRequest $errand): int
+    /**
+     * Tell every available captain that a new errand is on the board.
+     *
+     * @param  bool  $onlyNew  skip captains already told about this request — what the
+     *                         every-minute re-publish uses, so a captain who has been
+     *                         looking at it for ten minutes is not rung ten times.
+     */
+    public function publish(ErrandRequest $errand, bool $onlyNew = false): int
     {
-        $recipients = $this->availableDrivers();
+        $alreadyTold = array_map('intval', $errand->notified_driver_ids ?? []);
+
+        $recipients = $this->availableDrivers()
+            ->when($onlyNew, fn ($drivers) => $drivers->reject(
+                fn (Driver $driver) => in_array((int) $driver->id, $alreadyTold, true),
+            ));
 
         foreach ($recipients as $driver) {
             $this->notifications->send(
@@ -56,7 +67,52 @@ class ErrandDispatcher
             );
         }
 
+        $errand->forceFill([
+            'notified_driver_ids' => array_values(array_unique(array_merge(
+                $alreadyTold,
+                $recipients->map(fn (Driver $driver) => (int) $driver->id)->all(),
+            ))),
+            'last_published_at' => now(),
+        ])->save();
+
         return $recipients->count();
+    }
+
+    /**
+     * The every-minute re-publish. Operator, 2026-09-08: «حاول تخليها continuous يعني
+     * مثلاً كل دقيقة تتشيك… تقوم بعت تاني، فاهم؟ وهكذا».
+     *
+     * `publish()` ran once, at creation, against whoever happened to be online in that
+     * second. On a town with seven captains that is frequently nobody, and the request
+     * then sat on a board no phone had been told to open. This asks again — only the
+     * captains who have not already been told, so the ones who have been staring at it
+     * are left alone.
+     *
+     * @return int captains newly told, across every open request
+     */
+    public function republishOpen(): int
+    {
+        $interval = self::republishIntervalMinutes();
+
+        $open = ErrandRequest::query()
+            ->where('status', ErrandStatus::Open->value)
+            ->whereNull('driver_id')
+            ->where(fn ($q) => $q
+                ->whereNull('last_published_at')
+                ->orWhere('last_published_at', '<=', now()->subMinutes($interval)))
+            // An errand from last week is an operator's problem, not a dispatcher's —
+            // the same cutoff `cr7:tick` applies to a stranded order.
+            ->where('created_at', '>=', now()->subDay())
+            ->limit(50)
+            ->get();
+
+        $told = 0;
+
+        foreach ($open as $errand) {
+            $told += $this->publish($errand, onlyNew: true);
+        }
+
+        return $told;
     }
 
     /**
@@ -129,6 +185,13 @@ class ErrandDispatcher
     private static function money(mixed $amount): string
     {
         return number_format((float) $amount, 2).' ج.م';
+    }
+
+    private static function republishIntervalMinutes(): int
+    {
+        $value = Setting::query()->where('key', 'errands.republish_interval_minutes')->value('value');
+
+        return is_numeric($value) ? max(1, (int) $value) : 1;
     }
 
     private static function escalateAfterMinutes(): int

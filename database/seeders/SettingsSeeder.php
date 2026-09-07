@@ -14,7 +14,19 @@ class SettingsSeeder extends Seeder
             'dispatch.batch_size' => [3, 'dispatch'],
             'dispatch.radius_km' => [5, 'dispatch'],
             'dispatch.radius_expand_km' => [2, 'dispatch'],
+            // **Read by nothing since 2026-09-08.** An offer no longer expires — the
+            // operator ruled it stays until the captain answers — and the clock that
+            // used to end a round now lives on the order as
+            // `dispatch.rebroadcast_interval_seconds`. Left seeded so an operator who
+            // had tuned it does not meet a missing row, and so old
+            // `order_driver_attempts` rows still read against a number that explains
+            // them.
             'dispatch.offer_ttl_seconds' => [30, 'dispatch'],
+            // Every minute, offer the order to captains who have not been asked yet.
+            // The ones already holding it keep it.
+            'dispatch.rebroadcast_interval_seconds' => [60, 'dispatch'],
+            // …and after five minutes of that, tell the operators once.
+            'dispatch.escalate_after_seconds' => [300, 'dispatch'],
             'dispatch.max_rounds' => [3, 'dispatch'],
             'dispatch.allow_neighbour_zones' => [true, 'dispatch'],
             'dispatch.mode_multi_restaurant' => ['driver_per_restaurant', 'dispatch'],
@@ -80,6 +92,9 @@ class SettingsSeeder extends Seeder
             'errands.min_fee' => [20.00, 'errands'],
             // How long an errand may sit unclaimed before the operators are told.
             'errands.escalate_after_minutes' => [5, 'errands'],
+            // The errand half of the same rule: a captain who came online after the
+            // request was published had never been told it existed.
+            'errands.republish_interval_minutes' => [1, 'errands'],
 
             'commission.default_rate' => [10.00, 'commission'],
 

@@ -6,6 +6,7 @@ use App\Enums\AdminScopeType;
 use App\Enums\ErrandStatus;
 use App\Models\Driver;
 use App\Models\ErrandRequest;
+use App\Models\Notification;
 use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
@@ -179,6 +180,49 @@ class ErrandRequestTest extends TestCase
         $response->assertOk();
         $this->assertSame(1, $response->json('data.counts.errand_unclaimed'));
         $this->assertContains('errand_unclaimed', array_column($response->json('data.items'), 'kind'));
+    }
+
+    /**
+     * 2026-09-08 — «حاول تخليها continuous… كل دقيقة تتشيك… تقوم بعت تاني».
+     *
+     * `publish()` ran once, at creation, against whoever happened to be online in that
+     * second. On a town with seven captains that is frequently nobody, and the request
+     * then sat on a board no phone had been told to open.
+     */
+    public function test_a_captain_who_comes_online_later_still_hears_about_an_open_errand(): void
+    {
+        $errand = $this->publish();
+
+        // Nobody was on shift when it was published.
+        $this->assertSame(0, Notification::query()->where('type', 'errand.new')->count());
+
+        $this->travel(2)->minutes();
+        $late = $this->makeDriver();
+
+        $this->artisan('cr7:tick --once');
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $late->user_id,
+            'type' => 'errand.new',
+        ]);
+        $this->assertNotNull($errand->fresh()->last_published_at);
+    }
+
+    /** …and is not rung again every minute for the same one. */
+    public function test_the_republish_does_not_ring_a_captain_twice(): void
+    {
+        $driver = $this->makeDriver();
+        $this->publish();
+
+        $this->travel(2)->minutes();
+        $this->artisan('cr7:tick --once');
+        $this->travel(2)->minutes();
+        $this->artisan('cr7:tick --once');
+
+        $this->assertSame(1, Notification::query()
+            ->where('user_id', $driver->user_id)
+            ->where('type', 'errand.new')
+            ->count());
     }
 
     /**

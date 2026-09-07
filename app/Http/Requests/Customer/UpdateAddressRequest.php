@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests\Customer;
 
+use App\Http\Requests\Concerns\ValidatesAddressZone;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class UpdateAddressRequest extends FormRequest
 {
+    use ValidatesAddressZone;
+
     public function authorize(): bool
     {
         return true;
@@ -28,5 +32,25 @@ class UpdateAddressRequest extends FormRequest
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'is_default' => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * A PATCH may carry the zone without the pin, or the pin without the zone. Either way
+     * the pair has to be checked, so the missing half is filled in from the stored row —
+     * otherwise moving an address into a cheaper area, alone, skipped the guard entirely.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $address = $this->route('address');
+
+        if ($address !== null) {
+            $validator->setData($validator->getData() + [
+                'latitude' => $address->latitude,
+                'longitude' => $address->longitude,
+                'zone_id' => $address->service_zone_id,
+            ]);
+        }
+
+        $validator->after(fn (Validator $v) => $this->validateZoneAgainstPoint($v));
     }
 }

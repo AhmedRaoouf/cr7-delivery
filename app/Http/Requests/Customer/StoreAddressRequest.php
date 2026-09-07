@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests\Customer;
 
+use App\Http\Requests\Concerns\ValidatesAddressZone;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreAddressRequest extends FormRequest
 {
+    use ValidatesAddressZone;
+
     public function authorize(): bool
     {
         return true;
@@ -28,5 +32,10 @@ class StoreAddressRequest extends FormRequest
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'is_default' => ['nullable', 'boolean'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(fn (Validator $v) => $this->validateZoneAgainstPoint($v));
     }
 }

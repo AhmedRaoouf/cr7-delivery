@@ -8,7 +8,7 @@ use App\Models\Complaint;
 use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
-use App\Support\ComplaintAttachments;
+use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -61,7 +61,7 @@ class ComplaintController extends Controller
             'sender_role' => 'admin',
             'visibility' => $validated['visibility'] ?? 'all',
             'message' => $validated['message'],
-            'attachments' => ComplaintAttachments::store($request) ?: null,
+            'attachments' => UploadedImages::store($request, 'attachments', 'complaints') ?: null,
         ]);
 
         if (! $complaint->first_response_at) {

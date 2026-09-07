@@ -72,6 +72,15 @@ class SettingsSeeder extends Seeder
             'delivery.extra_stop_fee' => [10.00, 'delivery'],
             'delivery.multi_pickup_max_spread_km' => [2.5, 'delivery'],
 
+            // doc 40 — «اطلب كابتن». The fee is the customer's offer, so these three only
+            // shape the *suggestion* the request screen starts them from. Base + per-km
+            // against the straight-line distance, floored at the minimum.
+            'errands.base_fee' => [20.00, 'errands'],
+            'errands.per_km_fee' => [5.00, 'errands'],
+            'errands.min_fee' => [20.00, 'errands'],
+            // How long an errand may sit unclaimed before the operators are told.
+            'errands.escalate_after_minutes' => [5, 'errands'],
+
             'commission.default_rate' => [10.00, 'commission'],
 
             // D-63..D-65 — the platform service fee («رسوم الخدمة»). A fixed amount

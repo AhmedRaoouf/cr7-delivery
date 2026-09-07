@@ -8,6 +8,7 @@ use App\Enums\OrderStatusActorType;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Support\DispatchService;
+use App\Support\ErrandDispatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -62,7 +63,7 @@ class TickCommand extends Command
      */
     private const TIMEOUT_MAX_AGE_HOURS = 24;
 
-    public function handle(DispatchService $dispatch, MarkOrderReadyAction $markReady): int
+    public function handle(DispatchService $dispatch, MarkOrderReadyAction $markReady, ErrandDispatcher $errands): int
     {
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
 
@@ -77,7 +78,7 @@ class TickCommand extends Command
             $sleep = max(1, (int) $this->option('sleep'));
 
             for ($pass = 1; $pass <= $passes; $pass++) {
-                $this->pass($dispatch, $markReady);
+                $this->pass($dispatch, $markReady, $errands);
 
                 if ($pass < $passes) {
                     sleep($sleep);
@@ -90,12 +91,15 @@ class TickCommand extends Command
         return self::SUCCESS;
     }
 
-    private function pass(DispatchService $dispatch, MarkOrderReadyAction $markReady): void
+    private function pass(DispatchService $dispatch, MarkOrderReadyAction $markReady, ErrandDispatcher $errands): void
     {
         $this->sweep('prep timers', fn () => $this->expirePrepTimers($markReady));
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
         $this->sweep('stranded orders', fn () => $this->retryStranded($dispatch));
+        // doc 40 §3 — an errand nobody took. Notifies once and leaves it open: the
+        // operator assigning it by hand is the fallback, not the only path.
+        $this->sweep('stranded errands', fn () => $errands->escalateStranded());
     }
 
     /** @param callable():int $work */

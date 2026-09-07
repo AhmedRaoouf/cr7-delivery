@@ -8,6 +8,7 @@ use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Models\Setting;
 use App\Support\Geo;
+use App\Support\ZoneLocator;
 
 /** doc 08 §6.2 — POST /restaurant/direct-orders/quote: coverage, zone, distance, fee, ETA. Never creates anything. */
 class QuoteDirectOrderAction
@@ -17,13 +18,7 @@ class QuoteDirectOrderAction
         $servedZoneIds = $restaurant->servedZones()->pluck('service_zones.id')->push($restaurant->service_zone_id)->unique();
 
         $zone = ServiceZone::query()->whereIn('id', $servedZoneIds)->where('is_active', true)->get()
-            ->first(function ($zone) use ($lat, $lng) {
-                if ($zone->polygon) {
-                    return Geo::pointInPolygon($lat, $lng, $zone->polygon[0] ?? $zone->polygon);
-                }
-
-                return $zone->radius_km && Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng) <= (float) $zone->radius_km;
-            });
+            ->first(fn (ServiceZone $zone) => ZoneLocator::contains($zone, $lat, $lng));
 
         if (! $zone) {
             $nearest = ServiceZone::query()->whereIn('id', $servedZoneIds)->first();

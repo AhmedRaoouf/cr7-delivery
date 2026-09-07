@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UserAddress;
 use App\Support\BusinessTime;
 use App\Support\CheckoutPricer;
+use App\Support\OrderNumber;
 use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
@@ -45,7 +46,7 @@ class CreateOrderAction
 
         return DB::transaction(function () use ($user, $cart, $data, $idempotencyKey, $address, $quote) {
             $group = OrderGroup::create([
-                'group_number' => 'CR7-pending-'.$idempotencyKey,
+                'group_number' => OrderNumber::pending($idempotencyKey),
                 'idempotency_key' => $idempotencyKey,
                 'origin' => 'app',
                 'user_id' => $user->id,
@@ -77,7 +78,7 @@ class CreateOrderAction
                 'placed_at' => now(),
             ]);
 
-            $groupNumber = 'CR7-'.now()->format('ymd').'-'.$group->id;
+            $groupNumber = OrderNumber::forGroup($group->id);
             $group->update(['group_number' => $groupNumber]);
 
             $cartItemsByRestaurant = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get()->groupBy('restaurant_id');
@@ -88,7 +89,7 @@ class CreateOrderAction
                 $restaurant = $lines->first()->restaurant;
 
                 $groupSequence = $sequence + 1;
-                $orderNumber = "{$groupNumber}-{$groupSequence}";
+                $orderNumber = OrderNumber::forSubOrder($groupNumber, $groupSequence);
 
                 $subOrder = Order::create([
                     'order_group_id' => $group->id,

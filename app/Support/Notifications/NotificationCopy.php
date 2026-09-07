@@ -147,6 +147,39 @@ class NotificationCopy
             'ar' => ['تم سحب الطلب من قائمتك', 'الطلب {order_number} لم يعد في قائمتك'],
             'en' => ['Order removed from your list', 'Order {order_number} is no longer yours'],
         ],
+
+        // ----------------------------------------------- errands «اطلب كابتن»
+        // Broadcast to every available captain, not to the nearest three: the fee is the
+        // customer's offer and taking it is a decision only the captain can make.
+        'errand.new' => [
+            'ar' => ['🛵 مشوار جديد متاح', '{pickup} ← {dropoff} · {distance} كم · العميل يعرض {fee}'],
+            'en' => ['🛵 New errand available', '{pickup} → {dropoff} · {distance} km · customer offers {fee}'],
+        ],
+        'errand.taken' => [
+            'ar' => ['أصبح المشوار لك ✅', 'توجّه إلى {pickup} — {reference}'],
+            'en' => ['The errand is yours ✅', 'Head to {pickup} — {reference}'],
+        ],
+        'errand.assigned_customer' => [
+            'ar' => ['الكابتن {driver} في الطريق 🛵', 'سيستلم طلبك من {pickup}'],
+            'en' => ['{driver} is on the way 🛵', 'Collecting from {pickup}'],
+        ],
+        'errand.picked_up_customer' => [
+            'ar' => ['استلم الكابتن طلبك', 'في الطريق إليك الآن — الإجمالي المستحق {total}'],
+            'en' => ['Your captain has collected it', 'On the way — total due {total}'],
+        ],
+        'errand.delivered_customer' => [
+            'ar' => ['تم تسليم المشوار ✅', 'شكرًا لاستخدامك خدمة اطلب كابتن'],
+            'en' => ['Errand delivered ✅', 'Thanks for using the errand service'],
+        ],
+        'errand.cancelled_driver' => [
+            'ar' => ['أُلغي المشوار', 'المشوار {reference} لم يعد في قائمتك'],
+            'en' => ['Errand cancelled', 'Errand {reference} is no longer yours'],
+        ],
+        // The escalation, doc 40 §3: nobody took it and the operator has to look.
+        'errand.no_driver_admin' => [
+            'ar' => ['مشوار بلا كابتن منذ {minutes} دقيقة', '{reference} — {pickup} ← {dropoff} · العميل يعرض {fee}'],
+            'en' => ['Errand unclaimed for {minutes} min', '{reference} — {pickup} → {dropoff} · offer {fee}'],
+        ],
     ];
 
     /**

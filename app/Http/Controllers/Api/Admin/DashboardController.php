@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\ErrandStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\Driver;
+use App\Models\ErrandRequest;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Support\AdminScope;
@@ -149,7 +151,30 @@ class DashboardController extends Controller
             ->get()
             ->map(fn (Order $order) => $this->orderAlert($order, 'delivery_issue', 'مشكلة في التوصيل'));
 
-        $items = $payments->concat($stranded)->concat($timedOut)->concat($issues);
+        // doc 40 §3 — an errand nobody took. It joins the dock rather than getting its
+        // own surface because it is the same question the other four ask: something is
+        // waiting on a person and nobody has picked it up. `ErrandDispatcher` pushes once
+        // at five minutes; this is what keeps it in front of the operator afterwards.
+        $errands = AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
+            ->where('status', ErrandStatus::Open->value)
+            ->whereNull('driver_id')
+            ->oldest()
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (ErrandRequest $errand) => [
+                'kind' => 'errand_unclaimed',
+                'id' => $errand->id,
+                'title' => 'مشوار بانتظار كابتن',
+                'reference' => $errand->reference,
+                'order_group_id' => null,
+                'amount' => (float) $errand->offered_fee,
+                'restaurant' => $errand->pickup_address_text,
+                'created_at' => $errand->created_at,
+                'href' => '/errands/'.$errand->id,
+                'receipts' => [],
+            ]);
+
+        $items = $payments->concat($stranded)->concat($timedOut)->concat($issues)->concat($errands);
 
         /*
          * The counts are the **true** totals, not `$items->count()`.
@@ -175,7 +200,7 @@ class DashboardController extends Controller
     /**
      * The four open-alert counts, scoped to the operator (D-50).
      *
-     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int}
+     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int, errand_unclaimed:int}
      */
     private function alertCounts(Request $request): array
     {
@@ -186,6 +211,10 @@ class DashboardController extends Controller
             'no_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
             'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
+            'errand_unclaimed' => AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
+                ->where('status', ErrandStatus::Open->value)
+                ->whereNull('driver_id')
+                ->count(),
         ];
     }
 

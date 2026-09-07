@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
-use App\Support\ComplaintAttachments;
+use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,7 +37,7 @@ class ComplaintController extends Controller
     public function store(StoreComplaintRequest $request, CreateComplaintAction $action): JsonResponse
     {
         $data = $request->validated();
-        $data['attachments'] = ComplaintAttachments::store($request);
+        $data['attachments'] = UploadedImages::store($request, 'attachments', 'complaints');
         $data['user_role'] = $this->role($request);
 
         $complaint = $action->execute($request->user(), $data);
@@ -70,7 +70,7 @@ class ComplaintController extends Controller
             'sender_role' => $this->role($request),
             'visibility' => 'all',
             'message' => $validated['message'],
-            'attachments' => ComplaintAttachments::store($request) ?: null,
+            'attachments' => UploadedImages::store($request, 'attachments', 'complaints') ?: null,
         ]);
 
         return ApiResponse::success($message, 'تم إرسال الرسالة', status: 201);

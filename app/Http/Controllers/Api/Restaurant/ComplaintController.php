@@ -9,7 +9,7 @@ use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Http\Resources\Restaurant\ComplaintResource;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
-use App\Support\ComplaintAttachments;
+use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,7 +64,7 @@ class ComplaintController extends Controller
             'sender_role' => 'restaurant',
             'visibility' => 'all',
             'message' => $validated['message'],
-            'attachments' => ComplaintAttachments::store($request) ?: null,
+            'attachments' => UploadedImages::store($request, 'attachments', 'complaints') ?: null,
         ]);
 
         $complaint->update(['restaurant_replied_at' => now()]);
@@ -81,7 +81,7 @@ class ComplaintController extends Controller
             ...$request->validated(),
             'order_id' => null,
             'user_role' => 'restaurant',
-            'attachments' => ComplaintAttachments::store($request),
+            'attachments' => UploadedImages::store($request, 'attachments', 'complaints'),
         ]);
         $complaint->update(['restaurant_id' => null, 'visible_to_restaurant' => false]);
 

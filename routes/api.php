@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\DirectOrderController as AdminDirectOrderCont
 use App\Http\Controllers\Api\Admin\DriverController;
 use App\Http\Controllers\Api\Admin\DriverDocumentController;
 use App\Http\Controllers\Api\Admin\DriverFinanceController;
+use App\Http\Controllers\Api\Admin\ErrandController as AdminErrandController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\CheckoutController;
 use App\Http\Controllers\Api\Customer\ComplaintController as CustomerComplaintController;
+use App\Http\Controllers\Api\Customer\ErrandController as CustomerErrandController;
 use App\Http\Controllers\Api\Customer\FavoriteController;
 use App\Http\Controllers\Api\Customer\OrderController;
 use App\Http\Controllers\Api\Customer\PaymentController;
@@ -51,6 +53,7 @@ use App\Http\Controllers\Api\Customer\SearchController;
 use App\Http\Controllers\Api\Driver\DocumentController as DriverOwnDocumentController;
 use App\Http\Controllers\Api\Driver\DriverMeController;
 use App\Http\Controllers\Api\Driver\EarningsController as DriverEarningsController;
+use App\Http\Controllers\Api\Driver\ErrandController as DriverErrandController;
 use App\Http\Controllers\Api\Driver\OfferController as DriverOfferController;
 use App\Http\Controllers\Api\Driver\OrderController as DriverOrderController;
 use App\Http\Controllers\Api\Restaurant\CategoryController as RestaurantCategoryController;
@@ -197,6 +200,24 @@ Route::prefix('v1')->group(function () {
         Route::post('/complaints/{complaint}/messages', [CustomerComplaintController::class, 'addMessage']);
     });
 
+    /*
+    |----------------------------------------------------------------------
+    | §4c Errands — «اطلب كابتن», doc 40. Customer side.
+    |
+    | A point-to-point job with no restaurant in it: the customer names both ends
+    | and the fee, and every available captain sees it at once. Behind
+    | `type:customer` — a captain requesting an errand from their own app is not
+    | a case that exists, and the captain's half lives in §5.
+    |----------------------------------------------------------------------
+    */
+    Route::prefix('customer')->middleware(['auth:sanctum', 'client.type', 'type:customer'])->group(function () {
+        Route::post('/errands/quote', [CustomerErrandController::class, 'quote']);
+        Route::post('/errands', [CustomerErrandController::class, 'store']);
+        Route::get('/errands', [CustomerErrandController::class, 'index']);
+        Route::get('/errands/{errand}', [CustomerErrandController::class, 'show']);
+        Route::post('/errands/{errand}/cancel', [CustomerErrandController::class, 'cancel']);
+    });
+
     // Directions. Behind auth, unlike the two geocoding proxies beside it: every
     // screen that draws a route — the customer's tracking map, the captain's active
     // job, the operator's fleet board — is already signed in, and a public route
@@ -313,6 +334,17 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/offers', [DriverOfferController::class, 'index']);
         Route::get('/offers/{orderId}', [DriverOfferController::class, 'show']);
+
+        // doc 40 — «اطلب كابتن». `board` is open to every captain on shift; the rest
+        // answer 404 unless the errand is theirs.
+        Route::get('/errands/board', [DriverErrandController::class, 'board']);
+        Route::get('/errands/mine', [DriverErrandController::class, 'mine']);
+        Route::get('/errands/{errand}', [DriverErrandController::class, 'show']);
+        Route::post('/errands/{errand}/accept', [DriverErrandController::class, 'accept']);
+        Route::post('/errands/{errand}/picked-up', [DriverErrandController::class, 'pickedUp']);
+        Route::post('/errands/{errand}/deliver', [DriverErrandController::class, 'deliver']);
+        Route::post('/errands/{errand}/purchases', [DriverErrandController::class, 'purchases']);
+        Route::post('/errands/{errand}/cancel', [DriverErrandController::class, 'cancel']);
 
         Route::post('/orders/{order}/accept', [DriverOrderController::class, 'accept']);
         Route::post('/orders/{order}/reject', [DriverOrderController::class, 'reject']);
@@ -477,6 +509,18 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{order}/renotify-restaurant', [AdminOrderController::class, 'renotifyRestaurant'])->middleware('permission:orders.renotify');
         Route::post('/orders/{order}/extend-prep', [AdminOrderController::class, 'extendPrep'])->middleware('permission:orders.extend_prep');
         Route::post('/orders/{order}/notes', [AdminOrderController::class, 'addNote'])->middleware('permission:orders.note');
+
+        // doc 40 — «اطلب كابتن». Reuses the order permissions rather than minting a
+        // parallel set: an operator trusted to reassign a food delivery is the same
+        // operator who assigns an unclaimed errand, and a second catalogue would only
+        // create a way for the two to disagree.
+        Route::middleware('permission:orders.view')->group(function () {
+            Route::get('/errands', [AdminErrandController::class, 'index']);
+            Route::get('/errands/{errand}', [AdminErrandController::class, 'show']);
+            Route::get('/errands/{errand}/eligible-drivers', [AdminErrandController::class, 'eligibleDrivers']);
+        });
+        Route::post('/errands/{errand}/assign', [AdminErrandController::class, 'assign'])->middleware('permission:orders.reassign_driver');
+        Route::post('/errands/{errand}/cancel', [AdminErrandController::class, 'cancel'])->middleware('permission:orders.cancel');
 
         // Money
         Route::middleware('permission:payments.view')->group(function () {

@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Support\BusinessTime;
 use App\Support\DispatchService;
+use App\Support\OrderNumber;
 use App\Support\Otp;
 use Illuminate\Support\Facades\DB;
 
@@ -56,7 +57,7 @@ class CreateDirectOrderAction
 
         return DB::transaction(function () use ($user, $restaurant, $data, $idempotencyKey, $quote) {
             $group = OrderGroup::create([
-                'group_number' => 'CR7-pending-'.$idempotencyKey,
+                'group_number' => OrderNumber::pending($idempotencyKey),
                 'idempotency_key' => $idempotencyKey,
                 'origin' => 'restaurant_direct',
                 'user_id' => null,
@@ -84,7 +85,8 @@ class CreateDirectOrderAction
                 'confirmed_by' => 'system',
             ]);
 
-            $group->update(['group_number' => 'CR7-'.now()->format('ymd').'-'.$group->id]);
+            $groupNumber = OrderNumber::forGroup($group->id);
+            $group->update(['group_number' => $groupNumber]);
 
             $status = $data['ready_now'] ? OrderStatus::Ready : OrderStatus::Preparing;
             $now = now();
@@ -99,7 +101,7 @@ class CreateDirectOrderAction
                 'declared_items_text' => $data['declared_items_text'] ?? null,
                 'declared_order_value' => $data['declared_order_value'] ?? 0,
                 'food_payment' => $data['food_payment'],
-                'order_number' => $group->group_number.'-1',
+                'order_number' => OrderNumber::forSubOrder($groupNumber, 1),
                 'group_sequence' => 1,
                 'idempotency_key' => $idempotencyKey,
                 'user_id' => null,

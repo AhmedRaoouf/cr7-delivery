@@ -4,12 +4,11 @@ namespace App\Http\Controllers\Api\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\ServiceZoneResource;
-use App\Models\City;
 use App\Models\ServiceZone;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\Router;
 use App\Support\ApiResponse;
-use App\Support\Geo;
+use App\Support\ZoneLocator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,21 +34,7 @@ class GeoController extends Controller
         $lat = (float) $validated['lat'];
         $lng = (float) $validated['lng'];
 
-        $zone = ServiceZone::query()
-            ->with('city')
-            ->where('is_active', true)
-            ->get()
-            ->first(function (ServiceZone $zone) use ($lat, $lng) {
-                if ($zone->polygon) {
-                    return Geo::pointInPolygon($lat, $lng, $zone->polygon[0] ?? $zone->polygon);
-                }
-
-                if ($zone->radius_km) {
-                    return Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng) <= (float) $zone->radius_km;
-                }
-
-                return false;
-            });
+        $zone = ZoneLocator::forPoint($lat, $lng);
 
         if ($zone) {
             return ApiResponse::success([
@@ -67,17 +52,7 @@ class GeoController extends Controller
         // the price is whichever area the customer picks off the list this returns.
         // Without this fallback every address in New Mansoura resolved to «خارج نطاق
         // التوصيل» the moment the wide legacy circles stopped being the price.
-        $city = City::query()
-            ->where('is_active', true)
-            ->whereNotNull('radius_km')
-            ->get()
-            ->map(fn (City $candidate) => [
-                'city' => $candidate,
-                'distance' => Geo::haversineKm((float) $candidate->center_lat, (float) $candidate->center_lng, $lat, $lng),
-            ])
-            ->filter(fn (array $row) => $row['distance'] <= (float) $row['city']->radius_km)
-            ->sortBy('distance')
-            ->first();
+        $city = ZoneLocator::cityForPoint($lat, $lng);
 
         if (! $city) {
             return ApiResponse::success([
@@ -90,13 +65,13 @@ class GeoController extends Controller
         }
 
         return ApiResponse::success([
-            'city' => $city['city'],
+            'city' => $city,
             // Deliberately null. The pin says which town; only the customer can say
             // which area of it, and the fee follows that answer, not this one.
             'zone' => null,
             'is_serviceable' => true,
             'requires_zone_choice' => true,
-            'zones' => ServiceZoneResource::collection($this->pricedZones($city['city']->id)),
+            'zones' => ServiceZoneResource::collection($this->pricedZones($city->id)),
         ]);
     }
 
@@ -111,13 +86,7 @@ class GeoController extends Controller
      */
     private function pricedZones(int $cityId)
     {
-        return ServiceZone::query()
-            ->where('city_id', $cityId)
-            ->where('is_active', true)
-            ->where('is_selectable', true)
-            ->orderBy('sort_order')
-            ->orderBy('delivery_fee')
-            ->get();
+        return ZoneLocator::selectableFor($cityId);
     }
 
     /**

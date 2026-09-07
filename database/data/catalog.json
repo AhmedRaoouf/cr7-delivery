@@ -14062,7 +14062,7 @@
    "slug": "restaurants",
    "name_ar": "مطاعم",
    "name_en": "Restaurants",
-   "image": "catalog/store-categories/restaurants.png",
+   "image": "catalog/store-categories/restaurants.jpg",
    "icon": "catalog/store-categories/icon-restaurants.png",
    "color": "#E8112D",
    "sort_order": 0
@@ -14071,7 +14071,7 @@
    "slug": "pharmacies",
    "name_ar": "صيدليات",
    "name_en": "Pharmacies",
-   "image": "catalog/store-categories/pharmacies.png",
+   "image": "catalog/store-categories/pharmacies.jpg",
    "icon": "catalog/store-categories/icon-pharmacies.png",
    "color": "#12B76A",
    "sort_order": 1
@@ -14080,7 +14080,7 @@
    "slug": "cafes",
    "name_ar": "كافيهات",
    "name_en": "Cafés",
-   "image": "catalog/store-categories/cafes.png",
+   "image": "catalog/store-categories/cafes.jpg",
    "icon": "catalog/store-categories/icon-cafes.png",
    "color": "#A9662B",
    "sort_order": 2
@@ -14089,7 +14089,7 @@
    "slug": "supermarkets",
    "name_ar": "سوبرماركت",
    "name_en": "Supermarkets",
-   "image": "catalog/store-categories/supermarkets.png",
+   "image": "catalog/store-categories/supermarkets.jpg",
    "icon": "catalog/store-categories/icon-supermarkets.png",
    "color": "#2E7CF6",
    "sort_order": 3
@@ -14098,7 +14098,7 @@
    "slug": "greengrocers",
    "name_ar": "خضروات وفاكهة",
    "name_en": "Greengrocers",
-   "image": "catalog/store-categories/greengrocers.png",
+   "image": "catalog/store-categories/greengrocers.jpg",
    "icon": "catalog/store-categories/icon-greengrocers.png",
    "color": "#5BA524",
    "sort_order": 4

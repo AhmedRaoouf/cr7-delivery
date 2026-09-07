@@ -11,6 +11,7 @@ use App\Models\ServiceZone;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
 use App\Support\Locale;
+use App\Support\MenuCategoryIcon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -119,7 +120,14 @@ class RestaurantController extends Controller
             ->map(fn ($category) => [
                 'id' => $category->id,
                 'name' => $category->{"name_{$locale}"},
-                'image' => $category->image,
+                // Resolved, never stored — see `MenuCategoryIcon`. The operator's
+                // own upload wins; otherwise the tab gets the icon its name earns,
+                // including for a category created after this build shipped.
+                'image' => MenuCategoryIcon::resolve(
+                    $category->image,
+                    $category->name_ar,
+                    $category->name_en,
+                ),
                 'products_count' => $category->products_count,
             ]);
 

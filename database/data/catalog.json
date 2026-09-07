@@ -102,7 +102,7 @@
    "description_ar": "طعم البحر في كل قطمة",
    "description_en": "The taste of the sea in every bite",
    "logo": "catalog/restaurants/sandwich-omar.png",
-   "cover": "catalog/covers/cover-seafood.jpg",
+   "cover": "catalog/covers/sandwich-omar.jpg",
    "menu_sheets": [
     "catalog/menus/menu-omar.png"
    ],
@@ -369,7 +369,7 @@
    "description_ar": "شرقي وخليجي على الجد والمظبوط",
    "description_en": "Oriental and Gulf, done properly",
    "logo": "catalog/restaurants/alrokn-elaraby.png",
-   "cover": "catalog/covers/cover-grill.jpg",
+   "cover": "catalog/covers/alrokn-elaraby.jpg",
    "menu_sheets": [
     "catalog/menus/menu-alrokn-p1.png",
     "catalog/menus/menu-alrokn-p2.png"
@@ -1919,7 +1919,7 @@
    "description_ar": "طعم الكشري الأصلي",
    "description_en": "The original koshari taste",
    "logo": "catalog/restaurants/ebn-elbalad.png",
-   "cover": "catalog/covers/cover-grill.jpg",
+   "cover": "catalog/covers/ebn-elbalad.jpg",
    "menu_sheets": [
     "catalog/menus/menu-ebnelbalad-p1.png",
     "catalog/menus/menu-ebnelbalad-p2.png"
@@ -2986,7 +2986,7 @@
    "description_ar": "مطعم وكافيه · فطير وبيتزا وحلويات",
    "description_en": "Restaurant & cafe — fateer, pizza and desserts",
    "logo": "catalog/restaurants/saad-eldomiaty.png",
-   "cover": "catalog/covers/cover-patisserie.jpg",
+   "cover": "catalog/covers/saad-eldomiaty.jpg",
    "menu_sheets": [
     "catalog/menus/menu-saad.png"
    ],
@@ -7136,7 +7136,7 @@
    "description_ar": "King Chicken Broast",
    "description_en": "King Chicken Broast",
    "logo": "catalog/restaurants/king-broast.png",
-   "cover": "catalog/covers/cover-fastfood.jpg",
+   "cover": "catalog/covers/king-broast.jpg",
    "menu_sheets": [
     "catalog/menus/menu-king-p1.png",
     "catalog/menus/menu-king-p2.png"
@@ -8464,7 +8464,7 @@
    "description_ar": "في كل بوكس حكاية",
    "description_en": "Every box tells a story",
    "logo": "catalog/restaurants/boxs.png",
-   "cover": "catalog/covers/cover-fastfood.jpg",
+   "cover": "catalog/covers/boxs.jpg",
    "menu_sheets": [
     "catalog/menus/menu-boxs-page1.png",
     "catalog/menus/menu-boxs-page2.png"
@@ -9254,7 +9254,7 @@
    "description_ar": "فطير وبيتزا · تأسيس 2011",
    "description_en": "Fateer and pizza — established 2011",
    "logo": "catalog/restaurants/nasser-alqias.png",
-   "cover": "catalog/covers/cover-bakery.jpg",
+   "cover": "catalog/covers/nasser-alqias.jpg",
    "menu_sheets": [
     "catalog/menus/menu-nasser.png"
    ],
@@ -9387,7 +9387,7 @@
    "description_ar": "مشويات ومطبخ وصوانٍ · جمصة",
    "description_en": "Grills, kitchen and trays — Gamasa",
    "logo": null,
-   "cover": "catalog/covers/cover-grill.jpg",
+   "cover": "catalog/covers/sawany-eldomiaty.jpg",
    "menu_sheets": [
     "catalog/menus/menu-sawany.png"
    ],
@@ -12789,7 +12789,7 @@
    "description_ar": "صيدلية عمرو — أدوية ومستلزمات طبية وعناية شخصية، توصيل داخل جمصة",
    "description_en": "Amr Pharmacy — medicines, medical supplies and personal care, delivered across Gamasa",
    "logo": "catalog/restaurants/amr-pharmacy.png",
-   "cover": null,
+   "cover": "catalog/covers/amr-pharmacy.jpg",
    "menu_sheets": [],
    "brand_color": "#12B76A",
    "owner_phone": "01000000181",
@@ -13272,7 +13272,7 @@
    "description_ar": "تاج هايبر — بقالة وخضروات ومنظفات ومستلزمات منزلية",
    "description_en": "TAG HYPER — groceries, produce, cleaning and household supplies",
    "logo": "catalog/restaurants/tag-hyper.png",
-   "cover": null,
+   "cover": "catalog/covers/tag-hyper.jpg",
    "menu_sheets": [],
    "brand_color": "#2E7CF6",
    "owner_phone": "01000000161",
@@ -13755,7 +13755,7 @@
    "description_ar": "هيثم ماركت — بقالة يومية ومشروبات وسناكس، توصيل سريع داخل جمصة",
    "description_en": "Haytham Market — daily groceries, drinks and snacks, quick delivery in Gamasa",
    "logo": "catalog/restaurants/haytham-market.png",
-   "cover": null,
+   "cover": "catalog/covers/haytham-market.jpg",
    "menu_sheets": [],
    "brand_color": "#B8860B",
    "owner_phone": "01000000171",
@@ -14034,24 +14034,24 @@
  "banners": [
   {
    "title_ar": "خصم 20% على أول طلب · حتى 15 ج.م",
-   "title_en": "20% off your first order · up to EGP 15",
-   "image": "catalog/banners/promo-1.png",
+   "title_en": "20% off your first order · up to 15 EGP",
+   "image": "catalog/banners/promo-welcome.jpg",
    "link_type": "promo",
    "link_value": "WELCOME20",
    "sort_order": 0
   },
   {
-   "title_ar": "توصيل مجاني من مطاعم جمصة",
-   "title_en": "Free delivery from Gamasa restaurants",
-   "image": "catalog/covers/cover-fastfood.jpg",
-   "link_type": "none",
-   "link_value": null,
+   "title_ar": "جرّب برجر سماش من بوكس ع السريع",
+   "title_en": "Try the smash burger at Box’s",
+   "image": "catalog/banners/promo-free-delivery.jpg",
+   "link_type": "product",
+   "link_value": "r-06:برجر سماش",
    "sort_order": 1
   },
   {
    "title_ar": "طعم البحر في كل قطمة",
    "title_en": "The taste of the sea in every bite",
-   "image": "catalog/covers/cover-seafood.jpg",
+   "image": "catalog/banners/promo-seafood.jpg",
    "link_type": "restaurant",
    "link_value": "r-01",
    "sort_order": 2

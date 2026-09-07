@@ -36,6 +36,14 @@ use Illuminate\Support\Facades\Hash;
  */
 class CatalogSeeder extends Seeder
 {
+    /**
+     * Slides this seeder shipped and has since replaced.
+     *
+     * Named rather than inferred: «anything not in the current list» would sweep away
+     * the operator's own banners on the next `db:seed`.
+     */
+    private const RETIRED_BANNERS = ['توصيل مجاني من مطاعم جمصة'];
+
     public function run(): void
     {
         $path = database_path('data/catalog.json');
@@ -275,6 +283,22 @@ class CatalogSeeder extends Seeder
 
     private function seedBanners(array $rows, City $city): void
     {
+        // A banner the seed no longer lists is retired rather than left running. Keyed on
+        // the title, so re-seeding after an offer is renamed does not leave the old slide
+        // in the carousel next to its replacement — which is what happened to «توصيل
+        // مجاني من مطاعم جمصة».
+        //
+        // Deactivated, not deleted: an operator may have added slides of their own from
+        // `ADM-32`, and a seeder must never remove those.
+        Banner::query()
+            ->whereIn('title_ar', array_column($rows, 'title_ar'))
+            ->orWhereIn('title_ar', self::RETIRED_BANNERS)
+            ->update(['is_active' => true]);
+
+        Banner::query()
+            ->whereIn('title_ar', self::RETIRED_BANNERS)
+            ->update(['is_active' => false]);
+
         foreach ($rows as $row) {
             Banner::query()->updateOrCreate(
                 ['title_ar' => $row['title_ar']],
@@ -292,21 +316,49 @@ class CatalogSeeder extends Seeder
         }
     }
 
-    /** A banner pointing at a restaurant has to carry the row's real id, not doc 17's code. */
+    /**
+     * A banner pointing at a row has to carry that row's real id, not doc 17's code.
+     *
+     * `product` is `<restaurant code>:<dish name>` in the seed file, because the dish id
+     * is assigned at insert and the seed cannot know it. Resolved to the id here, so a
+     * banner that says «خصم على البرجر» opens the burger.
+     */
     private function resolveBannerLink(array $row): ?string
     {
+        if ($row['link_type'] === 'product') {
+            [$code, $name] = array_pad(explode(':', (string) $row['link_value'], 2), 2, null);
+            $restaurantId = $this->restaurantIdFor($code);
+
+            if ($restaurantId === null || $name === null) {
+                return null;
+            }
+
+            return (string) Product::query()
+                ->where('restaurant_id', $restaurantId)
+                ->where('name_ar', $name)
+                ->value('id');
+        }
+
         if ($row['link_type'] !== 'restaurant') {
             return $row['link_value'];
         }
 
-        $slug = match ($row['link_value']) {
+        return $this->restaurantIdFor($row['link_value']);
+    }
+
+    private function restaurantIdFor(?string $code): ?string
+    {
+        $slug = match ($code) {
             'r-01' => 'sandwich-omar', 'r-02' => 'alrokn-elaraby', 'r-03' => 'ebn-elbalad',
             'r-04' => 'saad-eldomiaty', 'r-05' => 'king-broast', 'r-06' => 'boxs',
             'r-07' => 'nasser-alqias', 'r-08' => 'sawany-eldomiaty',
+            'r-16' => 'tag-hyper', 'r-17' => 'haytham-market', 'r-18' => 'amr-pharmacy',
             default => null,
         };
 
-        return $slug === null ? null : (string) Restaurant::query()->where('slug', $slug)->value('id');
+        $id = $slug === null ? null : Restaurant::query()->where('slug', $slug)->value('id');
+
+        return $id === null ? null : (string) $id;
     }
 
     /** doc 22 §6 — the promo of record, and the only one any screen quotes. */

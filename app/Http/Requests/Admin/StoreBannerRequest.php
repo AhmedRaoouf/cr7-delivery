@@ -20,7 +20,7 @@ class StoreBannerRequest extends FormRequest
             'title_en' => [$required, 'string', 'max:255'],
             'image_ar' => [$required, 'image', 'max:5120'],
             'image_en' => [$required, 'image', 'max:5120'],
-            'link_type' => ['nullable', 'in:restaurant,category,promo,url,none'],
+            'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
             'link_value' => ['nullable', 'string'],
             'city_ids' => ['nullable', 'array'],
             'sort_order' => ['nullable', 'integer'],

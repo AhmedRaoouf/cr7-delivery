@@ -176,6 +176,39 @@ class CaptainApplicationTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_an_applicant_with_no_scans_still_sends_files_as_an_object(): void
+    {
+        // PHP has one array type, so a map that filters down to nothing encodes as
+        // `[]` and not `{}`. The dashboard parses this field as an object, so a single
+        // applicant with no uploads threw inside the server render and returned 500 for
+        // the whole of `ADM-30` — every other applicant on the page with it.
+        $application = CaptainApplication::query()->create([
+            'reference' => CaptainApplication::nextReference(),
+            'full_name' => 'مقدّم بلا مرفقات',
+            'phone' => '01098765432',
+            'city_id' => $this->city->id,
+            'vehicle_type' => 'motorcycle',
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($this->makeAdmin());
+
+        $body = $this->withHeader('X-App', 'admin')
+            ->getJson("/api/v1/admin/captain-applications/{$application->id}")
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('"files":{}', $body);
+        $this->assertStringNotContainsString('"files":[]', $body);
+
+        $list = $this->withHeader('X-App', 'admin')
+            ->getJson('/api/v1/admin/captain-applications')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('"files":[]', $list);
+    }
+
     public function test_approving_carries_the_id_photos_onto_the_captains_account(): void
     {
         $this->apply()->assertCreated();

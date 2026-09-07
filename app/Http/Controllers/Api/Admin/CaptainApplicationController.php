@@ -80,7 +80,11 @@ class CaptainApplicationController extends Controller
     private function withFileUrls(CaptainApplication $row): array
     {
         return $row->toArray() + [
-            'files' => collect(self::FILES)
+            // Cast, because an applicant who uploaded nothing leaves an empty PHP array
+            // here and `json_encode` writes that as `[]`, not `{}` — and the dashboard
+            // parses this field as an object. One applicant with no scans was enough to
+            // throw inside the server render and take `ADM-30` down with a 500.
+            'files' => (object) collect(self::FILES)
                 ->filter(fn (string $column) => filled($row->getAttribute($column)))
                 ->map(fn (string $column, string $kind) => "admin/captain-applications/{$row->id}/files/{$kind}")
                 ->all(),

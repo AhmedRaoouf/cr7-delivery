@@ -19,7 +19,13 @@ class ResetPasswordAction
                 ->whereLogin($login)
                 ->first();
 
-            if (! $user || ! $user->password) {
+            // `! $user->password` used to be part of this guard, which meant every
+            // account created before passwords existed — i.e. every customer — was told
+            // its own reset code was wrong. Setting a first password is exactly what
+            // this endpoint is for; only a phone with no account at all is refused, and
+            // it is refused with the code's message so the endpoint does not become a
+            // way to ask which numbers are registered.
+            if (! $user) {
                 throw new ApiException('otp_invalid', 'رمز التحقق غير صحيح', 422);
             }
 

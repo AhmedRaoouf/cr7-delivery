@@ -20,14 +20,17 @@ class PasswordAuthController extends Controller
 {
     public function login(LoginRequest $request, PasswordLoginAction $action): JsonResponse
     {
-        $expectedType = match ($request->header('X-App')) {
-            'restaurant' => UserType::Restaurant,
-            'admin' => UserType::Admin,
-            'app' => UserType::Driver,
+        // `app` is both shells. The mobile binary no longer asks «عميل ولا كابتن» — one
+        // screen takes a phone and a password, and `user.type` in the answer is what
+        // sends the customer to the browse tabs and the captain to the duty card.
+        $expected = match ($request->header('X-App')) {
+            'restaurant' => [UserType::Restaurant],
+            'admin' => [UserType::Admin],
+            'app' => [UserType::Customer, UserType::Driver],
             default => throw new ApiException('wrong_client', 'هذا الحساب لا يمكنه الدخول من هذه الواجهة', 403),
         };
 
-        $result = $action->execute($request->string('login'), $request->string('password'), $expectedType);
+        $result = $action->execute($request->string('login'), $request->string('password'), $expected);
 
         return ApiResponse::success([
             'user' => new UserResource($result['user']),

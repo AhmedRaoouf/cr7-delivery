@@ -7,6 +7,7 @@ use App\Models\MenuCategory;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\StaticPage;
+use App\Models\StoreCategory;
 use Database\Seeders\CatalogSeeder;
 use Database\Seeders\ContentSeeder;
 use Database\Seeders\LocationSeeder;
@@ -29,12 +30,66 @@ class CatalogSeedTest extends TestCase
         $this->seed([SettingsSeeder::class, LocationSeeder::class, ContentSeeder::class, CatalogSeeder::class]);
     }
 
+    /**
+     * 11 shops, not 8, since 2026-09-07: the home screen's strip needs something behind
+     * «صيدليات» and «سوبرماركت» or those cards lead nowhere. doc 17 R-16, R-17 and R-18
+     * are real Gamasa businesses with logos already in the repo.
+     */
     public function test_the_whole_catalogue_lands(): void
     {
-        $this->assertSame(8, Restaurant::query()->count());
-        $this->assertSame(69, MenuCategory::query()->count());
-        $this->assertSame(562, Product::query()->count());
+        $this->assertSame(11, Restaurant::query()->count());
+        $this->assertSame(85, MenuCategory::query()->count());
+        $this->assertSame(641, Product::query()->count());
         $this->assertGreaterThan(0, Cuisine::query()->count());
+    }
+
+    public function test_every_shop_lands_in_a_store_category(): void
+    {
+        $this->assertSame(5, StoreCategory::query()->count());
+
+        // Not one shop may be left without a card to appear under — that is precisely
+        // how a restaurant vanishes from the home screen and nobody notices for a week.
+        $this->assertSame(
+            0,
+            Restaurant::query()->whereNull('store_category_id')->count(),
+            'every seeded shop belongs to a store category',
+        );
+
+        $counts = StoreCategory::query()
+            ->withCount('restaurants')
+            ->pluck('restaurants_count', 'slug')
+            ->all();
+
+        // 7, not 8: سعد الدمياطي is «مطعم كافيه» in doc 17 and sits under «كافيهات».
+        $this->assertSame(7, $counts['restaurants']);
+        $this->assertSame(1, $counts['cafes']);
+        $this->assertSame(1, $counts['pharmacies']);
+        $this->assertSame(2, $counts['supermarkets']);
+        // «خضروات وفاكهة» ships empty on purpose — the operator has no greengrocer signed
+        // up yet, and the card is listed anyway so they can see where one would go.
+        $this->assertSame(0, $counts['greengrocers']);
+    }
+
+    public function test_the_public_strip_lists_every_active_category(): void
+    {
+        $this->getJson('/api/v1/store-categories')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('data.0.slug', 'restaurants')
+            ->assertJsonPath('data.0.name_ar', 'مطاعم')
+            ->assertJsonPath('data.4.restaurants_count', 0);
+    }
+
+    public function test_a_shop_can_be_browsed_by_its_store_category(): void
+    {
+        $this->getJson('/api/v1/restaurants?filter[store_category]=pharmacies')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Amr Pharmacy');
+
+        $this->getJson('/api/v1/restaurants?filter[store_category]=supermarkets')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
     }
 
     public function test_every_price_band_matches_doc_17(): void

@@ -127,7 +127,7 @@ class ErrandController extends Controller
 
         return ApiResponse::success(
             new ErrandRequestResource($action->assign($request->user(), $errand, $driver, $validated['note'] ?? null)),
-            'تم إسناد المشوار إلى الكابتن',
+            'تم إرسال المشوار إلى الكابتن — بانتظار قبوله',
         );
     }
 

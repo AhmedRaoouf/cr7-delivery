@@ -31,10 +31,19 @@ class ErrandController extends Controller
         $errands = ErrandRequest::query()
             ->where('status', ErrandStatus::Open->value)
             ->whereNull('driver_id')
+            // An errand this captain was offered and declined stays off their board.
+            // The row carries the ids as JSON, so the exclusion is done in PHP after
+            // the fetch rather than as a `JSON_CONTAINS` that no index can serve.
             ->with('driver.user')
             ->latest()
             ->limit(50)
-            ->get();
+            ->get()
+            ->reject(fn (ErrandRequest $errand) => in_array(
+                (int) $driver->id,
+                array_map('intval', $errand->declined_driver_ids ?? []),
+                true,
+            ))
+            ->values();
 
         // Sorted in PHP rather than SQL: haversine in a MySQL `ORDER BY` cannot use an
         // index anyway at this size, and the captain's own position is often null.
@@ -50,12 +59,23 @@ class ErrandController extends Controller
         return ApiResponse::success(ErrandRequestResource::collection($errands));
     }
 
+    /**
+     * «مشاويري» — and the offers waiting on an answer.
+     *
+     * An offered errand has no `driver_id` by design (see `ErrandLifecycleAction::assign`),
+     * so a plain `where('driver_id', …)` hid the very screen the operator's assignment
+     * was supposed to open.
+     */
     public function mine(Request $request): JsonResponse
     {
         $driver = $this->driver($request);
 
         $errands = ErrandRequest::query()
-            ->where('driver_id', $driver->id)
+            ->where(fn ($q) => $q
+                ->where('driver_id', $driver->id)
+                ->orWhere(fn ($q) => $q
+                    ->where('offered_driver_id', $driver->id)
+                    ->where('status', ErrandStatus::Offered->value)))
             ->with('driver.user')
             ->latest()
             ->paginate($request->integer('per_page', 20));
@@ -75,9 +95,12 @@ class ErrandController extends Controller
     {
         $driver = $this->driver($request);
 
-        // An open errand is readable by anyone on shift; a taken one only by its captain.
+        // An open errand is readable by anyone on shift; a taken one only by its
+        // captain; an offered one only by the captain it was offered to.
         abort_unless(
-            $errand->driver_id === $driver->id || $errand->status === ErrandStatus::Open,
+            $errand->driver_id === $driver->id
+                || $errand->status === ErrandStatus::Open
+                || ($errand->status === ErrandStatus::Offered && $errand->offered_driver_id === $driver->id),
             404,
         );
 
@@ -89,6 +112,21 @@ class ErrandController extends Controller
         return ApiResponse::success(
             new ErrandRequestResource($action->accept($this->driver($request), $errand)),
             'أصبح المشوار لك',
+        );
+    }
+
+    /** «ارفض» on the offer screen — D-72's errand half. */
+    public function decline(Request $request, ErrandRequest $errand, ErrandLifecycleAction $action): JsonResponse
+    {
+        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+
+        return ApiResponse::success(
+            new ErrandRequestResource($action->declineOffer(
+                $this->driver($request),
+                $errand,
+                $validated['reason'] ?? null,
+            )),
+            'تم رفض المشوار',
         );
     }
 

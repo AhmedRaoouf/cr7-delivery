@@ -40,16 +40,30 @@ class ErrandLifecycleAction
         $fresh = DB::transaction(function () use ($driver, $errand): ErrandRequest {
             $locked = ErrandRequest::query()->lockForUpdate()->find($errand->id);
 
-            if ($locked === null || $locked->status !== ErrandStatus::Open || $locked->driver_id !== null) {
+            if ($locked === null || ! $locked->status->isUnclaimed() || $locked->driver_id !== null) {
                 throw new ApiException('errand_taken', 'سبقك كابتن آخر إلى هذا المشوار', 409);
             }
+
+            // An errand an operator handed to somebody belongs to that conversation until
+            // it is answered. Letting a second captain take it off the board while the
+            // first is still looking at «اقبل / ارفض» is how two captains ride to the same
+            // pickup, and the operator is told a name that is not the one they chose.
+            if ($locked->status === ErrandStatus::Offered && $locked->offered_driver_id !== $driver->id) {
+                throw new ApiException('errand_offered_elsewhere', 'هذا المشوار مُسند إلى كابتن آخر', 409);
+            }
+
+            // The operator who sent the offer keeps the credit for the assignment; the
+            // captain pressing «اقبل» is answering it, not taking it off the board.
+            $wasOffered = $locked->status === ErrandStatus::Offered;
 
             $locked->update([
                 'driver_id' => $driver->id,
                 'status' => ErrandStatus::Assigned,
-                'assigned_by' => 'driver',
-                'assigned_by_user_id' => $driver->user_id,
+                'assigned_by' => $wasOffered ? 'admin' : 'driver',
+                'assigned_by_user_id' => $wasOffered ? $locked->offered_by_user_id : $driver->user_id,
                 'assigned_at' => now(),
+                'offered_driver_id' => null,
+                'offered_at' => null,
             ]);
 
             $locked->record(ErrandStatus::Assigned, $driver->user, 'driver');
@@ -64,9 +78,22 @@ class ErrandLifecycleAction
         return $fresh;
     }
 
-    /** An operator hands the job to a captain after nobody took it (doc 40 §3). */
+    /**
+     * An operator offers the job to a captain (doc 40 §3, revised 2026-09-07).
+     *
+     * This used to write `driver_id` and be done — the captain learned they owned an
+     * errand from a push that told them where to go. Operator ruling: «إسناد الأوردر
+     * وإسناد المشوار وإسناد أي إسناد في الدنيا لازم يتبعت notification وصفحة قبول ورفض».
+     * A food order has worked this way since 2026-09-08; this is the errand half of the
+     * same rule, and it is the reason `offered_driver_id` is a separate column from
+     * `driver_id` rather than a flag beside it.
+     */
     public function assign(User $admin, ErrandRequest $errand, Driver $driver, ?string $note = null): ErrandRequest
     {
+        if ($driver->active_order_id !== null) {
+            throw new ApiException('driver_busy', 'هذا الكابتن على طلب آخر', 422);
+        }
+
         $fresh = DB::transaction(function () use ($admin, $errand, $driver, $note): ErrandRequest {
             $locked = ErrandRequest::query()->lockForUpdate()->find($errand->id);
 
@@ -74,17 +101,27 @@ class ErrandLifecycleAction
                 throw new ApiException('errand_closed', 'هذا المشوار منتهٍ ولا يقبل الإسناد', 422);
             }
 
+            if ($locked->status === ErrandStatus::PickedUp) {
+                throw new ApiException('errand_already_collected', 'استلم الكابتن الطلب بالفعل', 422);
+            }
+
             $previousDriver = $locked->driver;
 
             $locked->update([
-                'driver_id' => $driver->id,
-                'status' => ErrandStatus::Assigned,
-                'assigned_by' => 'admin',
-                'assigned_by_user_id' => $admin->id,
-                'assigned_at' => now(),
+                // Cleared, not kept. Between the offer and the answer this errand has no
+                // captain, and a stale `driver_id` here is a captain who still sees it on
+                // «مشاويري» while somebody else is being asked to take it.
+                'driver_id' => null,
+                'status' => ErrandStatus::Offered,
+                'offered_driver_id' => $driver->id,
+                'offered_by_user_id' => $admin->id,
+                'offered_at' => now(),
+                'assigned_by' => null,
+                'assigned_by_user_id' => null,
+                'assigned_at' => null,
             ]);
 
-            $locked->record(ErrandStatus::Assigned, $admin, 'admin', $note);
+            $locked->record(ErrandStatus::Offered, $admin, 'admin', $note);
 
             // Told before the new captain is, so a reassignment cannot leave the old one
             // riding to a pickup that is no longer theirs.
@@ -98,7 +135,62 @@ class ErrandLifecycleAction
         });
 
         AuditLogger::record($admin, 'errands.assign', $fresh);
-        $this->announceAssignment($fresh, $driver);
+
+        // Outside the transaction, for the same reason `accept` is: a push must never
+        // hold a row lock, and a provider timeout must never roll back an offer the
+        // operator has already been shown as sent.
+        $this->notifications->send($driver->user, 'errand.offered', [
+            'reference' => $fresh->reference,
+            'pickup' => $fresh->pickup_address_text,
+            'fee' => number_format((float) $fresh->offered_fee, 2).' ج.م',
+        ], deepLink: 'cr7://errands/offer/'.$fresh->id);
+
+        return $fresh;
+    }
+
+    /**
+     * «ارفض» on the offer screen.
+     *
+     * Back to the open board, not to nobody: the customer is still waiting, and the
+     * captain who declined is recorded so neither the sweeper nor the next assignment
+     * asks them again. The operator who sent it is told by name — the whole point of
+     * `offered_by_user_id`.
+     */
+    public function declineOffer(Driver $driver, ErrandRequest $errand, ?string $reason = null): ErrandRequest
+    {
+        $fresh = DB::transaction(function () use ($driver, $errand, $reason): ErrandRequest {
+            $locked = ErrandRequest::query()->lockForUpdate()->find($errand->id);
+
+            if ($locked === null || $locked->status !== ErrandStatus::Offered || $locked->offered_driver_id !== $driver->id) {
+                throw new ApiException('errand_not_offered', 'لم يعد هذا العرض متاحًا', 409);
+            }
+
+            $declined = array_values(array_unique([...($locked->declined_driver_ids ?? []), $driver->id]));
+
+            $locked->update([
+                'status' => ErrandStatus::Open,
+                'offered_driver_id' => null,
+                'offered_at' => null,
+                'declined_driver_ids' => $declined,
+                // Re-published from scratch: the captains told about it before the offer
+                // went out have all seen it, and the ones who came online since have not.
+                'notified_driver_ids' => null,
+                'last_published_at' => null,
+            ]);
+
+            $locked->record(ErrandStatus::Open, $driver->user, 'driver', $reason ?? 'رفض الكابتن العرض');
+
+            return $locked;
+        });
+
+        $operator = $errand->offered_by_user_id === null ? null : User::query()->find($errand->offered_by_user_id);
+
+        if ($operator !== null) {
+            $this->notifications->send($operator, 'errand.offer_declined', [
+                'reference' => $fresh->reference,
+                'driver' => $driver->user?->name ?? 'الكابتن',
+            ], deepLink: 'cr7://errands/'.$fresh->id);
+        }
 
         return $fresh;
     }

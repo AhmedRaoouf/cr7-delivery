@@ -31,6 +31,10 @@ class StoreRestaurantRequest extends FormRequest
         return [
             'city_id' => ['required', 'exists:cities,id'],
             'service_zone_id' => ['required', 'exists:service_zones,id'],
+            // Which of the home screen's cards this shop appears under. Nullable: a shop
+            // with no category is still a shop, it just does not appear in the strip.
+            'store_category_id' => ['nullable', 'exists:store_categories,id'],
+            'is_24_7' => ['nullable', 'boolean'],
             'name_ar' => ['required', 'string', 'max:255'],
             'name_en' => ['required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

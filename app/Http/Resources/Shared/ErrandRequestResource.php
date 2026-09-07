@@ -28,6 +28,15 @@ class ErrandRequestResource extends JsonResource
             && $this->driver !== null
             && $this->driver->user_id === $user->id;
 
+        // The captain an operator has offered it to, who has not answered yet. They are
+        // shown the job in full — a captain cannot judge «اقبل / ارفض» on a redacted
+        // card — but not the phone numbers, which stay behind the accept exactly as they
+        // do for a board errand.
+        $isOfferedDriver = $user !== null
+            && $this->offered_driver_id !== null
+            && $this->offeredDriver !== null
+            && $this->offeredDriver->user_id === $user->id;
+
         $mayCall = $isAdmin || $isOwner || $isAssignedDriver;
 
         return [
@@ -58,7 +67,7 @@ class ErrandRequestResource extends JsonResource
             'receipt_urls' => $this->receipt_urls ?? [],
             'total_due' => (float) $this->total_due,
 
-            'customer' => $this->when($isAdmin || $isAssignedDriver, fn () => [
+            'customer' => $this->when($isAdmin || $isAssignedDriver || $isOfferedDriver, fn () => [
                 'id' => $this->customer?->id,
                 'name' => $this->customer?->name,
                 'phone' => $mayCall ? $this->customer?->phone : null,
@@ -74,6 +83,14 @@ class ErrandRequestResource extends JsonResource
             ],
 
             'assigned_by' => $this->assigned_by,
+            // Present only while an offer is outstanding. `is_offer_for_me` is what the
+            // captain's app switches on to raise the accept/decline screen instead of
+            // the ordinary detail one — the client must never infer that from
+            // `status == offered` alone, or every captain online would be shown a
+            // decision that belongs to one of them.
+            'offered_driver_id' => $this->offered_driver_id,
+            'is_offer_for_me' => $isOfferedDriver,
+            'offered_at' => $this->offered_at?->toIso8601String(),
             'cancelled_by' => $this->cancelled_by,
             'cancel_reason' => $this->cancel_reason,
 

@@ -11,7 +11,12 @@ class Cart extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['user_id', 'address_id', 'promo_code', 'note'];
+    protected $fillable = ['user_id', 'address_id', 'promo_code', 'note', 'is_scratch'];
+
+    protected function casts(): array
+    {
+        return ['is_scratch' => 'boolean'];
+    }
 
     public function user(): BelongsTo
     {

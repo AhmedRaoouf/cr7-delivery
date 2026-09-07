@@ -16,8 +16,12 @@ class ForgotPasswordAction
             ->whereLogin($login)
             ->first();
 
-        if (! $user || ! $user->password) {
-            // doc 08 §1 — existence is not leaked; the client sees the same success either way.
+        // `! $user->password` used to be part of this. Since 2026-09-07 every customer
+        // signs in with one, and the accounts that predate that change have none — so the
+        // guard silently refused a code to precisely the people who needed one to set
+        // their first password. Only «no such account» is a reason to do nothing, and it
+        // is still answered with the same success message either way (doc 08 §1).
+        if (! $user) {
             return;
         }
 

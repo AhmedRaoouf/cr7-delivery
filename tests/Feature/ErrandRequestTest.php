@@ -262,7 +262,14 @@ class ErrandRequestTest extends TestCase
         }
     }
 
-    public function test_an_admin_assigns_a_stranded_errand_by_hand(): void
+    /**
+     * D-72's errand half: an operator's assignment is an offer, not a fact.
+     *
+     * This used to assert `assigned` straight out of the POST, which is exactly what the
+     * operator objected to — the captain learned they owned an errand from a push telling
+     * them where to ride. Now it stops at `offered` and waits for an answer.
+     */
+    public function test_an_admin_assignment_is_an_offer_the_captain_must_accept(): void
     {
         $errand = $this->publish();
         $driver = $this->makeDriver();
@@ -275,8 +282,65 @@ class ErrandRequestTest extends TestCase
         ]);
 
         $response->assertOk();
-        $this->assertSame('assigned', $response->json('data.status'));
-        $this->assertSame('admin', $response->json('data.assigned_by'));
+        $this->assertSame('offered', $response->json('data.status'));
+        $this->assertSame($driver->id, $response->json('data.offered_driver_id'));
+        // Nobody owns it yet. A `driver_id` here is a captain riding to a pickup they
+        // have not agreed to.
+        $this->assertNull($errand->fresh()->driver_id);
+
+        $this->actingAsDriver($driver);
+
+        $mine = $this->getJson('/api/v1/driver/errands/mine');
+        $mine->assertOk();
+        $this->assertSame($errand->id, $mine->json('data.0.id'));
+        $this->assertTrue($mine->json('data.0.is_offer_for_me'));
+
+        $accepted = $this->postJson("/api/v1/driver/errands/{$errand->id}/accept");
+        $accepted->assertOk();
+        $this->assertSame('assigned', $accepted->json('data.status'));
+        // The operator keeps the credit — the captain answered a question, they did not
+        // take it off the board.
+        $this->assertSame('admin', $accepted->json('data.assigned_by'));
+        $this->assertSame($driver->id, $errand->fresh()->driver_id);
+    }
+
+    public function test_a_declined_offer_goes_back_to_the_board_and_not_to_the_same_captain(): void
+    {
+        $errand = $this->publish();
+        $driver = $this->makeDriver();
+
+        $this->actingAsAdmin();
+        $this->postJson("/api/v1/admin/errands/{$errand->id}/assign", ['driver_id' => $driver->id])->assertOk();
+
+        $this->actingAsDriver($driver);
+        $declined = $this->postJson("/api/v1/driver/errands/{$errand->id}/decline", ['reason' => 'بعيد عني']);
+
+        $declined->assertOk();
+        $this->assertSame('open', $declined->json('data.status'));
+        $this->assertNull($errand->fresh()->offered_driver_id);
+        $this->assertSame([$driver->id], $errand->fresh()->declined_driver_ids);
+
+        // Back on the board for everyone else — and off this captain's.
+        $this->assertSame([], $this->getJson('/api/v1/driver/errands/board')->json('data'));
+
+        $other = $this->makeDriver();
+        $this->actingAsDriver($other);
+        $this->assertCount(1, $this->getJson('/api/v1/driver/errands/board')->json('data'));
+    }
+
+    public function test_a_captain_cannot_take_an_errand_offered_to_somebody_else(): void
+    {
+        $errand = $this->publish();
+        $offered = $this->makeDriver();
+        $other = $this->makeDriver();
+
+        $this->actingAsAdmin();
+        $this->postJson("/api/v1/admin/errands/{$errand->id}/assign", ['driver_id' => $offered->id])->assertOk();
+
+        $this->actingAsDriver($other);
+        $this->postJson("/api/v1/driver/errands/{$errand->id}/accept")
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'errand_offered_elsewhere');
     }
 
     /** @param array<string, mixed> $overrides */

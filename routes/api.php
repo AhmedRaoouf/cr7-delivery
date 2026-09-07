@@ -30,11 +30,14 @@ use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
 use App\Http\Controllers\Api\Admin\PromoCodeController;
 use App\Http\Controllers\Api\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Api\Admin\ReportController as AdminReportController;
+use App\Http\Controllers\Api\Admin\ReportExportController as AdminReportExportController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
 use App\Http\Controllers\Api\Admin\RoleController;
+use App\Http\Controllers\Api\Admin\ScheduledOrderController as AdminScheduledOrderController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
 use App\Http\Controllers\Api\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\Admin\SettlementController as AdminSettlementController;
+use App\Http\Controllers\Api\Admin\StoreCategoryController as AdminStoreCategoryController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
@@ -50,6 +53,7 @@ use App\Http\Controllers\Api\Customer\PaymentController;
 use App\Http\Controllers\Api\Customer\ProductController as CustomerProductController;
 use App\Http\Controllers\Api\Customer\PromoController;
 use App\Http\Controllers\Api\Customer\RestaurantController as CustomerRestaurantController;
+use App\Http\Controllers\Api\Customer\ScheduledOrderController as CustomerScheduledOrderController;
 use App\Http\Controllers\Api\Customer\SearchController;
 use App\Http\Controllers\Api\Driver\DocumentController as DriverOwnDocumentController;
 use App\Http\Controllers\Api\Driver\DriverMeController;
@@ -67,6 +71,7 @@ use App\Http\Controllers\Api\Restaurant\ProductOptionGroupController as Restaura
 use App\Http\Controllers\Api\Restaurant\RatingController as RestaurantRatingController;
 use App\Http\Controllers\Api\Restaurant\ReportController as RestaurantReportController;
 use App\Http\Controllers\Api\Restaurant\RestaurantMeController;
+use App\Http\Controllers\Api\Restaurant\ScheduledOrderController as RestaurantScheduledOrderController;
 use App\Http\Controllers\Api\Restaurant\SettlementController as RestaurantSettlementController;
 use App\Http\Controllers\Api\Shared\BannerController;
 use App\Http\Controllers\Api\Shared\CaptainApplicationController;
@@ -78,6 +83,7 @@ use App\Http\Controllers\Api\Shared\FaqController;
 use App\Http\Controllers\Api\Shared\GeoController;
 use App\Http\Controllers\Api\Shared\NotificationController;
 use App\Http\Controllers\Api\Shared\PageController;
+use App\Http\Controllers\Api\Shared\StoreCategoryController as SharedStoreCategoryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -101,6 +107,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/geo/search', [GeoController::class, 'search']);
     });
     Route::get('/cuisines', [SharedCuisineController::class, 'index']);
+    // The home screen's top strip. Public — the app browses before it signs in.
+    Route::get('/store-categories', [SharedStoreCategoryController::class, 'index']);
     Route::get('/banners', [BannerController::class, 'index']);
     Route::get('/pages/{slug}', [PageController::class, 'show']);
     Route::get('/faqs', [FaqController::class, 'index']);
@@ -117,6 +125,10 @@ Route::prefix('v1')->group(function () {
         // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
         Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp']);
         Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp']);
+        // «إنشاء حساب» — the second half of registration: the token `otp/verify` handed
+        // back, plus a name and a password. Throttled per IP because it is the one
+        // unauthenticated route that creates a row in `users`.
+        Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:10,1');
 
         // driver / restaurant / admin — Admin-created accounts, phone|email + password (FR-AUTH-04).
         // X-App decides the expected users.type (doc 12 §1.1).
@@ -166,6 +178,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/promo/validate', [PromoController::class, 'validate']);
 
         Route::post('/orders', [OrderController::class, 'store']);
+
+        // «اطلب في وقت لاحق» — a basket with a time on it. Not an order until `cr7:tick`
+        // releases it, which is why it lives on its own path rather than as a flag here.
+        Route::get('/scheduled-orders', [CustomerScheduledOrderController::class, 'index']);
+        Route::post('/scheduled-orders', [CustomerScheduledOrderController::class, 'store']);
+        Route::get('/scheduled-orders/{scheduledOrder}', [CustomerScheduledOrderController::class, 'show']);
+        Route::delete('/scheduled-orders/{scheduledOrder}', [CustomerScheduledOrderController::class, 'destroy']);
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/{orderGroup}', [OrderController::class, 'show']);
         Route::get('/orders/{orderGroup}/tracking', [OrderController::class, 'tracking']);
@@ -296,9 +315,13 @@ Route::prefix('v1')->group(function () {
         Route::patch('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'update']);
         Route::delete('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'destroy']);
 
+        // Read-only: a scheduled basket has nothing to accept yet.
+        Route::get('/scheduled-orders', [RestaurantScheduledOrderController::class, 'index']);
+
         Route::get('/reports/summary', [RestaurantReportController::class, 'summary']);
         Route::get('/reports/sales', [RestaurantReportController::class, 'sales']);
         Route::get('/reports/top-products', [RestaurantReportController::class, 'topProducts']);
+        Route::get('/reports/export', [RestaurantReportController::class, 'export']);
 
         Route::get('/settlements', [RestaurantSettlementController::class, 'index']);
         Route::get('/settlements/{settlement}', [RestaurantSettlementController::class, 'show']);
@@ -342,6 +365,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/errands/mine', [DriverErrandController::class, 'mine']);
         Route::get('/errands/{errand}', [DriverErrandController::class, 'show']);
         Route::post('/errands/{errand}/accept', [DriverErrandController::class, 'accept']);
+        Route::post('/errands/{errand}/decline', [DriverErrandController::class, 'decline']);
         Route::post('/errands/{errand}/picked-up', [DriverErrandController::class, 'pickedUp']);
         Route::post('/errands/{errand}/deliver', [DriverErrandController::class, 'deliver']);
         Route::post('/errands/{errand}/purchases', [DriverErrandController::class, 'purchases']);
@@ -493,6 +517,20 @@ Route::prefix('v1')->group(function () {
             Route::delete('/cuisines/{cuisine}', [CuisineController::class, 'destroy']);
         });
 
+        // The home screen's top level — «مطاعم / صيدليات / كافيهات / سوبرماركت / خضروات»,
+        // and whatever the operator adds after them.
+        Route::get('/store-categories', [AdminStoreCategoryController::class, 'index']);
+        Route::get('/store-categories/{storeCategory}', [AdminStoreCategoryController::class, 'show']);
+        Route::middleware('permission:content.manage')->group(function () {
+            Route::post('/store-categories', [AdminStoreCategoryController::class, 'store']);
+            // Both verbs. The card art arrives as multipart and PHP does not populate
+            // `$_FILES` for a PATCH body, so the dashboard posts with `_method=PATCH`
+            // and a client that can send a real PATCH (no file) still works.
+            Route::match(['post', 'patch'], '/store-categories/{storeCategory}', [AdminStoreCategoryController::class, 'update']);
+            Route::post('/store-categories-reorder', [AdminStoreCategoryController::class, 'reorder']);
+            Route::delete('/store-categories/{storeCategory}', [AdminStoreCategoryController::class, 'destroy']);
+        });
+
         // Orders — doc 12 §3, the intervention console (doc 24 §3)
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('/orders', [AdminOrderController::class, 'index']);
@@ -516,10 +554,16 @@ Route::prefix('v1')->group(function () {
         // operator who assigns an unclaimed errand, and a second catalogue would only
         // create a way for the two to disagree.
         Route::middleware('permission:orders.view')->group(function () {
+            Route::get('/scheduled-orders', [AdminScheduledOrderController::class, 'index']);
+            Route::get('/scheduled-orders/{scheduledOrder}', [AdminScheduledOrderController::class, 'show']);
+
             Route::get('/errands', [AdminErrandController::class, 'index']);
             Route::get('/errands/{errand}', [AdminErrandController::class, 'show']);
             Route::get('/errands/{errand}/eligible-drivers', [AdminErrandController::class, 'eligibleDrivers']);
         });
+        Route::post('/scheduled-orders/{scheduledOrder}/release', [AdminScheduledOrderController::class, 'release'])->middleware('permission:orders.update_status');
+        Route::post('/scheduled-orders/{scheduledOrder}/cancel', [AdminScheduledOrderController::class, 'cancel'])->middleware('permission:orders.cancel');
+
         Route::post('/errands/{errand}/assign', [AdminErrandController::class, 'assign'])->middleware('permission:orders.reassign_driver');
         Route::post('/errands/{errand}/cancel', [AdminErrandController::class, 'cancel'])->middleware('permission:orders.cancel');
 
@@ -676,6 +720,19 @@ Route::prefix('v1')->group(function () {
         Route::get('/reports/complaints', [AdminReportController::class, 'complaints'])->middleware('permission:complaints.view');
         Route::get('/reports/customers', [AdminReportController::class, 'customers'])->middleware('permission:reports.customers');
         Route::get('/reports/customers/cohorts', [AdminReportController::class, 'customerCohorts'])->middleware('permission:reports.customers');
+
+        // «تصدير Excel». Each one carries the same permission as the JSON report beside
+        // it — an operator who may not read a report may not download it either, and the
+        // two must not be able to drift apart.
+        Route::get('/reports/sales/export', [AdminReportExportController::class, 'export'])->defaults('report', 'sales')->middleware('permission:reports.sales');
+        Route::get('/reports/restaurants/export', [AdminReportExportController::class, 'export'])->defaults('report', 'restaurants')->middleware('permission:reports.restaurants');
+        Route::get('/reports/products/export', [AdminReportExportController::class, 'export'])->defaults('report', 'products')->middleware('permission:reports.products');
+        Route::get('/reports/drivers/export', [AdminReportExportController::class, 'export'])->defaults('report', 'drivers')->middleware('permission:reports.drivers');
+        Route::get('/reports/zones/export', [AdminReportExportController::class, 'export'])->defaults('report', 'zones')->middleware('permission:reports.zones');
+        Route::get('/reports/promo-codes/export', [AdminReportExportController::class, 'export'])->defaults('report', 'promo-codes')->middleware('permission:promos.view');
+        Route::get('/reports/refunds/export', [AdminReportExportController::class, 'export'])->defaults('report', 'refunds')->middleware('permission:refunds.view');
+        Route::get('/reports/complaints/export', [AdminReportExportController::class, 'export'])->defaults('report', 'complaints')->middleware('permission:complaints.view');
+        Route::get('/reports/customers/export', [AdminReportExportController::class, 'export'])->defaults('report', 'customers')->middleware('permission:reports.customers');
         Route::get('/ops/health', [AdminReportController::class, 'opsHealth'])->middleware('permission:ops.health');
     });
 });

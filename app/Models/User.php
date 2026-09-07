@@ -105,9 +105,17 @@ class User extends Authenticatable
         return $this->hasMany(AdminScope::class);
     }
 
+    /**
+     * The basket the customer is shopping in.
+     *
+     * Scoped past scratch carts on purpose: releasing a scheduled order rebuilds its
+     * basket in a throwaway cart row belonging to the same customer, and a `hasOne` with
+     * no ordering would sometimes hand that one back — a customer's live basket
+     * replaced, at random, by an order that was placed for them.
+     */
     public function cart(): HasOne
     {
-        return $this->hasOne(Cart::class);
+        return $this->hasOne(Cart::class)->where('is_scratch', false);
     }
 
     public function orderGroups(): HasMany

@@ -45,8 +45,13 @@ class ErrandDispatcher
     public function publish(ErrandRequest $errand, bool $onlyNew = false): int
     {
         $alreadyTold = array_map('intval', $errand->notified_driver_ids ?? []);
+        // A captain who was offered this errand by an operator and said no is not a
+        // candidate for the broadcast either — the board would put back in front of them
+        // the exact thing they just declined.
+        $declined = array_map('intval', $errand->declined_driver_ids ?? []);
 
         $recipients = $this->availableDrivers()
+            ->reject(fn (Driver $driver) => in_array((int) $driver->id, $declined, true))
             ->when($onlyNew, fn ($drivers) => $drivers->reject(
                 fn (Driver $driver) => in_array((int) $driver->id, $alreadyTold, true),
             ));

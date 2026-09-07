@@ -41,6 +41,12 @@ class BusinessHoursTest extends TestCase
     {
         $restaurant = $this->makeRestaurant('ابن البلد');
 
+        // A shop that keeps a week is, by definition, not «مفتوح 24 ساعة» — and since
+        // 2026-09-07 that flag is the default and short-circuits the window entirely.
+        // The dashboard turns it off the moment an operator types a real opening time;
+        // these tests are about what happens after that.
+        $restaurant->update(['is_24_7' => false]);
+
         foreach (range(0, 6) as $weekday) {
             $restaurant->openingHours()->create([
                 'weekday' => $weekday,

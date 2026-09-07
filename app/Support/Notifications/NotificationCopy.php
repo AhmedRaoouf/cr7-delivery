@@ -148,6 +148,19 @@ class NotificationCopy
             'en' => ['Order removed from your list', 'Order {order_number} is no longer yours'],
         ],
 
+        // ------------------------------------------- scheduled orders (2026-09-07)
+        // The customer chose a time hours ago and has almost certainly stopped thinking
+        // about it, so the release has to announce itself — and so does a failure, with
+        // the reason, because «لم يحدث شيء» is the worst possible answer to «طلبت لستة».
+        'order.scheduled_released' => [
+            'ar' => ['بدأ طلبك المجدول ⏰', 'أرسلنا الطلب {order_number} إلى المطعم الآن'],
+            'en' => ['Your scheduled order has started ⏰', 'Order {order_number} was sent to the restaurant'],
+        ],
+        'order.scheduled_failed' => [
+            'ar' => ['تعذّر تنفيذ طلبك المجدول', '{reference} — {reason}'],
+            'en' => ['Your scheduled order could not be placed', '{reference} — {reason}'],
+        ],
+
         // ----------------------------------------------- errands «اطلب كابتن»
         // Broadcast to every available captain, not to the nearest three: the fee is the
         // customer's offer and taking it is a decision only the captain can make.
@@ -170,6 +183,16 @@ class NotificationCopy
         'errand.delivered_customer' => [
             'ar' => ['تم تسليم المشوار ✅', 'شكرًا لاستخدامك خدمة اطلب كابتن'],
             'en' => ['Errand delivered ✅', 'Thanks for using the errand service'],
+        ],
+        // The errand half of D-72. An operator's assignment is a question with two
+        // answers, exactly like a food order's — same push, same accept/decline screen.
+        'errand.offered' => [
+            'ar' => ['📌 تم إسناد مشوار لك', '{reference} · من {pickup} · العميل يعرض {fee} — اقبله أو ارفضه'],
+            'en' => ['📌 An errand was assigned to you', '{reference} · from {pickup} · customer offers {fee} — accept or decline'],
+        ],
+        'errand.offer_declined' => [
+            'ar' => ['رفض الكابتن المشوار', 'رفض {driver} المشوار {reference} — عاد إلى لوحة المشاوير'],
+            'en' => ['The captain declined', '{driver} declined errand {reference} — it is back on the board'],
         ],
         'errand.cancelled_driver' => [
             'ar' => ['أُلغي المشوار', 'المشوار {reference} لم يعد في قائمتك'],

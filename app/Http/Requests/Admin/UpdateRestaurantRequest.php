@@ -16,6 +16,8 @@ class UpdateRestaurantRequest extends FormRequest
         return [
             'city_id' => ['sometimes', 'required', 'exists:cities,id'],
             'service_zone_id' => ['sometimes', 'required', 'exists:service_zones,id'],
+            'store_category_id' => ['nullable', 'exists:store_categories,id'],
+            'is_24_7' => ['nullable', 'boolean'],
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

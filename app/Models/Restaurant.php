@@ -21,6 +21,7 @@ class Restaurant extends Model
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
         'min_order_value', 'avg_prep_minutes', 'is_open_manual', 'is_active',
         'is_verified', 'is_featured', 'direct_orders_enabled', 'menu_layout',
+        'store_category_id', 'is_24_7',
         'sort_order', 'price_band', 'tagline_ar', 'tagline_en', 'menu_sheets', 'brand_color',
     ];
 
@@ -39,6 +40,7 @@ class Restaurant extends Model
             'is_verified' => 'boolean',
             'is_featured' => 'boolean',
             'direct_orders_enabled' => 'boolean',
+            'is_24_7' => 'boolean',
         ];
     }
 
@@ -55,6 +57,11 @@ class Restaurant extends Model
     public function serviceZone(): BelongsTo
     {
         return $this->belongsTo(ServiceZone::class);
+    }
+
+    public function storeCategory(): BelongsTo
+    {
+        return $this->belongsTo(StoreCategory::class);
     }
 
     public function cuisines(): BelongsToMany
@@ -102,6 +109,14 @@ class Restaurant extends Model
     {
         if (! $this->is_open_manual || ! $this->is_active) {
             return false;
+        }
+
+        // «مفتوح 24 ساعة» is the default and it is a real answer, not an empty week.
+        // A shop that keeps no hours row already read as open — but one that kept a
+        // stale week from before the operator flipped the switch did not, and the
+        // switch is the thing they just told us to believe.
+        if ($this->is_24_7) {
+            return true;
         }
 
         // `BusinessTime`, not `now()`. Opening hours are a clock on a wall in Gamasa and

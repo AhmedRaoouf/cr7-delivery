@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Actions\Auth\RegisterCustomerAction;
 use App\Actions\Auth\SendOtpAction;
 use App\Actions\Auth\VerifyOtpAction;
 use App\Enums\OtpPurpose;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\RegisterCustomerRequest;
 use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
@@ -13,7 +15,15 @@ use App\Support\ApiResponse;
 use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 
-/** FR-AUTH-01/02/03 — the customer shell never has a password. */
+/**
+ * FR-AUTH-01/02/03 — the customer's own three requests.
+ *
+ * The shell used to be OTP-only; since 2026-09-07 a customer has a password like everyone
+ * else, and «إنشاء حساب» is: send a code, verify it, choose a password. `verifyOtp` still
+ * answers a session for `purpose = login`, because every account created before that day
+ * has no password and OTP is the only way back in for them — and the way they get one is
+ * «نسيت كلمة المرور», which is the same code down the same wire.
+ */
 class CustomerAuthController extends Controller
 {
     public function sendOtp(SendOtpRequest $request, SendOtpAction $action): JsonResponse
@@ -39,10 +49,29 @@ class CustomerAuthController extends Controller
 
         $result = $action->execute($request->string('phone'), $request->string('code'), $purpose);
 
+        // Registration answers a token, not a session — the account does not exist yet.
+        if (array_key_exists('registration_token', $result)) {
+            return ApiResponse::success($result, 'تم التحقق من رقمك — اختر كلمة مرور');
+        }
+
         return ApiResponse::success([
             'user' => new UserResource($result['user']),
             'token' => $result['token'],
             'is_new_user' => $result['is_new_user'],
         ], 'تم تسجيل الدخول بنجاح');
+    }
+
+    public function register(RegisterCustomerRequest $request, RegisterCustomerAction $action): JsonResponse
+    {
+        $result = $action->execute(
+            $request->string('registration_token'),
+            $request->string('name'),
+            $request->string('password'),
+        );
+
+        return ApiResponse::success([
+            'user' => new UserResource($result['user']),
+            'token' => $result['token'],
+        ], 'تم إنشاء حسابك بنجاح', status: 201);
     }
 }

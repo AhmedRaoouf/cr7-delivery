@@ -24,10 +24,16 @@ class RestaurantController extends Controller
         $lng = $request->float('lng') ?: null;
 
         $restaurants = Restaurant::query()
-            ->with(['cuisines', 'serviceZone'])
+            ->with(['cuisines', 'serviceZone', 'storeCategory'])
             ->where('is_active', true)
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->when($request->integer('zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
+            // The home strip's filter. Accepts the id or the slug, because the app
+            // deep-links «مطاعم» by slug and the dashboard's own list filters by id.
+            ->when($filter['store_category'] ?? $filter['store_category_id'] ?? null, fn ($q, $category) => $q
+                ->whereHas('storeCategory', fn ($cq) => is_numeric($category)
+                    ? $cq->where('store_categories.id', (int) $category)
+                    : $cq->where('store_categories.slug', $category)))
             ->when($filter['cuisine_id'] ?? null, fn ($q, $cuisineId) => $q->whereHas(
                 'cuisines',
                 fn ($cq) => $cq->where('cuisines.id', $cuisineId),

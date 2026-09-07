@@ -18,6 +18,7 @@ class ErrandRequest extends Model
         'dropoff_lat', 'dropoff_lng', 'dropoff_address_text', 'dropoff_contact_phone',
         'details', 'distance_km', 'offered_fee', 'suggested_fee',
         'driver_id', 'assigned_by', 'assigned_by_user_id',
+        'offered_driver_id', 'offered_by_user_id', 'offered_at', 'declined_driver_ids',
         'purchases_amount', 'purchases_note', 'receipt_urls',
         'cancelled_by', 'cancel_reason',
         'assigned_at', 'picked_up_at', 'delivered_at', 'cancelled_at', 'admin_notified_at',
@@ -45,6 +46,8 @@ class ErrandRequest extends Model
             'purchases_amount' => 'decimal:2',
             'receipt_urls' => 'array',
             'notified_driver_ids' => 'array',
+            'declined_driver_ids' => 'array',
+            'offered_at' => 'datetime',
             'last_published_at' => 'datetime',
             'assigned_at' => 'datetime',
             'picked_up_at' => 'datetime',
@@ -72,6 +75,18 @@ class ErrandRequest extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    /**
+     * The captain an operator has handed this to and who has not answered yet.
+     *
+     * Kept apart from `driver_id` on purpose: an offer is not an assignment, and until
+     * «اقبل» is pressed the errand has no captain. Reading the offer as ownership is
+     * exactly the bug this column exists to prevent.
+     */
+    public function offeredDriver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class, 'offered_driver_id');
     }
 
     public function city(): BelongsTo

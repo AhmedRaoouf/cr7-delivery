@@ -21,6 +21,7 @@ class RestaurantMeController extends Controller
         return ApiResponse::success([
             ...$restaurant->toArray(),
             'is_open_now' => $restaurant->isOpenNow(),
+            'is_24_7' => (bool) $restaurant->is_24_7,
             'pending_count' => $restaurant->orders()->where('status', 'pending')->count(),
         ]);
     }
@@ -63,13 +64,26 @@ class RestaurantMeController extends Controller
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
-        return ApiResponse::success($restaurant->openingHours()->orderBy('weekday')->get());
+        return ApiResponse::success([
+            'is_24_7' => (bool) $restaurant->is_24_7,
+            'hours' => $restaurant->openingHours()->orderBy('weekday')->get(),
+        ]);
     }
 
+    /**
+     * «مفتوح 24 ساعة» first, a week of windows second.
+     *
+     * Operator, 2026-09-07: «مواعيد المطعم مفتوح يعني خليها 24 ساعة دي default… بدل ما
+     * أختار الساعة هنا وأختار الساعة هنا». So the switch is the primary control and the
+     * seven rows only matter when it is off — `hours` is required only then, and the
+     * rows already stored are left alone while it is on, so switching back does not lose
+     * a week somebody spent typing.
+     */
     public function updateOpeningHours(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'hours' => ['required', 'array', 'size:7'],
+            'is_24_7' => ['nullable', 'boolean'],
+            'hours' => ['exclude_if:is_24_7,true', 'required', 'array', 'size:7'],
             'hours.*.weekday' => ['required', 'integer', 'between:0,6'],
             'hours.*.opens_at' => ['nullable', 'date_format:H:i'],
             'hours.*.closes_at' => ['nullable', 'date_format:H:i'],
@@ -78,13 +92,19 @@ class RestaurantMeController extends Controller
 
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
-        foreach ($validated['hours'] as $entry) {
+        $alwaysOpen = (bool) ($validated['is_24_7'] ?? false);
+        $restaurant->update(['is_24_7' => $alwaysOpen]);
+
+        foreach ($validated['hours'] ?? [] as $entry) {
             $restaurant->openingHours()->updateOrCreate(
                 ['weekday' => $entry['weekday']],
                 ['opens_at' => $entry['opens_at'] ?? null, 'closes_at' => $entry['closes_at'] ?? null, 'is_closed' => $entry['is_closed'] ?? false],
             );
         }
 
-        return ApiResponse::success($restaurant->openingHours()->orderBy('weekday')->get(), 'تم تحديث ساعات العمل بنجاح');
+        return ApiResponse::success([
+            'is_24_7' => $alwaysOpen,
+            'hours' => $restaurant->openingHours()->orderBy('weekday')->get(),
+        ], 'تم تحديث ساعات العمل بنجاح');
     }
 }

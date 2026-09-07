@@ -5,6 +5,7 @@ namespace App\Actions\Customer;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
+use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
@@ -23,14 +24,20 @@ class CreateOrderAction
 {
     public function __construct(private readonly CheckoutPricer $pricer) {}
 
-    public function execute(User $user, array $data, string $idempotencyKey): OrderGroup
+    /**
+     * @param  Cart|null  $cart  the basket to place. Defaults to the customer's live one;
+     *                           a scheduled order passes the scratch cart it was rebuilt
+     *                           into, so releasing one at 18:00 cannot consume whatever
+     *                           the customer happens to be shopping for at 18:00.
+     */
+    public function execute(User $user, array $data, string $idempotencyKey, ?Cart $cart = null): OrderGroup
     {
         $existing = OrderGroup::query()->where('idempotency_key', $idempotencyKey)->where('user_id', $user->id)->first();
         if ($existing) {
             return $existing->load(['orders.restaurant', 'payment']);
         }
 
-        $cart = $user->cart()->firstOrCreate([]);
+        $cart ??= $user->cart()->firstOrCreate([]);
         if ($cart->items()->count() === 0) {
             throw new ApiException('cart_empty', 'السلة فارغة', 422);
         }

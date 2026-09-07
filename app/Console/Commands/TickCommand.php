@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Customer\ReleaseScheduledOrdersAction;
 use App\Actions\Restaurant\MarkOrderReadyAction;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
@@ -66,8 +67,12 @@ class TickCommand extends Command
      */
     private const TIMEOUT_MAX_AGE_HOURS = 24;
 
-    public function handle(DispatchService $dispatch, MarkOrderReadyAction $markReady, ErrandDispatcher $errands): int
-    {
+    public function handle(
+        DispatchService $dispatch,
+        MarkOrderReadyAction $markReady,
+        ErrandDispatcher $errands,
+        ReleaseScheduledOrdersAction $scheduled,
+    ): int {
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
 
         if (! $lock->get()) {
@@ -81,7 +86,7 @@ class TickCommand extends Command
             $sleep = max(1, (int) $this->option('sleep'));
 
             for ($pass = 1; $pass <= $passes; $pass++) {
-                $this->pass($dispatch, $markReady, $errands);
+                $this->pass($dispatch, $markReady, $errands, $scheduled);
 
                 if ($pass < $passes) {
                     sleep($sleep);
@@ -94,8 +99,12 @@ class TickCommand extends Command
         return self::SUCCESS;
     }
 
-    private function pass(DispatchService $dispatch, MarkOrderReadyAction $markReady, ErrandDispatcher $errands): void
-    {
+    private function pass(
+        DispatchService $dispatch,
+        MarkOrderReadyAction $markReady,
+        ErrandDispatcher $errands,
+        ReleaseScheduledOrdersAction $scheduled,
+    ): void {
         $this->sweep('prep timers', fn () => $this->expirePrepTimers($markReady));
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
@@ -111,6 +120,14 @@ class TickCommand extends Command
         // The errand half of the same ruling: a captain who came online after the
         // request was published had never been told it existed.
         $this->sweep('republish errands', fn () => $errands->republishOpen());
+        // «الساعة ستة اللي هو عاملها تيجي فيقوم رايح يبعت». The minute a scheduled
+        // basket becomes a real order — through the same `CreateOrderAction` a
+        // customer's own checkout uses, so there is no second path to keep in step.
+        $this->sweep('scheduled orders', function () use ($scheduled) {
+            $result = $scheduled->releaseDue();
+
+            return $result['released'] + $result['failed'];
+        });
     }
 
     /** @param callable():int $work */

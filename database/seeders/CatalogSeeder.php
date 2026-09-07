@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\PromoCode;
 use App\Models\Restaurant;
 use App\Models\ServiceZone;
+use App\Models\StoreCategory;
 use App\Models\User;
 use App\Support\PriceBand;
 use App\Support\Settings;
@@ -57,9 +58,10 @@ class CatalogSeeder extends Seeder
 
         $zones = ServiceZone::query()->where('city_id', $city->id)->get()->keyBy('name_en');
         $cuisines = $this->seedCuisines($data['cuisines']);
+        $storeCategories = $this->seedStoreCategories($data['store_categories'] ?? []);
 
         foreach ($data['restaurants'] as $row) {
-            $this->seedRestaurant($row, $city, $zones, $cuisines);
+            $this->seedRestaurant($row, $city, $zones, $cuisines, $storeCategories);
         }
 
         $this->seedBanners($data['banners'], $city);
@@ -99,7 +101,40 @@ class CatalogSeeder extends Seeder
         return $map;
     }
 
-    private function seedRestaurant(array $row, City $city, $zones, array $cuisines): void
+    /**
+     * The home screen's top strip — «مطاعم / صيدليات / كافيهات / سوبرماركت / خضروات».
+     *
+     * `updateOrCreate` on the slug, and the artwork is refreshed on every run: the
+     * operator can rename a category or swap its picture from the dashboard, and this
+     * must not undo that — but a fresh database has to come up with the cards drawn.
+     *
+     * @return array<string, int> slug => store_categories.id
+     */
+    private function seedStoreCategories(array $rows): array
+    {
+        $map = [];
+
+        foreach ($rows as $row) {
+            $category = StoreCategory::query()->updateOrCreate(
+                ['slug' => $row['slug']],
+                [
+                    'name_ar' => $row['name_ar'],
+                    'name_en' => $row['name_en'],
+                    'image' => $this->url($row['image'] ?? null),
+                    'icon' => $this->url($row['icon'] ?? null),
+                    'color' => $row['color'] ?? null,
+                    'sort_order' => $row['sort_order'] ?? 0,
+                    'is_active' => true,
+                ],
+            );
+
+            $map[$row['slug']] = $category->id;
+        }
+
+        return $map;
+    }
+
+    private function seedRestaurant(array $row, City $city, $zones, array $cuisines, array $storeCategories = []): void
     {
         $zone = $zones[$row['zone_en']] ?? $zones->first();
 
@@ -125,6 +160,7 @@ class CatalogSeeder extends Seeder
                 'user_id' => $owner->id,
                 'city_id' => $city->id,
                 'service_zone_id' => $zone->id,
+                'store_category_id' => $storeCategories[$row['store_category'] ?? ''] ?? null,
                 'name_ar' => $row['name_ar'],
                 'name_en' => $row['name_en'],
                 'tagline_ar' => $row['tagline_ar'],

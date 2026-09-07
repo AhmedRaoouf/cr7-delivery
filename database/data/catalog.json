@@ -356,7 +356,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-02",
@@ -1905,7 +1906,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-03",
@@ -2971,7 +2973,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-04",
@@ -7120,7 +7123,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "cafes"
   },
   {
    "code": "r-05",
@@ -8447,7 +8451,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-06",
@@ -9236,7 +9241,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-07",
@@ -9368,7 +9374,8 @@
       }
      ]
     }
-   ]
+   ],
+   "store_category": "restaurants"
   },
   {
    "code": "r-08",
@@ -12769,6 +12776,1258 @@
       }
      ]
     }
+   ],
+   "store_category": "restaurants"
+  },
+  {
+   "code": "r-18",
+   "slug": "amr-pharmacy",
+   "name_ar": "صيدلية عمرو",
+   "name_en": "Amr Pharmacy",
+   "tagline_ar": "دواؤك يصلك في دقائق",
+   "tagline_en": "Your medicine, in minutes",
+   "description_ar": "صيدلية عمرو — أدوية ومستلزمات طبية وعناية شخصية، توصيل داخل جمصة",
+   "description_en": "Amr Pharmacy — medicines, medical supplies and personal care, delivered across Gamasa",
+   "logo": "catalog/restaurants/amr-pharmacy.png",
+   "cover": null,
+   "menu_sheets": [],
+   "brand_color": "#12B76A",
+   "owner_phone": "01000000181",
+   "phone": "01000000181",
+   "whatsapp": "01000000181",
+   "address": "مصيف جمصة — الشارع العمومي",
+   "latitude": 31.4457,
+   "longitude": 31.5188,
+   "zone_en": "Gamasa Center",
+   "cuisines": [],
+   "min_order_value": 30.0,
+   "avg_prep_minutes": 10,
+   "rating_avg": 4.7,
+   "rating_count": 86,
+   "menu_layout": "list",
+   "sort_order": 40,
+   "is_featured": false,
+   "store_category": "pharmacies",
+   "categories": [
+    {
+     "name_ar": "مسكنات وخافضات حرارة",
+     "name_en": "Pain & fever",
+     "sort_order": 0,
+     "products": [
+      {
+       "name_ar": "باراسيتامول 500 مجم — شريط",
+       "name_en": "باراسيتامول 500 مجم — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 25.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": true,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بروفين 400 مجم — شريط",
+       "name_en": "بروفين 400 مجم — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 42.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كتافلام 50 مجم — شريط",
+       "name_en": "كتافلام 50 مجم — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 38.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "أسبرين بروتكت 75 مجم",
+       "name_en": "أسبرين بروتكت 75 مجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 30.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كمادات هلامية خافضة للحرارة",
+       "name_en": "كمادات هلامية خافضة للحرارة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 45.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "برد وحساسية",
+     "name_en": "Cold & allergy",
+     "sort_order": 1,
+     "products": [
+      {
+       "name_ar": "كونجستال — شريط",
+       "name_en": "كونجستال — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 28.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "فلورست — شريط",
+       "name_en": "فلورست — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 35.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كلاريتين 10 مجم",
+       "name_en": "كلاريتين 10 مجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 55.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "محلول ملحي لغسيل الأنف",
+       "name_en": "محلول ملحي لغسيل الأنف",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 40.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شراب سعال للأطفال",
+       "name_en": "شراب سعال للأطفال",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 48.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "معدة وجهاز هضمي",
+     "name_en": "Digestive",
+     "sort_order": 2,
+     "products": [
+      {
+       "name_ar": "أنتينال — علبة",
+       "name_en": "أنتينال — علبة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 52.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "موتيليوم — شريط",
+       "name_en": "موتيليوم — شريط",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 34.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "فوار إينو",
+       "name_en": "فوار إينو",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 12.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "محلول معالجة الجفاف — ظرف",
+       "name_en": "محلول معالجة الجفاف — ظرف",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 8.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مالوكس شراب",
+       "name_en": "مالوكس شراب",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 60.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مستلزمات طبية",
+     "name_en": "Medical supplies",
+     "sort_order": 3,
+     "products": [
+      {
+       "name_ar": "كمامة طبية — علبة 50",
+       "name_en": "كمامة طبية — علبة 50",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 70.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شاش معقم",
+       "name_en": "شاش معقم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 18.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بلاستر جروح — علبة",
+       "name_en": "بلاستر جروح — علبة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 25.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "ترمومتر رقمي",
+       "name_en": "ترمومتر رقمي",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 120.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "جهاز قياس ضغط رقمي",
+       "name_en": "جهاز قياس ضغط رقمي",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 850.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      },
+      {
+       "name_ar": "قفازات طبية — علبة",
+       "name_en": "قفازات طبية — علبة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 95.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 5,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "عناية شخصية",
+     "name_en": "Personal care",
+     "sort_order": 4,
+     "products": [
+      {
+       "name_ar": "كحول طبي 70% — 250 مل",
+       "name_en": "كحول طبي 70% — 250 مل",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 35.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مطهر ديتول 250 مل",
+       "name_en": "مطهر ديتول 250 مل",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 65.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "واقي شمس SPF50",
+       "name_en": "واقي شمس SPF50",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 210.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شامبو للأطفال",
+       "name_en": "شامبو للأطفال",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 95.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كريم مرطب لليدين",
+       "name_en": "كريم مرطب لليدين",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 70.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "أمومة وطفل",
+     "name_en": "Mother & baby",
+     "sort_order": 5,
+     "products": [
+      {
+       "name_ar": "حفاضات أطفال — مقاس 3",
+       "name_en": "حفاضات أطفال — مقاس 3",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 190.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مناديل مبللة للأطفال",
+       "name_en": "مناديل مبللة للأطفال",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 55.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "ببرونة رضاعة",
+       "name_en": "ببرونة رضاعة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 120.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "لبن أطفال مرحلة 1",
+       "name_en": "لبن أطفال مرحلة 1",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 320.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كريم تسلخات",
+       "name_en": "كريم تسلخات",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 85.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "r-16",
+   "slug": "tag-hyper",
+   "name_ar": "تاج هايبر",
+   "name_en": "TAG HYPER",
+   "tagline_ar": "كل احتياجات البيت في مكان واحد",
+   "tagline_en": "Everything your home needs",
+   "description_ar": "تاج هايبر — بقالة وخضروات ومنظفات ومستلزمات منزلية",
+   "description_en": "TAG HYPER — groceries, produce, cleaning and household supplies",
+   "logo": "catalog/restaurants/tag-hyper.png",
+   "cover": null,
+   "menu_sheets": [],
+   "brand_color": "#2E7CF6",
+   "owner_phone": "01000000161",
+   "phone": "01000000161",
+   "whatsapp": "01000000161",
+   "address": "مصيف جمصة — الطريق العمومي",
+   "latitude": 31.4398,
+   "longitude": 31.5107,
+   "zone_en": "Gamasa Center",
+   "cuisines": [],
+   "min_order_value": 75.0,
+   "avg_prep_minutes": 20,
+   "rating_avg": 4.5,
+   "rating_count": 143,
+   "menu_layout": "list",
+   "sort_order": 41,
+   "is_featured": true,
+   "store_category": "supermarkets",
+   "categories": [
+    {
+     "name_ar": "بقالة أساسية",
+     "name_en": "Pantry",
+     "sort_order": 0,
+     "products": [
+      {
+       "name_ar": "أرز مصري — 1 كجم",
+       "name_en": "أرز مصري — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 48.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": true,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مكرونة إسباجتي — 400 جم",
+       "name_en": "مكرونة إسباجتي — 400 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 22.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "سكر أبيض — 1 كجم",
+       "name_en": "سكر أبيض — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 42.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "زيت عباد الشمس — 1 لتر",
+       "name_en": "زيت عباد الشمس — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 95.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "ملح طعام — 1 كجم",
+       "name_en": "ملح طعام — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 10.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      },
+      {
+       "name_ar": "دقيق فاخر — 1 كجم",
+       "name_en": "دقيق فاخر — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 30.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 5,
+       "option_groups": []
+      },
+      {
+       "name_ar": "عدس أصفر — 500 جم",
+       "name_en": "عدس أصفر — 500 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 45.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 6,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "ألبان وأجبان",
+     "name_en": "Dairy",
+     "sort_order": 1,
+     "products": [
+      {
+       "name_ar": "لبن كامل الدسم — 1 لتر",
+       "name_en": "لبن كامل الدسم — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 42.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "جبنة بيضاء — 500 جم",
+       "name_en": "جبنة بيضاء — 500 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 75.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "جبنة رومي — 250 جم",
+       "name_en": "جبنة رومي — 250 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 120.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "زبادي — عبوة 4",
+       "name_en": "زبادي — عبوة 4",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 40.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "زبدة — 200 جم",
+       "name_en": "زبدة — 200 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 115.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بيض — طبق 30",
+       "name_en": "بيض — طبق 30",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 180.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 5,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مشروبات",
+     "name_en": "Drinks",
+     "sort_order": 2,
+     "products": [
+      {
+       "name_ar": "مياه معدنية 1.5 لتر",
+       "name_en": "مياه معدنية 1.5 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 12.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بيبسي — 1 لتر",
+       "name_en": "بيبسي — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 30.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "عصير مانجو — 1 لتر",
+       "name_en": "عصير مانجو — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 38.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شاي فاخر — 250 جم",
+       "name_en": "شاي فاخر — 250 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 85.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "نسكافيه — 100 جم",
+       "name_en": "نسكافيه — 100 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 165.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "منظفات",
+     "name_en": "Cleaning",
+     "sort_order": 3,
+     "products": [
+      {
+       "name_ar": "مسحوق غسيل — 3 كجم",
+       "name_en": "مسحوق غسيل — 3 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 240.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "سائل جلي — 1 لتر",
+       "name_en": "سائل جلي — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 55.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كلور مطهر — 1 لتر",
+       "name_en": "كلور مطهر — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 30.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "منظف أرضيات — 1 لتر",
+       "name_en": "منظف أرضيات — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 48.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "أكياس قمامة — رول",
+       "name_en": "أكياس قمامة — رول",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 35.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مستلزمات منزلية",
+     "name_en": "Household",
+     "sort_order": 4,
+     "products": [
+      {
+       "name_ar": "مناديل ورقية — علبة",
+       "name_en": "مناديل ورقية — علبة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 28.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "ورق ألومنيوم",
+       "name_en": "ورق ألومنيوم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 65.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "فحم شواء — 2 كجم",
+       "name_en": "فحم شواء — 2 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 90.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شمع إضاءة",
+       "name_en": "شمع إضاءة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 25.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مجمدات",
+     "name_en": "Frozen",
+     "sort_order": 5,
+     "products": [
+      {
+       "name_ar": "بطاطس مقلية مجمدة — 1 كجم",
+       "name_en": "بطاطس مقلية مجمدة — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 95.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بازلاء مجمدة — 400 جم",
+       "name_en": "بازلاء مجمدة — 400 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 48.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "خضار مشكل مجمد — 400 جم",
+       "name_en": "خضار مشكل مجمد — 400 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 52.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "سمك فيليه مجمد — 1 كجم",
+       "name_en": "سمك فيليه مجمد — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 280.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "r-17",
+   "slug": "haytham-market",
+   "name_ar": "هيثم ماركت",
+   "name_en": "Haytham Market",
+   "tagline_ar": "قريب منك وسعره معاك",
+   "tagline_en": "Close to you, easy on the pocket",
+   "description_ar": "هيثم ماركت — بقالة يومية ومشروبات وسناكس، توصيل سريع داخل جمصة",
+   "description_en": "Haytham Market — daily groceries, drinks and snacks, quick delivery in Gamasa",
+   "logo": "catalog/restaurants/haytham-market.png",
+   "cover": null,
+   "menu_sheets": [],
+   "brand_color": "#B8860B",
+   "owner_phone": "01000000171",
+   "phone": "01000000171",
+   "whatsapp": "01000000171",
+   "address": "مصيف جمصة — شارع البحر",
+   "latitude": 31.4482,
+   "longitude": 31.5231,
+   "zone_en": "Gamasa Beach",
+   "cuisines": [],
+   "min_order_value": 50.0,
+   "avg_prep_minutes": 15,
+   "rating_avg": 4.4,
+   "rating_count": 61,
+   "menu_layout": "list",
+   "sort_order": 42,
+   "is_featured": false,
+   "store_category": "supermarkets",
+   "categories": [
+    {
+     "name_ar": "بقالة يومية",
+     "name_en": "Daily basics",
+     "sort_order": 0,
+     "products": [
+      {
+       "name_ar": "عيش فينو — 5 أرغفة",
+       "name_en": "عيش فينو — 5 أرغفة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 20.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": true,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "لبن — 1 لتر",
+       "name_en": "لبن — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 42.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بيض — طبق 30",
+       "name_en": "بيض — طبق 30",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 180.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "سكر — 1 كجم",
+       "name_en": "سكر — 1 كجم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 42.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شاي — 100 جم",
+       "name_en": "شاي — 100 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 38.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "سناكس",
+     "name_en": "Snacks",
+     "sort_order": 1,
+     "products": [
+      {
+       "name_ar": "شيبسي — كيس كبير",
+       "name_en": "شيبسي — كيس كبير",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 25.0,
+       "tags": [
+        "best_seller"
+       ],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "بسكويت شاي",
+       "name_en": "بسكويت شاي",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 18.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "شوكولاتة",
+       "name_en": "شوكولاتة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 22.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مكسرات مشكلة — 250 جم",
+       "name_en": "مكسرات مشكلة — 250 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 145.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      },
+      {
+       "name_ar": "لب سوري — 250 جم",
+       "name_en": "لب سوري — 250 جم",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 70.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 4,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مشروبات",
+     "name_en": "Drinks",
+     "sort_order": 2,
+     "products": [
+      {
+       "name_ar": "مياه معدنية 1.5 لتر",
+       "name_en": "مياه معدنية 1.5 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 12.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كوكاكولا — 1 لتر",
+       "name_en": "كوكاكولا — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 30.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "عصير برتقال — 1 لتر",
+       "name_en": "عصير برتقال — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 38.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مشروب طاقة",
+       "name_en": "مشروب طاقة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 45.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 3,
+       "option_groups": []
+      }
+     ]
+    },
+    {
+     "name_ar": "مثلجات",
+     "name_en": "Ice cream",
+     "sort_order": 3,
+     "products": [
+      {
+       "name_ar": "آيس كريم فانيليا — 1 لتر",
+       "name_en": "آيس كريم فانيليا — 1 لتر",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 130.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 0,
+       "option_groups": []
+      },
+      {
+       "name_ar": "مصاصة مثلجة",
+       "name_en": "مصاصة مثلجة",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 15.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 1,
+       "option_groups": []
+      },
+      {
+       "name_ar": "كورنيتو",
+       "name_en": "كورنيتو",
+       "description_ar": null,
+       "description_en": null,
+       "image": null,
+       "price": 35.0,
+       "tags": [],
+       "is_featured": false,
+       "is_available": true,
+       "sort_order": 2,
+       "option_groups": []
+      }
+     ]
+    }
    ]
   }
  ],
@@ -12796,6 +14055,53 @@
    "link_type": "restaurant",
    "link_value": "r-01",
    "sort_order": 2
+  }
+ ],
+ "store_categories": [
+  {
+   "slug": "restaurants",
+   "name_ar": "مطاعم",
+   "name_en": "Restaurants",
+   "image": "catalog/store-categories/restaurants.png",
+   "icon": "catalog/store-categories/icon-restaurants.png",
+   "color": "#E8112D",
+   "sort_order": 0
+  },
+  {
+   "slug": "pharmacies",
+   "name_ar": "صيدليات",
+   "name_en": "Pharmacies",
+   "image": "catalog/store-categories/pharmacies.png",
+   "icon": "catalog/store-categories/icon-pharmacies.png",
+   "color": "#12B76A",
+   "sort_order": 1
+  },
+  {
+   "slug": "cafes",
+   "name_ar": "كافيهات",
+   "name_en": "Cafés",
+   "image": "catalog/store-categories/cafes.png",
+   "icon": "catalog/store-categories/icon-cafes.png",
+   "color": "#A9662B",
+   "sort_order": 2
+  },
+  {
+   "slug": "supermarkets",
+   "name_ar": "سوبرماركت",
+   "name_en": "Supermarkets",
+   "image": "catalog/store-categories/supermarkets.png",
+   "icon": "catalog/store-categories/icon-supermarkets.png",
+   "color": "#2E7CF6",
+   "sort_order": 3
+  },
+  {
+   "slug": "greengrocers",
+   "name_ar": "خضروات وفاكهة",
+   "name_en": "Greengrocers",
+   "image": "catalog/store-categories/greengrocers.png",
+   "icon": "catalog/store-categories/icon-greengrocers.png",
+   "color": "#5BA524",
+   "sort_order": 4
   }
  ]
 }

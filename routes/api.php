@@ -561,7 +561,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/errands/{errand}', [AdminErrandController::class, 'show']);
             Route::get('/errands/{errand}/eligible-drivers', [AdminErrandController::class, 'eligibleDrivers']);
         });
-        Route::post('/scheduled-orders/{scheduledOrder}/release', [AdminScheduledOrderController::class, 'release'])->middleware('permission:orders.update_status');
+        // `orders.force_status`, not `orders.update_status` — the latter does not exist
+        // in the catalogue, and `permission:` on a name nothing grants denies everybody.
+        // Found by pressing the button on production, which is the only way a route
+        // gated on a typo is ever found.
+        Route::post('/scheduled-orders/{scheduledOrder}/release', [AdminScheduledOrderController::class, 'release'])->middleware('permission:orders.force_status');
         Route::post('/scheduled-orders/{scheduledOrder}/cancel', [AdminScheduledOrderController::class, 'cancel'])->middleware('permission:orders.cancel');
 
         Route::post('/errands/{errand}/assign', [AdminErrandController::class, 'assign'])->middleware('permission:orders.reassign_driver');

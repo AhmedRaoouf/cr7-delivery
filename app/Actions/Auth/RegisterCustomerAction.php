@@ -47,7 +47,7 @@ class RegisterCustomerAction
             if ($existing !== null) {
                 throw new ApiException(
                     'phone_taken',
-                    "هذا الرقم مسجل بالفعل كـ{$existing->type->label()} — سجّل الدخول بكلمة المرور",
+                    "هذا الرقم مسجل بالفعل ك{$existing->type->label()} — سجّل الدخول بكلمة المرور",
                     409,
                     meta: ['account_type' => $existing->type->value],
                 );

@@ -72,7 +72,7 @@ class VerifyOtpAction
                 if ($existing !== null) {
                     throw new ApiException(
                         'phone_taken',
-                        "هذا الرقم مسجل بالفعل كـ{$existing->type->label()} — سجّل الدخول بكلمة المرور",
+                        "هذا الرقم مسجل بالفعل ك{$existing->type->label()} — سجّل الدخول بكلمة المرور",
                         409,
                         meta: ['account_type' => $existing->type->value],
                     );
@@ -108,7 +108,7 @@ class VerifyOtpAction
                 // قبل كده».
                 throw new ApiException(
                     'wrong_client',
-                    "هذا الرقم مسجل كـ{$user->type->label()} — سجّل الدخول بكلمة المرور",
+                    "هذا الرقم مسجل ك{$user->type->label()} — سجّل الدخول بكلمة المرور",
                     403,
                     meta: ['account_type' => $user->type->value],
                 );

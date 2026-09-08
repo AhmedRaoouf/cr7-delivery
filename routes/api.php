@@ -113,6 +113,11 @@ Route::prefix('v1')->group(function () {
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('/geo/reverse', [GeoController::class, 'reverse']);
         Route::get('/geo/search', [GeoController::class, 'search']);
+        // Follows a shortened maps link to the URL that carries the coordinates. Not a
+        // provider call, but throttled with them: it is the one route here that makes
+        // the server fetch a URL a user chose, and the host allowlist inside is what
+        // keeps that from being an open proxy.
+        Route::get('/geo/expand-link', [GeoController::class, 'expandLink']);
     });
     Route::get('/cuisines', [SharedCuisineController::class, 'index']);
     // The home screen's top strip. Public — the app browses before it signs in.

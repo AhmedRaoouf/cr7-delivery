@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 /**
  * doc 08 §2 — POST /geo/resolve, plus the two geocoding proxies.
@@ -139,6 +140,139 @@ class GeoController extends Controller
             isset($validated['lng']) ? (float) $validated['lng'] : null,
             $this->language($request),
         ));
+    }
+
+    /**
+     * `GET /geo/expand-link?url=` — the point behind a shortened maps link.
+     *
+     * Operator, 2026-09-08: «اجيب لينك من google maps». The share sheet on a phone
+     * produces `https://maps.app.goo.gl/xxxx`, which carries no coordinates at all —
+     * they only appear in the URL it redirects to. Every other shape of link the
+     * dashboards parse in the browser; this is the one that needs a round trip, and
+     * it has to happen here because the browser cannot read a cross-origin redirect.
+     *
+     * The host allowlist is the whole security of this endpoint: without it, an
+     * authenticated user could aim a server-side GET at any address the server can
+     * reach, including the metadata service and anything on localhost.
+     *
+     * A link that cannot be followed answers 422 with a sentence, never a 500 — the
+     * operator's next move is to paste the full link, and they need to be told that.
+     */
+    public function expandLink(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'url' => ['required', 'string', 'max:2048', 'url'],
+        ]);
+
+        $url = $validated['url'];
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        if (! in_array($scheme, ['http', 'https'], true) || ! $this->isMapHost($host)) {
+            return ApiResponse::error('unsupported_map_link', 'هذا الرابط ليس رابط خريطة معروفًا.');
+        }
+
+        $cacheKey = 'geo:expand:'.sha1($url);
+        $cached = Cache::get($cacheKey);
+
+        if (is_array($cached)) {
+            return ApiResponse::success($cached);
+        }
+
+        try {
+            $response = Http::withHeaders([
+                // Google answers a bare client with an interstitial that carries no
+                // coordinates; with a browser UA it answers the redirect.
+                'User-Agent' => 'Mozilla/5.0 (compatible; CR7Delivery/1.0)',
+                'Accept-Language' => 'ar,en;q=0.8',
+            ])
+                ->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])
+                ->timeout(8)
+                ->get($url);
+        } catch (\Throwable) {
+            return ApiResponse::error('map_link_unreachable', 'تعذّر فتح الرابط.');
+        }
+
+        $history = $response->getHeader('X-Guzzle-Redirect-History');
+        $finalUrl = $history === [] ? $url : (string) end($history);
+
+        $point = self::pointFromUrl($finalUrl)
+            // A link that redirects to a consent page keeps its target in `continue=`;
+            // and where the URL says nothing, the page itself still carries the pin.
+            ?? self::pointFromUrl(urldecode($finalUrl))
+            ?? self::pointFromUrl((string) $response->body());
+
+        if ($point === null) {
+            return ApiResponse::error('map_link_has_no_point', 'الرابط لا يحمل موقعًا يمكن قراءته.');
+        }
+
+        $payload = ['lat' => $point[0], 'lng' => $point[1], 'url' => $finalUrl];
+        Cache::put($cacheKey, $payload, now()->addDay());
+
+        return ApiResponse::success($payload);
+    }
+
+    /**
+     * Only the map services, and only by exact host or a `.`-anchored suffix — a
+     * `str_contains` check here would accept `google.com.attacker.example`.
+     */
+    private function isMapHost(string $host): bool
+    {
+        $allowed = [
+            'goo.gl', 'app.goo.gl', 'g.co', 'google.com', 'maps.google.com',
+            'apple.com', 'openstreetmap.org', 'osm.org', 'waze.com', 'bing.com',
+        ];
+
+        foreach ($allowed as $domain) {
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The most specific point a maps URL or page carries, or `null`.
+     *
+     * Mirrors `packages/ui/src/lib/map-link.ts`, and in the same order and for the same
+     * reason: `!3d…!4d…` is the pin Google dropped on the place, `q=`/`ll=` is what the
+     * sharer asked for, and `@…` is only where the camera was — often a block away.
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    private static function pointFromUrl(string $text): ?array
+    {
+        $number = '-?\d{1,3}(?:\.\d+)?';
+
+        $patterns = [
+            "/!3d({$number})!4d({$number})/",
+            "/[?&](?:q|query|ll|sll|center|daddr|destination)=({$number}),\s*({$number})/i",
+            "/[?&]mlat=({$number})[^&]*&(?:[^&]*&)?mlon=({$number})/i",
+            "/[@\/]({$number}),({$number})(?:,|\/|z|\?|&|$)/",
+            "/map=\d+(?:\.\d+)?\/({$number})\/({$number})/",
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $text, $matches) !== 1) {
+                continue;
+            }
+
+            $lat = (float) $matches[1];
+            $lng = (float) $matches[2];
+
+            // `0,0` is what a half-matched pattern produces. Silently moving a shop to
+            // the Atlantic is worse than saying the link was not understood.
+            if ($lat === 0.0 && $lng === 0.0) {
+                continue;
+            }
+
+            if ($lat >= -90 && $lat <= 90 && $lng >= -180 && $lng <= 180) {
+                return [$lat, $lng];
+            }
+        }
+
+        return null;
     }
 
     /**

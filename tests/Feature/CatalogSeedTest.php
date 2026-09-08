@@ -225,4 +225,33 @@ class CatalogSeedTest extends TestCase
 
         $this->assertSame([], array_values(array_unique($missing)));
     }
+
+    /**
+     * Replacing artwork at a path that already exists has to change the URL.
+     *
+     * The app keeps every remote image on disk for thirty days keyed on its URL, so a
+     * regenerated picture served from the same path is invisible on any phone that has
+     * already seen the old one. On 2026-09-08 «مطاعم» was replaced, the server served
+     * the new file, and the app kept drawing the empty plate it had cached — nothing
+     * anywhere reported a fault.
+     *
+     * The stamp is derived from the file, so an unchanged one keeps its URL and a
+     * re-seed does not invalidate the whole catalogue.
+     */
+    public function test_seeded_artwork_carries_a_stamp_that_changes_with_the_file(): void
+    {
+        $cover = Restaurant::query()->whereNotNull('cover')->value('cover');
+
+        $this->assertNotNull($cover);
+        $this->assertMatchesRegularExpression('/\?v=[0-9a-f]{8}$/', $cover);
+
+        $path = public_path(parse_url($cover, PHP_URL_PATH));
+        parse_str((string) parse_url($cover, PHP_URL_QUERY), $query);
+
+        $this->assertSame(
+            substr(md5(filemtime($path).':'.filesize($path)), 0, 8),
+            $query['v'],
+            'the stamp must come from the file, not from the seed run',
+        );
+    }
 }

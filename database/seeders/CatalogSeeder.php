@@ -511,9 +511,28 @@ class CatalogSeeder extends Seeder
      * `public/catalog/...` served straight off the web root, so the images work the
      * moment the repo is deployed — no `storage:link`, no upload step. The absolute
      * URL is built from APP_URL at seed time, exactly like FileUploader does.
+     *
+     * **With a `?v=` stamped from the file itself.** The app keeps every remote image
+     * on disk for thirty days keyed on its URL (`MediaCache`), so replacing artwork at
+     * a path that already exists changes nothing on a phone that has already seen it —
+     * the old picture stays for a month. That is exactly what happened on 2026-09-08:
+     * «مطاعم» was regenerated, the server served the new file, and the app kept drawing
+     * the empty plate. Deriving the stamp from `filemtime` + `filesize` means an
+     * unchanged file keeps its URL — so a re-seed does not invalidate the whole
+     * catalogue — and a replaced one gets a new one, which is a cache miss by
+     * construction rather than by asking anybody to clear anything.
      */
     private function url(?string $path): ?string
     {
-        return $path === null ? null : asset($path);
+        if ($path === null) {
+            return null;
+        }
+
+        $file = public_path($path);
+        if (! is_file($file)) {
+            return asset($path);
+        }
+
+        return asset($path).'?v='.substr(md5((string) filemtime($file).':'.filesize($file)), 0, 8);
     }
 }

@@ -53,6 +53,10 @@ class HomePopupResource extends JsonResource
             'secondary_action' => $this->secondary_action,
 
             'frequency' => $this->frequency,
+            // Who the card is for. The app never filters on it — the queue it
+            // receives is already narrowed — but the dashboard reads the same
+            // resource back into its own form.
+            'audience' => $this->audience,
             'theme' => $this->theme,
             'sort_order' => $this->sort_order,
             'is_active' => (bool) $this->is_active,

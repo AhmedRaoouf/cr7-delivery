@@ -27,6 +27,10 @@ class HomePopupController extends Controller
     {
         $popups = HomePopup::query()
             ->live()
+            // Public route, so the token is resolved rather than required — a
+            // signed-out visitor keeps every `all` card and none of the ones
+            // that depend on knowing whether the account is new.
+            ->forViewer(auth('sanctum')->user())
             // The resource resolves a `category` popup to the category's slug.
             ->with('storeCategory:id,slug')
             ->orderBy('sort_order')

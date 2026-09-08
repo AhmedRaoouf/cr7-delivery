@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\OrderStatus;
 use App\Models\Banner;
+use App\Models\HomePopup;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
@@ -166,6 +167,39 @@ class FirstOrderFreeDeliveryTest extends TestCase
         $this->giveAnOrder($returning, OrderStatus::Delivered);
         $this->actingAs($returning, 'sanctum')
             ->getJson('/api/v1/banners')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $newAccountOnly->id]);
+    }
+
+    public function test_the_popup_queue_is_narrowed_the_same_way_as_the_banners(): void
+    {
+        // «العرض المنبثق» carries the same six destinations as a banner by design and
+        // is authored from the same page, so «who sees it» has to mean the same thing
+        // on both — otherwise the free-delivery card could be shown as a popup to an
+        // account the banner beside it already knows will be charged.
+        $newAccountOnly = HomePopup::query()->create([
+            'title_ar' => 'أول طلب لك علينا',
+            'body_ar' => 'التوصيل مجاني على أول طلب.',
+            'primary_label_ar' => 'اطلب الآن',
+            'link_type' => 'none',
+            'audience' => 'first_order',
+            'frequency' => 'once',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/home-popups')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $newAccountOnly->id]);
+
+        $this->actingAs($this->makeCustomer(), 'sanctum')
+            ->getJson('/api/v1/home-popups')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $newAccountOnly->id]);
+
+        $returning = $this->makeCustomer();
+        $this->giveAnOrder($returning, OrderStatus::Delivered);
+        $this->actingAs($returning, 'sanctum')
+            ->getJson('/api/v1/home-popups')
             ->assertOk()
             ->assertJsonMissing(['id' => $newAccountOnly->id]);
     }

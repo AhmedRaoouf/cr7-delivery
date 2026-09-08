@@ -35,6 +35,7 @@ class StoreHomePopupRequest extends FormRequest
             'remove_image' => ['nullable', 'boolean'],
 
             'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
+            'audience' => ['nullable', 'in:all,first_order,returning'],
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'product_id' => ['nullable', 'integer', 'exists:products,id'],
             'store_category_id' => ['nullable', 'integer', 'exists:store_categories,id'],

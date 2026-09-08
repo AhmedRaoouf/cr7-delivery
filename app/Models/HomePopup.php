@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\BannerAudience;
 use App\Enums\BannerLinkType;
 use App\Enums\HomePopupFrequency;
 use App\Enums\HomePopupSecondaryAction;
+use App\Support\FirstOrderPerk;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +27,7 @@ class HomePopup extends Model
     protected $fillable = [
         'title_ar', 'title_en', 'body_ar', 'body_en', 'image',
         'link_type', 'restaurant_id', 'product_id', 'store_category_id', 'code', 'url',
+        'audience',
         'primary_label_ar', 'primary_label_en', 'secondary_label_ar', 'secondary_label_en',
         'secondary_action', 'frequency', 'is_active', 'sort_order',
         'starts_at', 'ends_at', 'theme',
@@ -34,6 +37,7 @@ class HomePopup extends Model
     {
         return [
             'link_type' => BannerLinkType::class,
+            'audience' => BannerAudience::class,
             'secondary_action' => HomePopupSecondaryAction::class,
             'frequency' => HomePopupFrequency::class,
             'is_active' => 'boolean',
@@ -73,5 +77,28 @@ class HomePopup extends Model
             ->where('is_active', true)
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+    }
+
+    /**
+     * Narrows a live queue to the cards this viewer is the audience for.
+     *
+     * A visitor who has not signed in sees only `all`: the platform cannot know
+     * whether they are new, and a card promising a new account free delivery is
+     * a promise the checkout would not keep.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<HomePopup>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<HomePopup>
+     */
+    public function scopeForViewer(Builder $query, ?User $viewer): Builder
+    {
+        $audiences = [BannerAudience::All->value];
+
+        if ($viewer !== null) {
+            $audiences[] = FirstOrderPerk::appliesTo($viewer)
+                ? BannerAudience::FirstOrder->value
+                : BannerAudience::Returning->value;
+        }
+
+        return $query->whereIn('audience', $audiences);
     }
 }

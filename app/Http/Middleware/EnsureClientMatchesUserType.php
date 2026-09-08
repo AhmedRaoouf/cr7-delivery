@@ -12,6 +12,16 @@ use Symfony\Component\HttpFoundation\Response;
  * doc 12 §1.1 / FR-ROLE-04: `X-App` says which binary is calling, `users.type`
  * is the only authorization truth. A driver signing in from the customer path
  * still lands in the captain shell — both share `X-App: app`.
+ *
+ * Since 2026-09-08 the phone is **four** shells, not two (D-70). The operator:
+ * «لما اسجل بادمن او بمكان … الادمن يدخله علي واجهه الادمن كامل زي اللي في الويب».
+ * So `app` admits all four types, and the narrowing is left where it always
+ * belonged — the per-route `type:` middleware, which is unchanged.
+ *
+ * What this deliberately does **not** relax is the other direction: an `admin`
+ * origin still admits only an admin, and a `restaurant` origin only a
+ * restaurant. A captain's password on `admin.cr7-delivery.com` is refused by
+ * exactly the line that always refused it.
  */
 class EnsureClientMatchesUserType
 {
@@ -23,7 +33,11 @@ class EnsureClientMatchesUserType
             $app = $request->header('X-App');
 
             $allowed = match ($app) {
-                'app' => in_array($user->type, [UserType::Customer, UserType::Driver], true),
+                'app' => in_array(
+                    $user->type,
+                    [UserType::Customer, UserType::Driver, UserType::Restaurant, UserType::Admin],
+                    true,
+                ),
                 'restaurant' => $user->type === UserType::Restaurant,
                 'admin' => $user->type === UserType::Admin,
                 default => false,

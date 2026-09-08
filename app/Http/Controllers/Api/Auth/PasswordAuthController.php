@@ -20,13 +20,18 @@ class PasswordAuthController extends Controller
 {
     public function login(LoginRequest $request, PasswordLoginAction $action): JsonResponse
     {
-        // `app` is both shells. The mobile binary no longer asks «عميل ولا كابتن» — one
+        // `app` is every shell. The mobile binary no longer asks «عميل ولا كابتن» — one
         // screen takes a phone and a password, and `user.type` in the answer is what
-        // sends the customer to the browse tabs and the captain to the duty card.
+        // sends the customer to the browse tabs, the captain to the duty card, and —
+        // since D-70 — the place to its own board and the admin to the console.
+        //
+        // The dashboards still name exactly one type each, so this widens the phone
+        // and nothing else: a captain's password on `admin.` is refused by the branch
+        // below it, untouched.
         $expected = match ($request->header('X-App')) {
             'restaurant' => [UserType::Restaurant],
             'admin' => [UserType::Admin],
-            'app' => [UserType::Customer, UserType::Driver],
+            'app' => [UserType::Customer, UserType::Driver, UserType::Restaurant, UserType::Admin],
             default => throw new ApiException('wrong_client', 'هذا الحساب لا يمكنه الدخول من هذه الواجهة', 403),
         };
 

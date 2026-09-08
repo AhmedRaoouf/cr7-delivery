@@ -815,8 +815,20 @@ class DemoDataSeeder extends Seeder
                     'status' => $status,
                     'priority' => $priority,
                     'visible_to_restaurant' => $mirrored,
-                    'due_at' => now()->addHours(24),
-                    'first_response_at' => $status === 'open' ? null : now()->subHours(3),
+                    // The row is written now, so `created_at` is now — and a
+                    // ticket answered three hours ago and resolved two hours
+                    // ago was then resolved four hours *before* it was opened.
+                    // `/admin/reports/complaints` averages `created_at →
+                    // resolved_at` and reported «‪-2‬ ساعة» on every demo.
+                    'created_at' => now()->subHours(6),
+                    'updated_at' => now()->subHours(2),
+                    // One breached ticket on purpose: an SLA header that is
+                    // three zeros never shows an operator what a breach looks
+                    // like.
+                    'due_at' => $priority === 'high' && $status === 'open'
+                        ? now()->subHour()
+                        : now()->addHours(18),
+                    'first_response_at' => $status === 'open' ? null : now()->subHours(4),
                     'resolved_at' => $status === 'resolved' ? now()->subHours(2) : null,
                     'resolution_outcome' => $status === 'resolved' ? 'partial_refund' : null,
                 ],

@@ -24,7 +24,22 @@ class SettlementController extends Controller
             ->latest('period_end')
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($settlements->items(), meta: [
+        // `party` branches on the row's own `party_type` (restaurant or driver),
+        // so it cannot be eager-loaded: `with('party')` builds the relation from
+        // a fresh model whose type is null and would resolve every row against
+        // one table. Resolved per row instead — bounded by `per_page` — because
+        // a settlement list that cannot name the party names nothing.
+        $rows = collect($settlements->items())->map(function (Settlement $settlement) {
+            $party = $settlement->party;
+
+            return [
+                ...$settlement->toArray(),
+                'party_name' => $party?->getAttribute('name_ar')
+                    ?? $party?->getAttribute('name'),
+            ];
+        });
+
+        return ApiResponse::success($rows, meta: [
             'current_page' => $settlements->currentPage(),
             'per_page' => $settlements->perPage(),
             'total' => $settlements->total(),
@@ -74,7 +89,17 @@ class SettlementController extends Controller
 
         $validated = $request->validate(['reference' => ['nullable', 'string', 'max:255'], 'note' => ['nullable', 'string', 'max:500']]);
 
-        $settlement->update([...$validated, 'status' => 'paid', 'paid_at' => now()]);
+        // doc 08 §7 names the request field `reference`; the column is
+        // `payment_reference`. Spread straight into `update()` the key matched
+        // no fillable attribute, so mass assignment dropped it without a word
+        // and every settlement was marked paid with a null reference — the one
+        // field that says where the money actually went.
+        $settlement->update([
+            'payment_reference' => $validated['reference'] ?? null,
+            'note' => $validated['note'] ?? null,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
 
         AuditLogger::record($request->user(), 'settlements.pay', $settlement, $validated);
 

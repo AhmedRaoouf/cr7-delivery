@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Support\ApiResponse;
+use App\Support\FirstOrderPerk;
 use App\Support\MapStyles;
 use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
@@ -56,6 +57,16 @@ class ConfigController extends Controller
                 'order_fee' => (float) $settings->get('platform.order_fee', 0),
                 'order_fee_label_ar' => 'رسوم الخدمة',
                 'order_fee_label_en' => 'Service fee',
+            ],
+            // «خلي اول اورد للحساب توصيل مجاني» — operator, 2026-09-08. The basket
+            // draws its delivery line before it has a quote, so it has to know here
+            // or it would print a fee the checkout then waives. `eligible` needs the
+            // account, and this route is public: it is resolved from the token when
+            // there is one and is false for a visitor, which is the honest answer —
+            // the platform does not yet know whether they are new.
+            'first_order' => [
+                'free_delivery_enabled' => FirstOrderPerk::isEnabled(),
+                'free_delivery_eligible' => FirstOrderPerk::appliesTo(auth('sanctum')->user()),
             ],
             // The tile template, its zoom scale and the attribution the
             // provider's terms require. Published here rather than compiled

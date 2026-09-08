@@ -72,7 +72,17 @@ class CheckoutPricer
         $freeDeliveryOver = $pricingRule->free_delivery_over ?? $address->serviceZone->free_delivery_over ?? null;
         $freeDeliveryApplied = $freeDeliveryOver !== null && $subtotal >= (float) $freeDeliveryOver;
 
-        $deliveryFee = $freeDeliveryApplied ? 0.0 : round($deliveryBaseFee + $extraStopFeeTotal, 2);
+        // «خلي اول اورد للحساب توصيل مجاني» — operator, 2026-09-08. The platform's
+        // own welcome offer, so it sits here beside the zone's own threshold and not
+        // in the promo branch below: there is no code to type and nothing to enter
+        // wrong. It is reported separately from `free_delivery_applied` because the
+        // two are different sentences on `CUS-21` — «طلبك تعدّى الحد» and «أول طلب
+        // لك» — and because only one of them can be true again next week.
+        $firstOrderFree = FirstOrderPerk::appliesTo($user);
+
+        $deliveryFee = $freeDeliveryApplied || $firstOrderFree
+            ? 0.0
+            : round($deliveryBaseFee + $extraStopFeeTotal, 2);
 
         // D-63 — the platform service fee. Charged **once per order group**, whatever
         // the basket spans: three restaurants pay it once, exactly like the delivery
@@ -164,6 +174,7 @@ class CheckoutPricer
             'platform_fee' => $platformFee,
             'delivery_pricing_rule_id' => $pricingRule?->id,
             'free_delivery_applied' => $freeDeliveryApplied,
+            'first_order_free_applied' => $firstOrderFree,
             'subtotal' => $subtotal,
             'discount_amount' => $discountAmount,
             'promo' => $promo,

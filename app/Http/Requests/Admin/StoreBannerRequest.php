@@ -17,11 +17,16 @@ class StoreBannerRequest extends FormRequest
 
         return [
             'title_ar' => [$required, 'string', 'max:255'],
-            'title_en' => [$required, 'string', 'max:255'],
+            // English copy and English artwork are optional: most banners carry one
+            // piece of art and the app already falls back to the Arabic side. Making
+            // them required forced a designer to produce two of everything, and the
+            // dashboard could not create a banner at all.
+            'title_en' => ['nullable', 'string', 'max:255'],
             'image_ar' => [$required, 'image', 'max:5120'],
-            'image_en' => [$required, 'image', 'max:5120'],
+            'image_en' => ['nullable', 'image', 'max:5120'],
             'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
             'link_value' => ['nullable', 'string'],
+            'audience' => ['nullable', 'in:all,first_order,returning'],
             'city_ids' => ['nullable', 'array'],
             'sort_order' => ['nullable', 'integer'],
             'starts_at' => ['nullable', 'date'],

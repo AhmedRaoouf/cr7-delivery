@@ -82,6 +82,10 @@ class SettingsSeeder extends Seeder
             'cart.max_qty_per_line' => [10, 'cart'],
 
             'delivery.extra_stop_fee' => [10.00, 'delivery'],
+            // The platform's own welcome offer — the first order an account completes
+            // carries no delivery fee. Not a promo code: there is nothing to type and
+            // nothing to enter wrong (`App\Support\FirstOrderPerk`).
+            'delivery.first_order_free' => [1, 'delivery'],
             'delivery.multi_pickup_max_spread_km' => [2.5, 'delivery'],
 
             // doc 40 — «اطلب كابتن». The fee is the customer's offer, so these three only

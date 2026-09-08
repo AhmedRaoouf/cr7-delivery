@@ -12,6 +12,7 @@ use App\Models\OrderGroup;
 use App\Models\PromoCode;
 use App\Support\CheckoutPricer;
 use App\Support\DriverEarningCalculator;
+use App\Support\FirstOrderPerk;
 use App\Support\RefundPolicy;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,6 +34,12 @@ class PlatformFeeTest extends TestCase
     {
         parent::setUp();
         $this->seedLocation();
+
+        // Every customer this file makes is a brand-new account, and the platform's
+        // welcome offer (`delivery.first_order_free`) would zero the delivery line on
+        // all of them — hiding the numbers these tests exist to check. The offer has
+        // its own file; here the customer is an ordinary returning one.
+        Settings::set(FirstOrderPerk::SETTING, 0, 'delivery');
     }
 
     private function pricer(): CheckoutPricer

@@ -101,7 +101,12 @@ class SettingsSeeder extends Seeder
             // D-63..D-65 — the platform service fee («رسوم الخدمة»). A fixed amount
             // charged once per order group, on top of the food and the delivery fee,
             // and kept by the platform.
-            'platform.order_fee' => [5.00, 'platform'],
+            // **Zero since 2026-09-08**, at the operator's word — «الـ5 جنيه بتاع
+            // المنصة هتتشال حاليًا». The knob stays: raise it on `ADM-46` and it
+            // is charged again from the next quote, with no deploy. Every screen
+            // that prints it guards on `> 0`, so a fee of zero is not a line
+            // saying «رسوم الخدمة ‪0‬ ج.م» — it is no line at all.
+            'platform.order_fee' => [0, 'platform'],
             // D-64 — a direct order is a delivery the platform sold, so it carries the
             // fee too. Flip this to false to exempt phone orders without a deploy.
             'platform.order_fee_applies_to_direct' => [true, 'platform'],

@@ -29,21 +29,27 @@ class CreateRestaurantAction
                 'must_change_password' => true,
             ]);
 
+            // 🔴 Built from the **validated payload**, not from a hand-written
+            // list of columns. The hand-written one silently dropped five things
+            // `StoreRestaurantRequest` had already accepted — `store_category_id`,
+            // both `eta_*` minutes, `is_24_7`, and the `logo`/`cover` paths the
+            // controller had just uploaded — so a place created through `ADM-12`
+            // came back with no category, no delivery window and no picture, and
+            // nothing failed. Adding a field to the request now carries it here
+            // by construction.
+            //
+            // The keys below are the ones the *action* owns rather than the
+            // operator: an owner's phone belongs to the `users` row, and
+            // `name_en` is consumed by the slug.
+            $columns = collect($data)
+                ->except(['owner_phone', 'owner_email', 'remove_logo', 'remove_cover'])
+                ->filter(fn ($value) => $value !== null)
+                ->all();
+
             $restaurant = Restaurant::create([
+                ...$columns,
                 'user_id' => $owner->id,
-                'city_id' => $data['city_id'],
-                'service_zone_id' => $data['service_zone_id'],
-                'name_ar' => $data['name_ar'],
-                'name_en' => $data['name_en'],
-                'description_ar' => $data['description_ar'] ?? null,
-                'description_en' => $data['description_en'] ?? null,
                 'slug' => Str::slug($data['name_en']).'-'.Str::random(6),
-                'phone' => $data['phone'],
-                'whatsapp' => $data['whatsapp'] ?? null,
-                'address' => $data['address'] ?? null,
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
-                'commission_rate' => $data['commission_rate'],
                 'min_order_value' => $data['min_order_value'] ?? 0,
                 'avg_prep_minutes' => $data['avg_prep_minutes'] ?? 20,
                 'is_open_manual' => true,

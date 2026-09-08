@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\Product;
+use App\Models\Restaurant;
 use App\Support\FileUploader;
+use App\Support\Locale;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -43,3 +46,92 @@ Route::get('/storage/{path}', function (string $path) {
 
     return $response;
 })->where('path', '[A-Za-z0-9/_\-\.]+')->name('uploads.show');
+
+/**
+ * Where a shared link lands.
+ *
+ * `CUS-14`'s share sheet hands out `https://cr7-delivery.com/r/<id>`, and Android and
+ * iOS intercept that for anybody who has the app — `public/.well-known/assetlinks.json`
+ * and the `associated-domains` entitlement are what make the interception silent rather
+ * than a chooser. Everybody else reaches this: the name, the picture, and a button that
+ * fires the custom scheme.
+ *
+ * Without these two routes the share button was handing out a 404 to every person who
+ * did not already have the app — which is most of the people a share is aimed at.
+ *
+ * The `og:` tags matter as much as the page: WhatsApp and Messenger render the preview
+ * card from them, and a link with none is a bare blue URL nobody taps.
+ */
+Route::get('/r/{restaurant}', function (Restaurant $restaurant) {
+    abort_unless($restaurant->is_active, 404);
+
+    $locale = Locale::current(request());
+
+    // Arabic is the source language: a shop with no English tagline shows its Arabic
+    // one rather than the generic line, which is what a blank `tagline_en` would
+    // otherwise produce for every shop on the roster.
+    $first = fn (?string ...$values) => collect($values)->first(fn ($v) => filled($v));
+
+    return view('share', [
+        'title' => $first($restaurant->{"name_{$locale}"}, $restaurant->name_ar),
+        'subtitle' => $first(
+            $restaurant->{"tagline_{$locale}"},
+            $restaurant->tagline_ar,
+            $restaurant->{"description_{$locale}"},
+            $restaurant->description_ar,
+        ) ?? 'اطلب الآن من CR7 Delivery',
+        'image' => $restaurant->cover,
+        'deepLink' => "cr7delivery://r/{$restaurant->id}",
+    ]);
+})->whereNumber('restaurant')->name('share.restaurant');
+
+Route::get('/p/{product}', function (Product $product) {
+    abort_unless($product->is_available, 404);
+
+    $locale = Locale::current(request());
+    $restaurant = $product->restaurant;
+
+    $first = fn (?string ...$values) => collect($values)->first(fn ($v) => filled($v));
+
+    return view('share', [
+        'title' => $first($product->{"name_{$locale}"}, $product->name_ar),
+        'subtitle' => $first(
+            $restaurant?->{"name_{$locale}"},
+            $restaurant?->name_ar,
+        ) ?? 'اطلب الآن من CR7 Delivery',
+        'image' => $product->image,
+        'deepLink' => "cr7delivery://p/{$product->id}",
+    ]);
+})->whereNumber('product')->name('share.product');
+
+/**
+ * The iOS half of the App Links proof.
+ *
+ * Served from a route rather than a file because it has no extension and must arrive as
+ * `application/json`: dropped into `public/`, LiteSpeed answers it as
+ * `application/octet-stream` and iOS silently ignores the whole domain — links keep
+ * working, they just open Safari, and nothing anywhere says why.
+ *
+ * ⚠️ **This is only half of it.** The app must also carry
+ * `com.apple.developer.associated-domains = applinks:cr7-delivery.com` in its release
+ * entitlement, and that capability must exist on the App ID
+ * `com.cr7delivery.cr7Delivery` for team `XB8YVBDAM7` — otherwise every device release
+ * build fails to provision, which is exactly why `RunnerRelease.entitlements` does not
+ * carry it yet. Until it does, an iPhone opens the shared link in Safari and lands on
+ * the share page, whose «افتح في التطبيق» button uses the `cr7delivery://` scheme and
+ * works today. This file being correct in advance costs nothing and means the switch is
+ * one entitlement, not a server change too.
+ */
+Route::get('/.well-known/apple-app-site-association', function () {
+    return response()->json([
+        'applinks' => [
+            'details' => [[
+                'appIDs' => ['XB8YVBDAM7.com.cr7delivery.cr7Delivery'],
+                'components' => [
+                    ['/' => '/r/*', 'comment' => 'a shop'],
+                    ['/' => '/p/*', 'comment' => 'a dish'],
+                ],
+            ]],
+        ],
+    ])->header('Content-Type', 'application/json');
+})->name('share.aasa');

@@ -19,7 +19,8 @@ class Restaurant extends Model
         'user_id', 'city_id', 'service_zone_id', 'name_ar', 'name_en',
         'description_ar', 'description_en', 'slug', 'logo', 'cover', 'phone',
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
-        'min_order_value', 'avg_prep_minutes', 'is_open_manual', 'is_active',
+        'min_order_value', 'avg_prep_minutes', 'eta_min_minutes', 'eta_max_minutes',
+        'is_open_manual', 'is_active',
         'is_verified', 'is_featured', 'direct_orders_enabled', 'menu_layout',
         'store_category_id', 'is_24_7',
         'sort_order', 'price_band', 'tagline_ar', 'tagline_en', 'menu_sheets', 'brand_color',
@@ -105,6 +106,36 @@ class Restaurant extends Model
     }
 
     /** doc 08 §4 — is_open_now = the manual switch AND (no hours set, or today's window covers now). */
+    /**
+     * The delivery window the customer is shown, in minutes.
+     *
+     * The shop's own numbers win; the zone's average is the fallback for a shop
+     * that has published neither. Setting only one end publishes a single
+     * figure rather than half a range — «‎35‎ دقيقة», not «‎35‎ إلى null».
+     *
+     * @return array{0: int|null, 1: int|null}
+     */
+    public function etaWindow(): array
+    {
+        $min = $this->eta_min_minutes;
+        $max = $this->eta_max_minutes;
+
+        if ($min !== null || $max !== null) {
+            $min ??= $max;
+            $max ??= $min;
+
+            // A window entered backwards is a typo, not an empty set.
+            return $min <= $max ? [(int) $min, (int) $max] : [(int) $max, (int) $min];
+        }
+
+        $zone = $this->serviceZone;
+        if ($zone === null) {
+            return [null, null];
+        }
+
+        return [max(5, $zone->avg_delivery_minutes - 10), $zone->avg_delivery_minutes + 10];
+    }
+
     public function isOpenNow(): bool
     {
         if (! $this->is_open_manual || ! $this->is_active) {
@@ -132,6 +163,13 @@ class Restaurant extends Model
             : $this->openingHours()->where('weekday', $clock->dayOfWeek)->first();
 
         if (! $today) {
+            return true;
+        }
+
+        // One day of the week, round the clock — «يوم الحد 24 ساعة مفتوح».
+        // Checked before the times, because a 24-hour day is allowed to carry
+        // none.
+        if ($today->is_24h) {
             return true;
         }
 

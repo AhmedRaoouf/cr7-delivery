@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Cuisine extends Model
 {
-    protected $fillable = ['name_ar', 'name_en', 'icon', 'sort_order', 'is_active'];
+    protected $fillable = ['name_ar', 'name_en', 'icon', 'image', 'sort_order', 'is_active'];
 
     protected function casts(): array
     {

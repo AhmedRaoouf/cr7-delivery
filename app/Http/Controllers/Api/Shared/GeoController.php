@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Api\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Shared\MapPlaceResource;
 use App\Http\Resources\Shared\ServiceZoneResource;
+use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\Router;
 use App\Support\ApiResponse;
+use App\Support\Geo;
 use App\Support\ZoneLocator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * doc 08 §2 — POST /geo/resolve, plus the two geocoding proxies.
@@ -168,6 +172,85 @@ class GeoController extends Controller
         );
 
         return ApiResponse::success(['route' => $route]);
+    }
+
+    /**
+     * `GET /geo/places?lat=&lng=&radius_km=` — every shop near a point, by name.
+     *
+     * The raster basemaps under the pins are OpenStreetMap data, and OSM knows
+     * roads far better than it knows which unit of a Gamasa parade is a
+     * pharmacy. Operator, 2026-09-07: «عندك مثلاً كل الأماكن موجودة بحسب الاسم،
+     * هتلاقي المطعم الحاجات دي». No tile set will ever answer that for this
+     * town — but the platform can, because these are its own rows.
+     *
+     * Public, because it is the same catalogue `GET /restaurants` already
+     * publishes to a signed-out browser, narrowed to four columns and a point.
+     *
+     * Cheap on purpose: a bounding box the index can use, an ordering by
+     * distance, a hard limit, and a cache keyed on the point rounded to about
+     * 110 m — a map that re-asks as it pans must not re-run the query per metre.
+     */
+    public function places(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'radius_km' => ['sometimes', 'numeric', 'between:0.2,50'],
+            'limit' => ['sometimes', 'integer', 'between:1,200'],
+        ]);
+
+        $lat = (float) $validated['lat'];
+        $lng = (float) $validated['lng'];
+        $radius = (float) ($validated['radius_km'] ?? 5);
+        $limit = (int) ($validated['limit'] ?? 60);
+
+        $places = Cache::remember(
+            sprintf('geo:places:%.3f:%.3f:%.1f:%d', $lat, $lng, $radius, $limit),
+            now()->addMinutes(10),
+            fn () => $this->nearbyShops($lat, $lng, $radius, $limit),
+        );
+
+        return ApiResponse::success(MapPlaceResource::collection($places), meta: [
+            'radius_km' => $radius,
+            'count' => $places->count(),
+        ]);
+    }
+
+    /**
+     * @return Collection<int, Restaurant>
+     */
+    private function nearbyShops(float $lat, float $lng, float $radius, int $limit)
+    {
+        // A box before the trigonometry: MySQL can range-scan `latitude` and
+        // `longitude`, and cannot scan an `acos()`. One degree of latitude is
+        // 111.32 km everywhere; a degree of longitude shrinks with the cosine
+        // of the latitude, which at 31°N is about 0.855.
+        $latDelta = $radius / 111.32;
+        $lngDelta = $radius / max(0.000001, 111.32 * cos(deg2rad($lat)));
+
+        return Restaurant::query()
+            ->select(['id', 'slug', 'name_ar', 'name_en', 'latitude', 'longitude', 'store_category_id'])
+            ->with('storeCategory:id,slug,name_ar,name_en,color,icon')
+            ->where('is_active', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereBetween('latitude', [$lat - $latDelta, $lat + $latDelta])
+            ->whereBetween('longitude', [$lng - $lngDelta, $lng + $lngDelta])
+            ->orderByRaw(
+                '(6371 * acos(least(1, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))',
+                [$lat, $lng, $lat],
+            )
+            ->limit($limit)
+            ->get()
+            // The box has corners the circle does not. Ordered by distance
+            // already, so this only ever trims the far end.
+            ->filter(fn (Restaurant $shop) => Geo::haversineKm(
+                (float) $shop->latitude,
+                (float) $shop->longitude,
+                $lat,
+                $lng,
+            ) <= $radius)
+            ->values();
     }
 
     /** Mapbox takes an ISO code; the app already sends `Accept-Language`. */

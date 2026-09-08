@@ -6,6 +6,7 @@ use App\Enums\UserType;
 use App\Models\Banner;
 use App\Models\City;
 use App\Models\Cuisine;
+use App\Models\HomePopup;
 use App\Models\MenuCategory;
 use App\Models\Product;
 use App\Models\PromoCode;
@@ -73,6 +74,7 @@ class CatalogSeeder extends Seeder
         }
 
         $this->seedBanners($data['banners'], $city);
+        $this->seedHomePopups($data['home_popups'] ?? [], $storeCategories);
         $this->seedPromoCodes($city);
 
         // D-60 — the band is the menu's own median, so it is computed after the menu
@@ -98,6 +100,11 @@ class CatalogSeeder extends Seeder
                 [
                     'name_en' => $row['name_en'],
                     'icon' => $row['icon'],
+                    // The chip artwork. Refreshed on every run like the store
+                    // categories' is, so a fresh database comes up with the pictures
+                    // drawn — and null while the file for a new cuisine has not been
+                    // produced yet, which the client falls back to `icon` for.
+                    'image' => $this->url($row['image'] ?? null),
                     'sort_order' => $row['sort_order'],
                     'is_active' => true,
                 ],
@@ -359,6 +366,109 @@ class CatalogSeeder extends Seeder
         $id = $slug === null ? null : Restaurant::query()->where('slug', $slug)->value('id');
 
         return $id === null ? null : (string) $id;
+    }
+
+    /**
+     * «العرض المنبثق» — the card the home screen opens with.
+     *
+     * Two rows ship, and only the first is switched on. The operator asked for a queue
+     * («يظهر كذا واحد يعني ورا بعض») and then for the shipped state to be a single card
+     * («بس هو خلي الديفولت واحد»), so the second is seeded ready and dark: switching it
+     * on is one toggle on `ADM-32`, and nobody has to type an offer from scratch to
+     * prove the queue works.
+     *
+     * @param  array<string, int>  $storeCategories  slug => store_categories.id
+     */
+    private function seedHomePopups(array $rows, array $storeCategories): void
+    {
+        foreach ($rows as $row) {
+            $target = $this->resolveHomePopupTarget($row, $storeCategories);
+
+            // A card promising «اطلب الآن» with nowhere to go is the exact defect the
+            // validation rules refuse from the dashboard, so the seeder does not create
+            // one either — it says which row it skipped and why.
+            if ($target === null) {
+                $this->command?->warn(sprintf(
+                    'home popup «%s» points at a %s this catalogue does not have — skipped.',
+                    $row['title_ar'] ?? '(untitled)',
+                    $row['link_type'] ?? 'none',
+                ));
+
+                continue;
+            }
+
+            $popup = HomePopup::query()->firstOrNew(['title_ar' => $row['title_ar']]);
+
+            $popup->fill([
+                'title_en' => $row['title_en'] ?? null,
+                'body_ar' => $row['body_ar'] ?? null,
+                'body_en' => $row['body_en'] ?? null,
+                'image' => $this->url($row['image'] ?? null),
+                'link_type' => $row['link_type'] ?? 'none',
+                'restaurant_id' => null,
+                'product_id' => null,
+                'store_category_id' => null,
+                'code' => null,
+                'url' => null,
+                'primary_label_ar' => $row['primary_label_ar'] ?? null,
+                'primary_label_en' => $row['primary_label_en'] ?? null,
+                'secondary_label_ar' => $row['secondary_label_ar'] ?? null,
+                'secondary_label_en' => $row['secondary_label_en'] ?? null,
+                'secondary_action' => $row['secondary_action'] ?? 'dismiss',
+                'frequency' => $row['frequency'] ?? 'once_per_day',
+                'theme' => $row['theme'] ?? null,
+                'sort_order' => $row['sort_order'] ?? 0,
+                ...$target,
+            ]);
+
+            // «يظهر ولا ما يظهرش» is the operator's switch, not the seeder's. Set once,
+            // on the row's first run, and never touched again — otherwise a re-seed on
+            // production (`db:seed --force`) turns a card the operator switched off
+            // back on, over the top of the home screen, for every customer.
+            if (! $popup->exists) {
+                $popup->is_active = $row['is_active'] ?? true;
+            }
+
+            $popup->save();
+        }
+    }
+
+    /**
+     * The seed file names a destination the way `banners` does — `<restaurant code>:<dish
+     * name>` for a product, a slug for a store category — because neither id exists until
+     * the rows above are inserted. Returns the columns to write, or null if the thing it
+     * points at is not in this catalogue.
+     *
+     * @param  array<string, int>  $storeCategories  slug => store_categories.id
+     * @return array<string, mixed>|null
+     */
+    private function resolveHomePopupTarget(array $row, array $storeCategories): ?array
+    {
+        $value = $row['link_value'] ?? null;
+
+        switch ($row['link_type'] ?? 'none') {
+            case 'restaurant':
+                $id = $this->restaurantIdFor($value);
+
+                return $id === null ? null : ['restaurant_id' => $id];
+
+            case 'product':
+                $id = $this->resolveBannerLink($row);
+
+                return blank($id) ? null : ['product_id' => $id];
+
+            case 'category':
+                return isset($storeCategories[$value]) ? ['store_category_id' => $storeCategories[$value]] : null;
+
+            case 'promo':
+                return blank($value) ? null : ['code' => $value];
+
+            case 'url':
+                return blank($value) ? null : ['url' => $value];
+
+            default:
+                return [];
+        }
     }
 
     /** doc 22 §6 — the promo of record, and the only one any screen quotes. */

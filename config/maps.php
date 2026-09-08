@@ -12,12 +12,45 @@
  * Geocoding is the opposite: low volume, cacheable, and worth keeping the token
  * off the wire, so it is proxied through `/geo/*` and cached here.
  *
- * With no token set the whole thing degrades to OpenStreetMap's public raster
- * tiles and geocoding simply answers `null`. The app keeps working.
+ * With no credential of any kind the whole thing degrades to OpenStreetMap's
+ * public raster tiles and geocoding simply answers `null`. The app keeps
+ * working. `MapStyles::payload()` owns the order of preference.
  */
 return [
 
+    // Which provider to prefer. One whose credential is missing is skipped, not
+    // served broken — see `MapStyles::payload()`. `osm` always works.
     'provider' => env('MAPS_PROVIDER', 'mapbox'),
+
+    /**
+     * CARTO's raster basemaps — the densest labels of the three, and the only
+     * free one with a real dark style, so the client stops inverting light
+     * tiles in dark mode.
+     *
+     * **It needs a key.** `basemaps.cartocdn.com` still answers 200 without
+     * one, and the tile it answers with has «API KEY REQUIRED» stamped across
+     * it. A free key is a sign-up at carto.com/basemaps/apikey; without one
+     * `MapStyles` will not select this provider at all.
+     *
+     * Attribution is a licence requirement, not a nicety: `MapStyles` publishes
+     * «© OpenStreetMap © CARTO» and every map draws it.
+     */
+    'carto' => [
+        'api_key' => env('CARTO_API_KEY'),
+        'host' => env('CARTO_HOST', 'basemaps.cartocdn.com'),
+        // a…d are CDN shards of the same store. Left as `{s}` in the template
+        // with this list beside it, so the client spreads a screenful of tiles
+        // over four connection pools instead of one.
+        'subdomains' => ['a', 'b', 'c', 'd'],
+        'style_light' => env('CARTO_STYLE_LIGHT', 'voyager'),
+        'style_dark' => env('CARTO_STYLE_DARK', 'dark_all'),
+        'tile_size' => 256,
+        'zoom_offset' => 0,
+        'max_zoom' => 20,
+        // Emits `{r}`, which the client fills with `@2x` on a high-density
+        // screen and with nothing on any other.
+        'retina' => true,
+    ],
 
     'mapbox' => [
         // A **public** token (`pk.…`). Never a secret (`sk.…`) token: this one
@@ -39,13 +72,19 @@ return [
         'tile_size' => 512,
         'zoom_offset' => -1,
         'retina' => true,
+        // 18 is where the map stopped resolving street detail; `streets-v12`
+        // renders well past 20.
+        'max_zoom' => 20,
     ],
 
-    // The fallback, and what the app draws until a token exists.
+    // The floor: no account, no key, no quota to sign for. One light set and
+    // no retina set, so the client inverts it in dark mode and asks for no
+    // `@2x`. Zoom 20 answers 400 here, which is why the ceiling is 19.
     'osm' => [
         'tile_url' => 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         'tile_size' => 256,
         'zoom_offset' => 0,
+        'max_zoom' => 19,
     ],
 
     /**

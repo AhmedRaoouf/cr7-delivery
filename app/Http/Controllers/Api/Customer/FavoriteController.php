@@ -54,6 +54,58 @@ class FavoriteController extends Controller
         return ApiResponse::success($favorite, 'تمت الإضافة إلى المفضلة', status: 201);
     }
 
+    /**
+     * Adopt the favourites a guest collected on the device.
+     *
+     * Operator, 2026-09-07: «لما في حاجة تتحط في الفيفوريتس فاحفظها لوك عادي،
+     * وساعات ما يخش يسجل بحساب تبعتها للباك في الحساب». So the app keeps a
+     * guest's hearts in its own prefs and hands the list over once, on the first
+     * sign-in — the customer does not lose the shortlist they built while
+     * browsing.
+     *
+     * **Merge, never replace.** Someone signing in on a second phone would
+     * otherwise wipe what the account already holds. `firstOrCreate` per row,
+     * unknown ids skipped rather than 404-ing the whole call: the device's list
+     * can outlive a product the operator deleted, and a request that fails
+     * wholesale would strand the rest of it forever.
+     */
+    public function sync(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'restaurants' => ['nullable', 'array', 'max:500'],
+            'restaurants.*' => ['integer'],
+            'products' => ['nullable', 'array', 'max:500'],
+            'products.*' => ['integer'],
+        ]);
+
+        $adopted = 0;
+
+        foreach ([
+            'restaurant' => ['ids' => $validated['restaurants'] ?? [], 'model' => Restaurant::class],
+            'product' => ['ids' => $validated['products'] ?? [], 'model' => Product::class],
+        ] as $type => $spec) {
+            $existing = $spec['model']::query()
+                ->whereIn('id', array_unique($spec['ids']))
+                ->pluck('id');
+
+            foreach ($existing as $id) {
+                $favorite = $request->user()->favorites()->firstOrCreate([
+                    'favoritable_type' => $type,
+                    'favoritable_id' => $id,
+                ]);
+
+                if ($favorite->wasRecentlyCreated) {
+                    $adopted++;
+                }
+            }
+        }
+
+        return ApiResponse::success(
+            ['adopted' => $adopted],
+            'تمت مزامنة المفضلة',
+        );
+    }
+
     public function destroy(Request $request): JsonResponse
     {
         $validated = $request->validate([

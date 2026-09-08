@@ -31,10 +31,34 @@ class RestaurantController extends Controller
             ->when($request->integer('zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
             // The home strip's filter. Accepts the id or the slug, because the app
             // deep-links «مطاعم» by slug and the dashboard's own list filters by id.
-            ->when($filter['store_category'] ?? $filter['store_category_id'] ?? null, fn ($q, $category) => $q
-                ->whereHas('storeCategory', fn ($cq) => is_numeric($category)
-                    ? $cq->where('store_categories.id', (int) $category)
-                    : $cq->where('store_categories.slug', $category)))
+            //
+            // And accepts **several**, comma-separated. Operator, 2026-09-08: «لو
+            // دوست على مطاعم وكافيهات، يظهر المطاعم والكافيهات» — the home cards are
+            // a multi-select now, so the filter is a set and the match is an OR.
+            // One value still behaves exactly as it always did.
+            ->when($filter['store_category'] ?? $filter['store_category_id'] ?? null, function ($q, $category) {
+                $wanted = collect(is_array($category) ? $category : explode(',', (string) $category))
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter()
+                    ->values();
+
+                if ($wanted->isEmpty()) {
+                    return $q;
+                }
+
+                $ids = $wanted->filter(fn ($value) => is_numeric($value))->map(fn ($value) => (int) $value);
+                $slugs = $wanted->reject(fn ($value) => is_numeric($value));
+
+                return $q->whereHas('storeCategory', fn ($cq) => $cq
+                    ->where(function ($inner) use ($ids, $slugs) {
+                        if ($ids->isNotEmpty()) {
+                            $inner->orWhereIn('store_categories.id', $ids->all());
+                        }
+                        if ($slugs->isNotEmpty()) {
+                            $inner->orWhereIn('store_categories.slug', $slugs->all());
+                        }
+                    }));
+            })
             ->when($filter['cuisine_id'] ?? null, fn ($q, $cuisineId) => $q->whereHas(
                 'cuisines',
                 fn ($cq) => $cq->where('cuisines.id', $cuisineId),
@@ -105,7 +129,7 @@ class RestaurantController extends Controller
     {
         abort_unless($restaurant->is_active, 404);
 
-        return ApiResponse::success(new RestaurantDetailResource($restaurant->load(['cuisines', 'serviceZone', 'openingHours'])));
+        return ApiResponse::success(new RestaurantDetailResource($restaurant->load(['cuisines', 'serviceZone', 'openingHours', 'storeCategory'])));
     }
 
     public function categories(Restaurant $restaurant): JsonResponse

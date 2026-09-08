@@ -343,6 +343,86 @@
                     ]
                 },
                 {
+                    "name": "Broadcasting",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/broadcasting/auth",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/broadcasting/auth",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "broadcasting",
+                                        "auth"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/broadcasting/auth",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/broadcasting/auth",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "broadcasting",
+                                        "auth"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Captain Applications",
                     "item": [
                         {
@@ -529,6 +609,256 @@
                                     "variable": []
                                 }
                             }
+                        },
+                        {
+                            "name": "GET /api/v1/cuisines/{cuisine}/products",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/cuisines/:cuisine/products",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "cuisines",
+                                        ":cuisine",
+                                        "products"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "cuisine",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Customer",
+                    "item": [
+                        {
+                            "name": "POST /api/v1/customer/errands",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/customer/errands",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "customer",
+                                        "errands"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/customer/errands",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/customer/errands",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "customer",
+                                        "errands"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/customer/errands/quote",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/customer/errands/quote",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "customer",
+                                        "errands",
+                                        "quote"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/customer/errands/{errand}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/customer/errands/:errand",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "customer",
+                                        "errands",
+                                        ":errand"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/customer/errands/{errand}/cancel",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/customer/errands/:errand/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "customer",
+                                        "errands",
+                                        ":errand",
+                                        "cancel"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -653,6 +983,37 @@
                     "name": "Geo",
                     "item": [
                         {
+                            "name": "GET /api/v1/geo/places",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/geo/places",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "geo",
+                                        "places"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "POST /api/v1/geo/resolve",
                             "request": {
                                 "method": "POST",
@@ -728,6 +1089,37 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/geo/route",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/geo/route",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "geo",
+                                        "route"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/geo/search",
                             "request": {
                                 "method": "GET",
@@ -753,6 +1145,41 @@
                                     "path": [
                                         "geo",
                                         "search"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Home Popups",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/home-popups",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/home-popups",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "home-popups"
                                     ],
                                     "variable": []
                                 }
@@ -796,6 +1223,199 @@
                                             "value": ""
                                         }
                                     ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Scheduled Orders",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/scheduled-orders",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/scheduled-orders",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "scheduled-orders"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/scheduled-orders",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Idempotency-Key",
+                                        "value": "{{$guid}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/scheduled-orders",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "scheduled-orders"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/scheduled-orders/{scheduledOrder}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/scheduled-orders/:scheduledOrder",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "scheduled-orders",
+                                        ":scheduledOrder"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "scheduledOrder",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/scheduled-orders/{scheduledOrder}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/scheduled-orders/:scheduledOrder",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "scheduled-orders",
+                                        ":scheduledOrder"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "scheduledOrder",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Store Categories",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/store-categories",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/store-categories",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "store-categories"
+                                    ],
+                                    "variable": []
                                 }
                             }
                         }
@@ -1356,6 +1976,139 @@
                                         "auth",
                                         "password",
                                         "reset"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/auth/register",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/auth/register",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "auth",
+                                        "register"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/auth/social",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/auth/social",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "auth",
+                                        "social"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/auth/social/link",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/auth/social/link",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "auth",
+                                        "social",
+                                        "link"
                                     ],
                                     "variable": []
                                 },
@@ -2294,6 +3047,54 @@
                                     }
                                 }
                             }
+                        },
+                        {
+                            "name": "POST /api/v1/favorites/sync",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{customer_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/favorites/sync",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "favorites",
+                                        "sync"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -2958,6 +3759,54 @@
                                             "key": "amount_claimed",
                                             "value": "100",
                                             "type": "text"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/orders/{orderGroup}/payment/proofs/{proof}/file",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{customer_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/orders/:orderGroup/payment/proofs/:proof/file",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "orders",
+                                        ":orderGroup",
+                                        "payment",
+                                        "proofs",
+                                        ":proof",
+                                        "file"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "orderGroup",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "proof",
+                                            "value": ""
                                         }
                                     ]
                                 }
@@ -3699,6 +4548,454 @@
                                             "value": ""
                                         }
                                     ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Errands",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/driver/errands/board",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/board",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        "board"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/driver/errands/mine",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/mine",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        "mine"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/driver/errands/{errand}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/accept",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/accept",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "accept"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/cancel",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "cancel"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/decline",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/decline",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "decline"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/deliver",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/deliver",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "deliver"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/picked-up",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/picked-up",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "picked-up"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/driver/errands/{errand}/purchases",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/errands/:errand/purchases",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "errands",
+                                        ":errand",
+                                        "purchases"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -7000,6 +8297,42 @@
                     "name": "Reports",
                     "item": [
                         {
+                            "name": "GET /api/v1/restaurant/reports/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/reports/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "reports",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/restaurant/reports/sales",
                             "request": {
                                 "method": "GET",
@@ -7106,6 +8439,83 @@
                                     "variable": []
                                 }
                             }
+                        },
+                        {
+                            "name": "GET /api/v1/restaurant/reports/top-products/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/reports/top-products/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "reports",
+                                        "top-products",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Scheduled Orders",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/restaurant/scheduled-orders",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/scheduled-orders",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "scheduled-orders"
+                                    ],
+                                    "variable": []
+                                }
+                            }
                         }
                     ]
                 },
@@ -7187,6 +8597,48 @@
                                     ]
                                 }
                             }
+                        },
+                        {
+                            "name": "GET /api/v1/restaurant/settlements/{settlement}/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/settlements/:settlement/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "settlements",
+                                        ":settlement",
+                                        "export"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "settlement",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
                         }
                     ]
                 }
@@ -7195,6 +8647,221 @@
         {
             "name": "05 - Admin",
             "item": [
+                {
+                    "name": "Accounts",
+                    "item": [
+                        {
+                            "name": "DELETE /api/v1/admin/accounts/{user}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/accounts/:user",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "accounts",
+                                        ":user"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "user",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/accounts/{user}/block",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/accounts/:user/block",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "accounts",
+                                        ":user",
+                                        "block"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "user",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/accounts/{user}/reset",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/accounts/:user/reset",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "accounts",
+                                        ":user",
+                                        "reset"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "user",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/accounts/{user}/unblock",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/accounts/:user/unblock",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "accounts",
+                                        ":user",
+                                        "unblock"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "user",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
                 {
                     "name": "Audit Logs",
                     "item": [
@@ -7555,6 +9222,53 @@
                                     "variable": [
                                         {
                                             "key": "application",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/captain-applications/{application}/files/{kind}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/captain-applications/:application/files/:kind",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "captain-applications",
+                                        ":application",
+                                        "files",
+                                        ":kind"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "application",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "kind",
                                             "value": ""
                                         }
                                     ]
@@ -8876,6 +10590,42 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/dashboard/open-alerts",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/dashboard/open-alerts",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "dashboard",
+                                        "open-alerts"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/dashboard/summary",
                             "request": {
                                 "method": "GET",
@@ -9526,6 +11276,48 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/drivers/{driver}/ledger",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/drivers/:driver/ledger",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "drivers",
+                                        ":driver",
+                                        "ledger"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "driver",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
                             "name": "POST /api/v1/admin/drivers/{driver}/reset-password",
                             "request": {
                                 "method": "POST",
@@ -9561,6 +11353,61 @@
                                         "drivers",
                                         ":driver",
                                         "reset-password"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "driver",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/drivers/{driver}/settle",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/drivers/:driver/settle",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "drivers",
+                                        ":driver",
+                                        "settle"
                                     ],
                                     "variable": [
                                         {
@@ -9687,6 +11534,239 @@
                                             "language": "json"
                                         }
                                     }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Errands",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/errands",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/errands",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "errands"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/errands/{errand}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/errands/:errand",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "errands",
+                                        ":errand"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/errands/{errand}/assign",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/errands/:errand/assign",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "errands",
+                                        ":errand",
+                                        "assign"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/errands/{errand}/cancel",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/errands/:errand/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "errands",
+                                        ":errand",
+                                        "cancel"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/errands/{errand}/eligible-drivers",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/errands/:errand/eligible-drivers",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "errands",
+                                        ":errand",
+                                        "eligible-drivers"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "errand",
+                                            "value": ""
+                                        }
+                                    ]
                                 }
                             }
                         }
@@ -9874,6 +11954,382 @@
                                             "value": ""
                                         }
                                     ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Finance",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/finance/drivers",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/finance/drivers",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "finance",
+                                        "drivers"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Home Popups",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/home-popups",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/home-popups",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/home-popups/{homePopup}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups/:homePopup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups",
+                                        ":homePopup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "homePopup",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/home-popups/{homePopup}",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups/:homePopup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups",
+                                        ":homePopup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "homePopup",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "PATCH /api/v1/admin/home-popups/{homePopup}",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups/:homePopup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups",
+                                        ":homePopup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "homePopup",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/home-popups/{homePopup}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups/:homePopup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups",
+                                        ":homePopup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "homePopup",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Home Popups Reorder",
+                    "item": [
+                        {
+                            "name": "POST /api/v1/admin/home-popups-reorder",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/home-popups-reorder",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "home-popups-reorder"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -12411,6 +14867,43 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/reports/complaints/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/complaints/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "complaints",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/reports/customers",
                             "request": {
                                 "method": "GET",
@@ -12484,6 +14977,43 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/reports/customers/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/customers/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "customers",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/reports/drivers",
                             "request": {
                                 "method": "GET",
@@ -12514,6 +15044,43 @@
                                         "admin",
                                         "reports",
                                         "drivers"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/reports/drivers/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/drivers/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "drivers",
+                                        "export"
                                     ],
                                     "variable": []
                                 }
@@ -12556,6 +15123,43 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/reports/products/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/products/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "products",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/reports/promo-codes",
                             "request": {
                                 "method": "GET",
@@ -12586,6 +15190,43 @@
                                         "admin",
                                         "reports",
                                         "promo-codes"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/reports/promo-codes/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/promo-codes/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "promo-codes",
+                                        "export"
                                     ],
                                     "variable": []
                                 }
@@ -12628,6 +15269,43 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/reports/refunds/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/refunds/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "refunds",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/reports/restaurants",
                             "request": {
                                 "method": "GET",
@@ -12658,6 +15336,43 @@
                                         "admin",
                                         "reports",
                                         "restaurants"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/reports/restaurants/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/restaurants/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "restaurants",
+                                        "export"
                                     ],
                                     "variable": []
                                 }
@@ -12700,6 +15415,43 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/reports/sales/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/sales/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "sales",
+                                        "export"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/admin/reports/zones",
                             "request": {
                                 "method": "GET",
@@ -12730,6 +15482,43 @@
                                         "admin",
                                         "reports",
                                         "zones"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/reports/zones/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/reports/zones/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "reports",
+                                        "zones",
+                                        "export"
                                     ],
                                     "variable": []
                                 }
@@ -14128,6 +16917,197 @@
                     ]
                 },
                 {
+                    "name": "Scheduled Orders",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/scheduled-orders",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/scheduled-orders",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "scheduled-orders"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/scheduled-orders/{scheduledOrder}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/scheduled-orders/:scheduledOrder",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "scheduled-orders",
+                                        ":scheduledOrder"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "scheduledOrder",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/scheduled-orders/{scheduledOrder}/cancel",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/scheduled-orders/:scheduledOrder/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "scheduled-orders",
+                                        ":scheduledOrder",
+                                        "cancel"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "scheduledOrder",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/scheduled-orders/{scheduledOrder}/release",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/scheduled-orders/:scheduledOrder/release",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "scheduled-orders",
+                                        ":scheduledOrder",
+                                        "release"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "scheduledOrder",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Settings",
                     "item": [
                         {
@@ -14344,6 +17324,48 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/admin/settlements/{settlement}/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/settlements/:settlement/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "settlements",
+                                        ":settlement",
+                                        "export"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "settlement",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
                             "name": "POST /api/v1/admin/settlements/{settlement}/pay",
                             "request": {
                                 "method": "POST",
@@ -14390,6 +17412,341 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{\n    \"reference\": \"BANK-001\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Store Categories",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/store-categories",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/store-categories",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/store-categories/{storeCategory}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories/:storeCategory",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories",
+                                        ":storeCategory"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "storeCategory",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/store-categories/{storeCategory}",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories/:storeCategory",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories",
+                                        ":storeCategory"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "storeCategory",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "PATCH /api/v1/admin/store-categories/{storeCategory}",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories/:storeCategory",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories",
+                                        ":storeCategory"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "storeCategory",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/store-categories/{storeCategory}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories/:storeCategory",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories",
+                                        ":storeCategory"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "storeCategory",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Store Categories Reorder",
+                    "item": [
+                        {
+                            "name": "POST /api/v1/admin/store-categories-reorder",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/store-categories-reorder",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "store-categories-reorder"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
                                     "options": {
                                         "raw": {
                                             "language": "json"

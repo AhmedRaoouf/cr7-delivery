@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStoreCategoryRequest;
 use App\Http\Requests\Admin\UpdateStoreCategoryRequest;
@@ -26,6 +27,8 @@ use Illuminate\Support\Str;
  */
 class StoreCategoryController extends Controller
 {
+    use HandlesUploads;
+
     public function index(Request $request): JsonResponse
     {
         $categories = StoreCategory::query()
@@ -71,13 +74,12 @@ class StoreCategoryController extends Controller
 
         // A replaced picture takes the old file with it. Left in place, a year of edits
         // is a year of orphans on a disk nobody sweeps.
+        //
+        // Through `withPublicUpload` since 2026-09-08, for `remove_image` /
+        // `remove_icon`: the old branch could only ever *replace*, so a category given
+        // the wrong artwork had to keep some.
         foreach (['image', 'icon'] as $field) {
-            if ($request->hasFile($field)) {
-                FileUploader::deletePublic($storeCategory->{$field});
-                $data[$field] = FileUploader::storePublic($request->file($field), 'store-categories');
-            } else {
-                unset($data[$field]);
-            }
+            $data = $this->withPublicUpload($data, $request, $field, 'store-categories', $storeCategory);
         }
 
         $storeCategory->update($data);

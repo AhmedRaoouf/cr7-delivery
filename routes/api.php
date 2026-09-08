@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Admin\DriverDocumentController;
 use App\Http\Controllers\Api\Admin\DriverFinanceController;
 use App\Http\Controllers\Api\Admin\ErrandController as AdminErrandController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
+use App\Http\Controllers\Api\Admin\HomePopupController as AdminHomePopupController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
+use App\Http\Controllers\Api\Auth\SocialAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\CheckoutController;
@@ -81,6 +83,7 @@ use App\Http\Controllers\Api\Shared\CuisineController as SharedCuisineController
 use App\Http\Controllers\Api\Shared\DeviceController;
 use App\Http\Controllers\Api\Shared\FaqController;
 use App\Http\Controllers\Api\Shared\GeoController;
+use App\Http\Controllers\Api\Shared\HomePopupController as SharedHomePopupController;
 use App\Http\Controllers\Api\Shared\NotificationController;
 use App\Http\Controllers\Api\Shared\PageController;
 use App\Http\Controllers\Api\Shared\StoreCategoryController as SharedStoreCategoryController;
@@ -99,6 +102,11 @@ Route::prefix('v1')->group(function () {
     Route::get('/cities', [SharedCityController::class, 'index']);
     Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
     Route::post('/geo/resolve', [GeoController::class, 'resolve']);
+    // Our own shops, by name, near a point — what the raster tiles under them will
+    // never know. Public for the same reason `/store-categories` is: the app browses
+    // before it signs in, and this is the same catalogue narrowed to a pin and a name.
+    // Throttled generously — it is one indexed query behind a ten-minute cache.
+    Route::middleware('throttle:120,1')->get('/geo/places', [GeoController::class, 'places']);
     // Geocoding proxies. Throttled because every request behind them is a
     // billed one at the provider, and an unthrottled public route is a free
     // way for anyone to spend the account's monthly quota.
@@ -110,6 +118,9 @@ Route::prefix('v1')->group(function () {
     // The home screen's top strip. Public — the app browses before it signs in.
     Route::get('/store-categories', [SharedStoreCategoryController::class, 'index']);
     Route::get('/banners', [BannerController::class, 'index']);
+    // «العرض المنبثق» — the card drawn over the home screen the moment it opens. Public
+    // for the same reason the strip above is: it is shown before anyone signs in.
+    Route::get('/home-popups', [SharedHomePopupController::class, 'index']);
     Route::get('/pages/{slug}', [PageController::class, 'show']);
     Route::get('/faqs', [FaqController::class, 'index']);
     // APP-03 — public by necessity: an applicant has no account yet, and this creates
@@ -129,6 +140,14 @@ Route::prefix('v1')->group(function () {
         // back, plus a name and a password. Throttled per IP because it is the one
         // unauthenticated route that creates a row in `users`.
         Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:10,1');
+
+        // «المتابعة باستخدام Apple / Google». `/social` verifies the provider's id_token
+        // server-side and answers `signed_in` or `needs_phone`; `/social/link` is the
+        // second half — neither provider gives up a phone number, so `CUS-07a` asks for
+        // one and this attaches the identity to the account that answers its code.
+        // Throttled per IP for the same reason `/register` is.
+        Route::post('/social', [SocialAuthController::class, 'store'])->middleware('throttle:20,1');
+        Route::post('/social/link', [SocialAuthController::class, 'link'])->middleware('throttle:20,1');
 
         // driver / restaurant / admin — Admin-created accounts, phone|email + password (FR-AUTH-04).
         // X-App decides the expected users.type (doc 12 §1.1).
@@ -164,6 +183,8 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/favorites', [FavoriteController::class, 'index']);
         Route::post('/favorites', [FavoriteController::class, 'store']);
+        // What the device collected before there was an account to put it on.
+        Route::post('/favorites/sync', [FavoriteController::class, 'sync']);
         Route::delete('/favorites', [FavoriteController::class, 'destroy']);
 
         Route::get('/cart', [CartController::class, 'index']);
@@ -265,6 +286,10 @@ Route::prefix('v1')->group(function () {
     // per line.
     Route::get('/products', [CustomerProductController::class, 'index']);
     Route::get('/products/{product}', [CustomerProductController::class, 'show']);
+    // Tapping a cuisine lists dishes, not kitchens — «يجيبلي المنتجات على طول، مش
+    // مطاعم». Public like the rest of the catalogue, and gated on nothing: the
+    // browse path runs before the customer signs in.
+    Route::get('/cuisines/{cuisine}/products', [CustomerProductController::class, 'byCuisine']);
     Route::get('/search', [SearchController::class, 'index']);
 
     /*
@@ -322,6 +347,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/reports/sales', [RestaurantReportController::class, 'sales']);
         Route::get('/reports/top-products', [RestaurantReportController::class, 'topProducts']);
         Route::get('/reports/export', [RestaurantReportController::class, 'export']);
+        // Declared before the `{...}`-free `/reports/export` would ever shadow it — it
+        // would not, but the pair reads as one thing and belongs together.
+        Route::get('/reports/top-products/export', [RestaurantReportController::class, 'topProductsExport']);
 
         Route::get('/settlements', [RestaurantSettlementController::class, 'index']);
         Route::get('/settlements/{settlement}', [RestaurantSettlementController::class, 'show']);
@@ -619,6 +647,22 @@ Route::prefix('v1')->group(function () {
         Route::post('/banners', [AdminBannerController::class, 'store']);
         Route::patch('/banners/{banner}', [AdminBannerController::class, 'update']);
         Route::delete('/banners/{banner}', [AdminBannerController::class, 'destroy'])->middleware('permission:banners.manage');
+
+        // «العرض المنبثق» — the home screen's popup card. Same permission as the banners
+        // beside it: it is the same job (an offer, its artwork and where it points), and
+        // a `permission:home_popups.manage` that nothing seeds would refuse everybody
+        // including the super admin — see `RoutePermissionCatalogueTest`.
+        Route::get('/home-popups', [AdminHomePopupController::class, 'index']);
+        Route::get('/home-popups/{homePopup}', [AdminHomePopupController::class, 'show']);
+        Route::middleware('permission:banners.manage')->group(function () {
+            Route::post('/home-popups', [AdminHomePopupController::class, 'store']);
+            // Both verbs. The artwork arrives as multipart and PHP does not populate
+            // `$_FILES` for a PATCH body, so the dashboard posts with `_method=PATCH`
+            // and a client that can send a real PATCH (no file) still works.
+            Route::match(['post', 'patch'], '/home-popups/{homePopup}', [AdminHomePopupController::class, 'update']);
+            Route::post('/home-popups-reorder', [AdminHomePopupController::class, 'reorder']);
+            Route::delete('/home-popups/{homePopup}', [AdminHomePopupController::class, 'destroy']);
+        });
 
         Route::get('/pages', [AdminPageController::class, 'index']);
         Route::get('/pages/{slug}', [AdminPageController::class, 'show']);

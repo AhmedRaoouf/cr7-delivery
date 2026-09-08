@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\Customer;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Customer\ProductDetailResource;
 use App\Http\Resources\Customer\ProductResource;
+use App\Models\Cuisine;
 use App\Models\Product;
 use App\Support\ApiResponse;
+use App\Support\ArabicSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** doc 08 §4 — GET /products?ids=, GET /products/{id}. */
+/** doc 08 §4 — GET /products?ids=, GET /products/{id}, GET /cuisines/{id}/products. */
 class ProductController extends Controller
 {
     /**
@@ -39,6 +41,62 @@ class ProductController extends Controller
             ->get();
 
         return ApiResponse::success(ProductResource::collection($products));
+    }
+
+    /**
+     * Every dish sold by every kitchen tagged with this cuisine, paginated.
+     *
+     * «ولما أدوس عليها أكني بسيرش يجيبلي كل البرجرز… يجيبلي المنتجات على طول، مش
+     * مطاعم». A cuisine used to lead to `CUS-13`, a list of *restaurants* the customer
+     * then had to open one by one to find a burger. This is the list they asked for.
+     *
+     * The cuisine lives on the restaurant, not on the dish — doc 03 has no
+     * `cuisine_product` table and inventing one would mean tagging 562 rows by hand —
+     * so the filter is a `whereHas` through the restaurant. `city_id` narrows it the
+     * same way `GET /restaurants` does, because a customer in جمصة must not be offered
+     * a dish from a kitchen that does not deliver to them.
+     *
+     * The restaurant is eager-loaded so `ProductResource` can render `restaurant_name`:
+     * a dish out of its own menu is unopenable and unaddable without one.
+     */
+    public function byCuisine(Request $request, Cuisine $cuisine): JsonResponse
+    {
+        abort_unless($cuisine->is_active, 404);
+
+        $cityId = $request->integer('city_id') ?: null;
+
+        $products = Product::query()
+            ->with('restaurant:id,name_ar,name_en')
+            ->where('is_available', true)
+            ->whereHas('restaurant', fn ($q) => $q
+                ->where('is_active', true)
+                ->when($cityId, fn ($rq, $id) => $rq->where('city_id', $id))
+                ->whereHas('cuisines', fn ($cq) => $cq->where('cuisines.id', $cuisine->id)))
+            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+                $q,
+                ['name_ar', 'name_en', 'description_ar', 'description_en'],
+                ArabicSearch::tokens((string) $request->string('search')->value()),
+            ))
+            ->when($request->string('sort')->value(), function ($q, $sort) {
+                match ($sort) {
+                    'price' => $q->orderBy('price'),
+                    '-price' => $q->orderByDesc('price'),
+                    '-rating_avg' => $q->orderByDesc('rating_avg'),
+                    default => $q->orderByDesc('sold_count'),
+                };
+            }, fn ($q) => $q->orderByDesc('is_featured')->orderByDesc('sold_count'))
+            // A stable tiebreak. Without it MySQL is free to order two dishes with the
+            // same `sold_count` differently on page 1 and page 2, which is how a paged
+            // list shows the same row twice and drops another.
+            ->orderBy('id')
+            ->paginate($request->integer('per_page', 30));
+
+        return ApiResponse::success(ProductResource::collection($products->getCollection()), meta: [
+            'current_page' => $products->currentPage(),
+            'per_page' => $products->perPage(),
+            'total' => $products->total(),
+            'last_page' => $products->lastPage(),
+        ]);
     }
 
     public function show(Product $product): JsonResponse

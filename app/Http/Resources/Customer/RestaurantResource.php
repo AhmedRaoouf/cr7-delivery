@@ -35,8 +35,10 @@ class RestaurantResource extends JsonResource
             'rating_count' => $this->rating_count,
             'delivery_fee' => $zone?->delivery_fee !== null ? (float) $zone->delivery_fee : null,
             'free_delivery_over' => $zone?->free_delivery_over !== null ? (float) $zone->free_delivery_over : null,
-            'delivery_time_min' => $zone ? max(5, $zone->avg_delivery_minutes - 10) : null,
-            'delivery_time_max' => $zone ? $zone->avg_delivery_minutes + 10 : null,
+            // The shop's own window when it publishes one, the zone's estimate
+            // otherwise — see `Restaurant::etaWindow()`.
+            'delivery_time_min' => $this->etaWindow()[0],
+            'delivery_time_max' => $this->etaWindow()[1],
             'min_order_value' => (float) $this->min_order_value,
             'distance_km' => ($lat && $lng) ? round(Geo::haversineKm((float) $this->latitude, (float) $this->longitude, $lat, $lng), 2) : null,
             'price_band' => $this->price_band,

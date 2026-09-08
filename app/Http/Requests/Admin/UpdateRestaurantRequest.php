@@ -29,6 +29,11 @@ class UpdateRestaurantRequest extends FormRequest
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
             'avg_prep_minutes' => ['nullable', 'integer', 'min:1'],
+            // The window the customer is shown. Both nullable: a shop that sets
+            // neither keeps its zone's estimate, and one that sets them equal
+            // publishes a single figure rather than a range — «‎35‎ دقيقة».
+            'eta_min_minutes' => ['nullable', 'integer', 'min:1', 'max:240'],
+            'eta_max_minutes' => ['nullable', 'integer', 'min:1', 'max:240', 'gte:eta_min_minutes'],
             'menu_layout' => ['nullable', 'in:list,pager'],
             'sort_order' => ['nullable', 'integer'],
             'cuisine_ids' => ['nullable', 'array'],

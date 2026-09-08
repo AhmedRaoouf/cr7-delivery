@@ -85,6 +85,15 @@ class User extends Authenticatable
         return $this->hasMany(DeviceToken::class);
     }
 
+    /**
+     * Apple / Google identities attached to this account — at most one per provider,
+     * enforced by the unique index rather than by anything that reads this.
+     */
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
     public function restaurant(): HasOne
     {
         return $this->hasOne(Restaurant::class);

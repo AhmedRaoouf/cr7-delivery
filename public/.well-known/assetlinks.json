@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cr7delivery.cr7_delivery",
+      "sha256_cert_fingerprints": [
+        "45:3F:8C:8B:C6:C3:AF:84:EE:BF:FE:31:0C:0D:38:8D:EE:4A:AF:84:0F:B9:61:FA:DE:B9:3D:18:0E:CC:23:C9"
+      ]
+    }
+  }
+]

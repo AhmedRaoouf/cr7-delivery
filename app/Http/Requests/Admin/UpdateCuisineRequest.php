@@ -17,6 +17,7 @@ class UpdateCuisineRequest extends FormRequest
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'icon' => ['nullable', 'string'],
+            'image' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer'],
             'is_active' => ['nullable', 'boolean'],
         ];

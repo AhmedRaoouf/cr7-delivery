@@ -106,6 +106,20 @@ final class BusinessTime
     }
 
     /**
+     * The local calendar day a boundary belongs to — what the operator typed.
+     *
+     * Every boundary above is returned in **UTC**, ready for a `where` clause, and Cairo
+     * is two hours ahead of it: `fromInput('2026-01-05')` is `2026-01-04 22:00Z`. Printing
+     * that with a bare `format('Y-m-d')` is how «الفترة» at the top of every exported
+     * workbook came out a day earlier than the range the operator asked for, and a day
+     * earlier than the same period printed on the PDF beside it.
+     */
+    public static function localDate(Carbon $moment): string
+    {
+        return $moment->copy()->setTimezone(self::timezone())->toDateString();
+    }
+
+    /**
      * A SQL expression that reads `$column` on that wall clock.
      *
      * `DATE(created_at)` and `HOUR(created_at)` are UTC, so the sales chart cut

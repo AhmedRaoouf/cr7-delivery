@@ -19,6 +19,13 @@
         </include>
     </source>
     <php>
+        <!-- The suite grew from 393 tests to 453 on 2026-09-08, and `ImageOptimizerTest`
+             now exhausts PHP's default 128 MB inside a full run — it passes alone. The
+             failure is an out-of-memory abort with no failing assertion, which reads as
+             the runner crashing rather than as a test problem. `artisan test` spawns a
+             subprocess that does not inherit a command-line `-d`, so the limit has to be
+             here. -->
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

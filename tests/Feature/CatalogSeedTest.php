@@ -31,15 +31,20 @@ class CatalogSeedTest extends TestCase
     }
 
     /**
-     * 11 shops, not 8, since 2026-09-07: the home screen's strip needs something behind
-     * «صيدليات» and «سوبرماركت» or those cards lead nowhere. doc 17 R-16, R-17 and R-18
-     * are real Gamasa businesses with logos already in the repo.
+     * 22 shops.
+     *
+     * It was 8 — the restaurants doc 17 transcribed — then 11 on 2026-09-07, when
+     * «صيدليات» and «سوبرماركت» each needed something behind the card or it led
+     * nowhere. It is 22 on 2026-09-08 because one shop behind a card is not a
+     * section: the operator asked for «تلاتة أربعة صيدليات، تلاتة أربعة خضروات
+     * وفاكهة» so that filtering to a category returns a list rather than a single
+     * row. Four of the five cards now hold three or more.
      */
     public function test_the_whole_catalogue_lands(): void
     {
-        $this->assertSame(11, Restaurant::query()->count());
-        $this->assertSame(85, MenuCategory::query()->count());
-        $this->assertSame(641, Product::query()->count());
+        $this->assertSame(22, Restaurant::query()->count());
+        $this->assertSame(124, MenuCategory::query()->count());
+        $this->assertSame(846, Product::query()->count());
         $this->assertGreaterThan(0, Cuisine::query()->count());
     }
 
@@ -62,12 +67,15 @@ class CatalogSeedTest extends TestCase
 
         // 7, not 8: سعد الدمياطي is «مطعم كافيه» in doc 17 and sits under «كافيهات».
         $this->assertSame(7, $counts['restaurants']);
-        $this->assertSame(1, $counts['cafes']);
-        $this->assertSame(1, $counts['pharmacies']);
-        $this->assertSame(2, $counts['supermarkets']);
-        // «خضروات وفاكهة» ships empty on purpose — the operator has no greengrocer signed
-        // up yet, and the card is listed anyway so they can see where one would go.
-        $this->assertSame(0, $counts['greengrocers']);
+        $this->assertSame(4, $counts['cafes']);
+        $this->assertSame(4, $counts['pharmacies']);
+        $this->assertSame(3, $counts['supermarkets']);
+        $this->assertSame(4, $counts['greengrocers']);
+
+        // The point of the 2026-09-08 batch: no card leads to a list of one.
+        foreach ($counts as $slug => $count) {
+            $this->assertGreaterThanOrEqual(3, $count, "«{$slug}» needs more than a shop or two behind it");
+        }
     }
 
     public function test_the_public_strip_lists_every_active_category(): void
@@ -77,19 +85,33 @@ class CatalogSeedTest extends TestCase
             ->assertJsonCount(5, 'data')
             ->assertJsonPath('data.0.slug', 'restaurants')
             ->assertJsonPath('data.0.name_ar', 'مطاعم')
-            ->assertJsonPath('data.4.restaurants_count', 0);
+            ->assertJsonPath('data.4.restaurants_count', 4);
     }
 
     public function test_a_shop_can_be_browsed_by_its_store_category(): void
     {
         $this->getJson('/api/v1/restaurants?filter[store_category]=pharmacies')
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.name', 'Amr Pharmacy');
+            ->assertJsonCount(4, 'data');
 
         $this->getJson('/api/v1/restaurants?filter[store_category]=supermarkets')
             ->assertOk()
-            ->assertJsonCount(2, 'data');
+            ->assertJsonCount(3, 'data');
+
+        // Several at once, comma-separated: the home cards are a multi-select since
+        // 2026-09-08 and the server ORs them. 4 + 3, and not one row twice.
+        $response = $this->getJson('/api/v1/restaurants?filter[store_category]=pharmacies,supermarkets')
+            ->assertOk()
+            ->assertJsonCount(7, 'data');
+
+        $ids = array_column($response->json('data'), 'id');
+        $this->assertSame($ids, array_values(array_unique($ids)), 'an OR filter must not duplicate a row');
+
+        // An unknown slug is an empty list, never every shop — a filter that
+        // silently stops filtering is worse than one that returns nothing.
+        $this->getJson('/api/v1/restaurants?filter[store_category]=pharmacies,nonsense')
+            ->assertOk()
+            ->assertJsonCount(4, 'data');
     }
 
     public function test_every_price_band_matches_doc_17(): void

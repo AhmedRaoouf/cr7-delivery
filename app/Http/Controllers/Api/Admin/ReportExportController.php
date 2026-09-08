@@ -36,8 +36,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * PDF is deliberately not here. Arabic in a server-side PDF needs a shaping engine
  * (`mpdf` and 30 MB of vendor, on hosting that cannot run `composer update`), and every
  * lighter library renders «مطاعم» as five disconnected letters, backwards. The dashboard
- * prints the report the browser has already laid out correctly instead — see the
- * `print` route in `apps/admin`.
+ * prints the report the browser has already laid out correctly instead — «طباعة / حفظ
+ * PDF» on every report screen, against `packages/ui/src/styles/print.css`.
+ *
+ * The charts follow the same split. The two reports that draw one on screen — sales and
+ * customers — pass their series to [ReportExporter], which writes them to a second
+ * worksheet «بيانات الرسم البياني». It is **data, not a picture**: openspout cannot write
+ * a chart part, and the alternative is a composer dependency this host cannot install.
+ * See the note on that class.
  */
 class ReportExportController extends Controller
 {
@@ -83,6 +89,17 @@ class ReportExportController extends Controller
                 (float) $row->platform_fees,
             ]),
             $this->period($from, $to) + [['إجمالي المبيعات', round((float) $rows->sum('gmv'), 2)]],
+            // `ADM-43` draws «المبيعات عبر الزمن» and «عدد الطلبات» off one date axis, so
+            // one range with two value columns is what an operator needs to select.
+            [
+                'title' => 'المبيعات وعدد الطلبات عبر الزمن',
+                'headers' => ['التاريخ', 'إجمالي المبيعات', 'عدد الطلبات'],
+                'rows' => $rows->map(fn ($row) => [
+                    (string) $row->date,
+                    (float) $row->gmv,
+                    (int) $row->orders_count,
+                ])->all(),
+            ],
         );
     }
 
@@ -254,6 +271,15 @@ class ReportExportController extends Controller
 
         $rows = $query->withCount('orderGroups')->latest()->limit(self::MAX_ROWS)->get();
 
+        // `ADM-52`'s retention grid, from the same query that feeds it on screen.
+        $cohorts = User::query()
+            ->where('type', 'customer')
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as cohort_month, COUNT(*) as customers_count")
+            ->groupBy('cohort_month')
+            ->orderBy('cohort_month')
+            ->limit(6)
+            ->get();
+
         return ReportExporter::stream(
             "customers-{$stamp}.xlsx",
             'تقرير العملاء',
@@ -267,6 +293,14 @@ class ReportExportController extends Controller
                 $u->is_active ? 'نعم' : 'لا',
             ]),
             [['الشريحة', $segment ?: 'الكل']],
+            [
+                'title' => 'شبكة الاحتفاظ — العملاء لكل شهر تسجيل',
+                'headers' => ['شهر التسجيل', 'عدد العملاء'],
+                'rows' => $cohorts->map(fn ($row) => [
+                    (string) $row->cohort_month,
+                    (int) $row->customers_count,
+                ])->all(),
+            ],
         );
     }
 
@@ -284,7 +318,8 @@ class ReportExportController extends Controller
     /** @return list<array{0: string, 1: string}> */
     private function period($from, $to): array
     {
-        return [['الفترة', $from->format('Y-m-d').' — '.$to->format('Y-m-d')]];
+        // The local day, not the UTC instant behind it — see `BusinessTime::localDate`.
+        return [['الفترة', BusinessTime::localDate($from).' — '.BusinessTime::localDate($to)]];
     }
 
     /** @return array{0: Carbon, 1: Carbon} */

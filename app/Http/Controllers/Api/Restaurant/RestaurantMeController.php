@@ -78,6 +78,11 @@ class RestaurantMeController extends Controller
      * seven rows only matter when it is off — `hours` is required only then, and the
      * rows already stored are left alone while it is on, so switching back does not lose
      * a week somebody spent typing.
+     *
+     * Each row then has three shapes rather than two. Operator, 2026-09-07: «يحدد
+     * مثلاً يوم الحد 24 ساعة مفتوح، يوم الاتنين مقفول خالص… يبقى فيه زرار إجازة
+     * مثلاً». `is_24h` is the first, `is_closed` the second, a pair of times the
+     * third. `is_closed` wins, so a holiday cannot also be open all day.
      */
     public function updateOpeningHours(Request $request): JsonResponse
     {
@@ -88,6 +93,7 @@ class RestaurantMeController extends Controller
             'hours.*.opens_at' => ['nullable', 'date_format:H:i'],
             'hours.*.closes_at' => ['nullable', 'date_format:H:i'],
             'hours.*.is_closed' => ['nullable', 'boolean'],
+            'hours.*.is_24h' => ['nullable', 'boolean'],
         ]);
 
         $restaurant = $request->user()->restaurant()->firstOrFail();
@@ -98,7 +104,16 @@ class RestaurantMeController extends Controller
         foreach ($validated['hours'] ?? [] as $entry) {
             $restaurant->openingHours()->updateOrCreate(
                 ['weekday' => $entry['weekday']],
-                ['opens_at' => $entry['opens_at'] ?? null, 'closes_at' => $entry['closes_at'] ?? null, 'is_closed' => $entry['is_closed'] ?? false],
+                [
+                    'opens_at' => $entry['opens_at'] ?? null,
+                    'closes_at' => $entry['closes_at'] ?? null,
+                    'is_closed' => $entry['is_closed'] ?? false,
+                    // A day that is open round the clock, and a day that is a
+                    // holiday, are the two answers the week could not give.
+                    // «‎24‎ ساعة» wins over a pair of times, and a closed day
+                    // cannot also be open all day.
+                    'is_24h' => ! ($entry['is_closed'] ?? false) && ($entry['is_24h'] ?? false),
+                ],
             );
         }
 

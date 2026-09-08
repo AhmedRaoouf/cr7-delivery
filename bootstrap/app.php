@@ -18,6 +18,7 @@ use Spatie\Permission\Exceptions\UnauthorizedException as PermissionUnauthorized
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -83,7 +84,37 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        /*
+         * A FormRequest whose `authorize()` answers false throws
+         * `AuthorizationException` — and this closure never sees one.
+         *
+         * Laravel's handler runs `prepareException()` **before**
+         * `renderViaCallbacks()`, and that method rewrites a status-less
+         * `AuthorizationException` into Symfony's `AccessDeniedHttpException`.
+         * By the time the callbacks are consulted the class registered here no
+         * longer matches, so the refusal fell through to the framework's own
+         * renderer: no `success` key, no `error` code, an English
+         * «This action is unauthorized.», and — with `APP_DEBUG` on — the
+         * server's absolute paths and a full stack trace in the body.
+         *
+         * That is **27 requests** across the API (`Update*Request`,
+         * `Store*Request` — every one that gates on a permission inside
+         * `authorize()` rather than on the route), and it is the one 403 in the
+         * application a client cannot recognise. `PermissionUnauthorizedException`
+         * from the route middleware was never affected, which is why the gap
+         * only shows on the routes whose permission lives in the request.
+         *
+         * Both classes are registered: the Symfony one is what actually
+         * arrives, and the Laravel one stays for any path that reaches the
+         * callbacks before `prepareException` has run.
+         */
         $exceptions->render(function (AuthorizationException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponse::error('forbidden', 'غير مصرح لك بهذا الإجراء', 403);
+            }
+        });
+
+        $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponse::error('forbidden', 'غير مصرح لك بهذا الإجراء', 403);
             }

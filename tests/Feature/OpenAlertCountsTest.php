@@ -91,6 +91,21 @@ class OpenAlertCountsTest extends TestCase
         $this->assertSame($counts['restaurant_timeouts'], $open['counts']['restaurant_timeout']);
         $this->assertSame($counts['delivery_issues'], $open['counts']['delivery_issue']);
         $this->assertSame($counts['payments_to_verify'], $open['counts']['payment_review']);
+
+        // 🔴 These two are why the test's own name was not true. `alertCounts()`
+        // has computed six kinds since the errand queue and the complaints dock
+        // were added, and `/dashboard/alerts` published four of them — so the
+        // badge read «4» over a dock that listed six kinds of row. The
+        // assertion below asserts the promise rather than a subset of it.
+        $this->assertSame($counts['errands_unclaimed'], $open['counts']['errand_unclaimed']);
+        $this->assertSame($counts['complaints_open'], $open['counts']['complaint_open']);
+
+        $this->assertSame(
+            array_sum($open['counts']),
+            array_sum($counts),
+            'every kind the dock lists must also be a number the badge counts',
+        );
+
         $this->assertSame(4, $open['total']);
     }
 

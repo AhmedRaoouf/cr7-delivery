@@ -76,8 +76,14 @@ class DashboardController extends Controller
 
     public function alerts(Request $request): JsonResponse
     {
-        // Same four numbers `openAlerts()` publishes, under `ADM-03`'s older names.
+        // The same numbers `openAlerts()` publishes, under `ADM-03`'s older names.
         // One source, so the sidebar badge and the dock can never disagree.
+        //
+        // 🔴 They did disagree. `alertCounts()` has computed six kinds since the
+        // errand queue and the complaints dock were added, and this endpoint
+        // published four of them — so the badge read «7» over a list of nine,
+        // and the two queues that had no number were the two an operator is
+        // least likely to be sitting on already.
         $counts = $this->alertCounts($request);
 
         return ApiResponse::success([
@@ -85,6 +91,8 @@ class DashboardController extends Controller
             'no_driver' => $counts['no_driver'],
             'delivery_issues' => $counts['delivery_issue'],
             'payments_to_verify' => $counts['payment_review'],
+            'errands_unclaimed' => $counts['errand_unclaimed'],
+            'complaints_open' => $counts['complaint_open'],
         ]);
     }
 

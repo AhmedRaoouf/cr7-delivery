@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\AdminScopeType;
+use App\Enums\VehicleType;
+use App\Models\Driver;
 use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
@@ -10,6 +12,7 @@ use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use ZipArchive;
 
 /**
  * «زرار طباعة إكسل» on every report.
@@ -58,6 +61,68 @@ class ReportExportTest extends TestCase
             $body = $response->streamedContent();
             $this->assertSame('PK', substr($body, 0, 2), "{$report} did not stream a workbook");
         }
+    }
+
+    /**
+     * The 2026-09-09 regression, and why the loop above did not catch it.
+     *
+     * `test_every_report_downloads_as_a_real_workbook` runs against an empty
+     * database, so the drivers report streamed a header row and stopped — and a
+     * header row is all strings. The bug was in the **data** row: a `Driver`'s
+     * `vehicle_type` is cast to a `VehicleType`, openspout accepts no enum, and
+     * the operator's «تصدير Excel» answered 500 on production for as long as
+     * there was a captain in the table.
+     *
+     * So this seeds one first. It also reads the word back out of the sheet:
+     * `motorcycle` in an otherwise Arabic column would be a fix that only
+     * silenced the crash.
+     */
+    public function test_the_drivers_report_exports_with_a_captain_in_it(): void
+    {
+        Sanctum::actingAs($this->superAdmin());
+
+        $captain = User::factory()->create(['type' => 'driver', 'name' => 'كابتن يوسف']);
+        Driver::query()->create([
+            'user_id' => $captain->id,
+            'city_id' => $this->city->id,
+            'national_id' => '29001011234567',
+            'vehicle_type' => VehicleType::Motorcycle,
+            'vehicle_plate' => 'ج م ص 4471',
+        ]);
+
+        $response = $this->get('/api/v1/admin/reports/drivers/export');
+
+        $response->assertOk();
+        $body = $response->streamedContent();
+        $this->assertSame('PK', substr($body, 0, 2));
+
+        $sheet = $this->sheetText($body);
+        $this->assertStringContainsString('كابتن يوسف', $sheet);
+        $this->assertStringContainsString('دراجة نارية', $sheet);
+        $this->assertStringNotContainsString('motorcycle', $sheet);
+    }
+
+    /** The strings openspout wrote, read back out of the zip. */
+    private function sheetText(string $workbook): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($path, $workbook);
+
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($path) === true, 'the export is not a readable zip');
+
+        $text = '';
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (str_starts_with($name, 'xl/worksheets/') || $name === 'xl/sharedStrings.xml') {
+                $text .= $zip->getFromIndex($i);
+            }
+        }
+
+        $zip->close();
+        unlink($path);
+
+        return $text;
     }
 
     public function test_an_export_answers_to_the_same_permission_as_its_report(): void

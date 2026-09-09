@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use BackedEnum;
 use Generator;
 use OpenSpout\Common\Entity\Row;
+use UnitEnum;
 use OpenSpout\Common\Entity\Style\CellAlignment;
 use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Entity\SheetView;
@@ -93,7 +95,7 @@ class ReportExporter
             $writer->addRow(Row::fromValues($headers, $header));
 
             foreach ($rows as $row) {
-                $writer->addRow(Row::fromValues($row));
+                $writer->addRow(Row::fromValues(self::cells($row)));
             }
 
             if ($chart !== null) {
@@ -109,7 +111,7 @@ class ReportExporter
                 $writer->addRow(Row::fromValues($chart['headers'], $header));
 
                 foreach ($chart['rows'] as $row) {
-                    $writer->addRow(Row::fromValues($row));
+                    $writer->addRow(Row::fromValues(self::cells($row)));
                 }
             }
 
@@ -122,5 +124,37 @@ class ReportExporter
             'Access-Control-Expose-Headers' => 'Content-Disposition',
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    /**
+     * openspout accepts `DateInterval|DateTimeInterface|string|int|float|bool|null`
+     * and throws a `TypeError` on anything else — which, streamed inside a
+     * `StreamedResponse`, reaches the operator as a bare 500 with no report and no
+     * clue why.
+     *
+     * That is exactly what «تصدير Excel» on `ADM-44` did until 2026-09-09: a
+     * `Driver`'s `vehicle_type` is cast to a [\App\Enums\VehicleType], and the
+     * drivers report was the one export that handed the column over as the enum
+     * itself. Six other exports were each unwrapping their own enums at the call
+     * site, so the rule existed six times and was missing the seventh.
+     *
+     * It lives here now, once, where the values are actually written.
+     *
+     * @param  iterable<mixed>  $row
+     * @return list<scalar|null>
+     */
+    private static function cells(iterable $row): array
+    {
+        $cells = [];
+
+        foreach ($row as $value) {
+            $cells[] = match (true) {
+                $value instanceof BackedEnum => $value->value,
+                $value instanceof UnitEnum => $value->name,
+                default => $value,
+            };
+        }
+
+        return $cells;
     }
 }

@@ -3,6 +3,9 @@
 /public/build
 /public/hot
 /public/storage
+# Resized copies `ImageResizer` writes on first request. Derived from
+# `public/catalog`, rebuilt on demand, and never worth a diff.
+/public/img
 /storage/*.key
 /storage/pail
 /vendor

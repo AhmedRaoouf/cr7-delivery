@@ -161,7 +161,14 @@ class CheckoutPricer
             $blockers[] = ['code' => 'cash_only_restricted', 'message' => 'حسابك مقيّد بالدفع نقدًا فقط حاليًا'];
         }
 
-        $total = round($subtotal - $discountAmount + $deliveryFee + $platformFee, 2);
+        // «رسوم إلغاء سابقة» — a late-cancellation fee from an earlier basket that
+        // had no refund to come out of (`LateCancellationFee`). It is collected
+        // by the next order rather than chased separately, and it is added to
+        // the total *after* every discount: a promo code is a reason to charge
+        // less for food, not a reason to forgive a fee.
+        $outstandingFees = round((float) $user->outstanding_fees, 2);
+
+        $total = round($subtotal - $discountAmount + $deliveryFee + $platformFee + $outstandingFees, 2);
 
         return [
             'restaurant_count' => $restaurantCount,
@@ -172,6 +179,7 @@ class CheckoutPricer
             'extra_stop_fee_total' => $extraStopFeeTotal,
             'delivery_fee' => $deliveryFee,
             'platform_fee' => $platformFee,
+            'outstanding_fees' => $outstandingFees,
             'delivery_pricing_rule_id' => $pricingRule?->id,
             'free_delivery_applied' => $freeDeliveryApplied,
             'first_order_free_applied' => $firstOrderFree,

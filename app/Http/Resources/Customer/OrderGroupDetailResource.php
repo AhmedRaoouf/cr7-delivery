@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -26,6 +27,11 @@ class OrderGroupDetailResource extends JsonResource
             'extra_stop_fee_total' => (float) $this->extra_stop_fee_total,
             'delivery_fee' => (float) $this->delivery_fee,
             'platform_fee' => (float) $this->platform_fee,
+            // A balance carried over from a late cancellation on an earlier
+            // basket. Zero on almost every order, and the receipt hides the
+            // line when it is — but when it is not, the customer is owed the
+            // sentence that says why the total moved.
+            'outstanding_fees' => (float) $this->outstanding_fees,
             'total' => (float) $this->total,
             'customer_note' => $this->customer_note,
             'delivery_instructions' => $this->delivery_instructions,
@@ -37,6 +43,14 @@ class OrderGroupDetailResource extends JsonResource
             'confirmation_opened_at' => $this->confirmation_opened_at,
             'confirmed_at' => $this->confirmed_at,
             'completed_at' => $this->completed_at,
+            // `CUS-31` draws the cancel button off these two, not off its own
+            // reading of the sub-order statuses — see the note in
+            // `OrderController::tracking`.
+            'can_cancel' => $this->whenLoaded('orders', fn () => $this->orders
+                ->contains(fn ($order) => $order->status->customerCanCancel())),
+            'cancellation_fee_due' => $this->whenLoaded('orders', fn () => LateCancellationFee::appliesTo(
+                $this->orders->filter(fn ($order) => $order->status->customerCanCancel()),
+            ) ? LateCancellationFee::amount() : 0.0),
             'sub_orders' => $this->whenLoaded('orders', fn () => $this->orders->map(fn ($order) => [
                 'id' => $order->id,
                 'order_number' => $order->order_number,
@@ -53,6 +67,8 @@ class OrderGroupDetailResource extends JsonResource
                 'delivery_fee_share' => (float) $order->delivery_fee_share,
                 'platform_fee_share' => (float) $order->platform_fee_share,
                 'total' => (float) $order->total,
+                // What this cancellation actually cost, snapshotted on the row.
+                'cancellation_fee' => (float) $order->cancellation_fee,
                 // doc 04 §11.3 — the customer reads their own delivery code, and only
                 // once the captain physically holds the food. Exposing it earlier
                 // would let it be handed over before there is anything to hand over.

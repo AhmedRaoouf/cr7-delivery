@@ -93,6 +93,11 @@ class CartFormatter
             'subtotal' => $groups->sum('subtotal'),
             'line_count' => $items->count(),
             'unit_count' => $items->sum('quantity'),
+            // A late-cancellation fee this basket will collect. It has to be
+            // visible here rather than only in the quote: a total that jumps by
+            // 20 EGP between the basket and the checkout screen, with no line
+            // naming it, reads as a bug or a swindle.
+            'outstanding_fees' => (float) $cart->user->outstanding_fees,
             'issues' => $basketIssues,
         ];
     }

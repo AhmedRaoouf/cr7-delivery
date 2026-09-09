@@ -78,6 +78,10 @@ class CreateOrderAction
                 // D-63 — snapshot. Changing `platform.order_fee` afterwards must not
                 // re-price an order already placed.
                 'platform_fee' => $quote['platform_fee'],
+                // The balance this basket is collecting, snapshotted with the
+                // rest of the money. It is cleared on the account below, in the
+                // same transaction, so the fee is carried by exactly one order.
+                'outstanding_fees' => $quote['outstanding_fees'],
                 'total' => $quote['total'],
                 'rollup_status' => 'pending',
                 'customer_note' => $data['customer_note'] ?? null,
@@ -196,6 +200,16 @@ class CreateOrderAction
                 'status' => 'pending',
                 'amount' => 0,
             ]);
+
+            // The balance is now this order's problem, not the account's. Cleared
+            // inside the same transaction as the row that carries it, so there is
+            // no window where a second checkout could charge it twice.
+            // `forceFill`, because `outstanding_fees` is deliberately **not**
+            // fillable: it is money the server owns, and a column a request
+            // could mass-assign is a column a customer could zero.
+            if ($quote['outstanding_fees'] > 0) {
+                $user->forceFill(['outstanding_fees' => 0])->save();
+            }
 
             $cart->items()->delete();
 

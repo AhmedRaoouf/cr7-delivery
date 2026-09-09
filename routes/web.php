@@ -48,6 +48,39 @@ Route::get('/storage/{path}', function (string $path) {
 })->where('path', '[A-Za-z0-9/_\-\.]+')->name('uploads.show');
 
 /**
+ * A picture at the size it will actually be drawn.
+ *
+ * «في التطبيق بياخد وقت كبير اوي علي ما يحمل الصور» — operator, 2026-09-09. A
+ * restaurant logo drawn in a 42 dp circle was a 512 × 512 PNG of 370 KB, and a
+ * cold home screen pulled about 3.5 MB across thirty requests off a host with
+ * no CDN. `AppImage` already decoded at the drawn size; nothing shrank the
+ * download.
+ *
+ * `/img/{width}/catalog/…` answers the same picture at one of
+ * `ImageResizer::WIDTHS`, and **writes the file it just made to that exact
+ * path** — so the second request for it is served by the web server off disk
+ * and never reaches PHP. Where the file already exists this route never runs.
+ *
+ * The width is matched against the allowlist by the regex as well as inside
+ * `ImageResizer`, so an unknown one is a 404 from the router rather than a PHP
+ * boot. `where` on the path forbids `..` and pins it to the catalogue folders.
+ */
+Route::get('/img/{width}/{path}', function (string $width, string $path) {
+    $file = \App\Support\ImageResizer::make($path, (int) $width);
+
+    abort_if($file === null, 404);
+
+    return response()->file($file, [
+        // A year: the URL carries a `?v=` fingerprint that changes with the
+        // source, so a stale copy cannot outlive the picture it is of.
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
+})
+    ->where('width', implode('|', \App\Support\ImageResizer::WIDTHS))
+    ->where('path', 'catalog/[A-Za-z0-9/_\-\.]+')
+    ->name('images.resized');
+
+/**
  * Where a shared link lands.
  *
  * `CUS-14`'s share sheet hands out `https://cr7-delivery.com/r/<id>`, and Android and

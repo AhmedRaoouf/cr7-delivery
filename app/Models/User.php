@@ -40,6 +40,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'blocked_at' => 'datetime',
             'must_change_password' => 'boolean',
+            'outstanding_fees' => 'decimal:2',
             'notify_orders' => 'boolean',
             'notify_captain' => 'boolean',
             'notify_promos' => 'boolean',

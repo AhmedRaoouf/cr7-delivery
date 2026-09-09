@@ -102,6 +102,15 @@ class SettingsSeeder extends Seeder
 
             'commission.default_rate' => [10.00, 'commission'],
 
+            // «رسوم الإلغاء المتأخر» — operator, 2026-09-09: «الغاء الطلب ينفع
+            // طالما المطعم مبدأش تحضير، ولو عايز يلغي بعد كدا لازم يحول رسوم
+            // عشرين جنيه». Charged once per cancellation, only while a kitchen
+            // is in `preparing`, and netted out of the refund where there is one
+            // — otherwise carried on the account until the next basket collects
+            // it. Set it to 0 to make a late cancellation free again, with no
+            // deploy; `preparing` stays cancellable either way.
+            'orders.late_cancellation_fee' => [20.00, 'orders'],
+
             // D-63..D-65 — the platform service fee («رسوم الخدمة»). A fixed amount
             // charged once per order group, on top of the food and the delivery fee,
             // and kept by the platform.

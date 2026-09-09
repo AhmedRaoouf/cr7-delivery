@@ -66,6 +66,37 @@ enum OrderStatus: string
         return $this === self::Delivered || $this === self::Cancelled;
     }
 
+    /**
+     * Can the customer still cancel from here, and does it cost them?
+     *
+     * doc 04 §1 drew one line — the customer keeps the button until the kitchen
+     * starts. The operator moved it on 2026-09-09: «الغاء الطلب ينفع طالما
+     * المطعم مبدأش تحضير، ولو عايز يلغي بعد كدا لازم يحول رسوم عشرين جنيه». So
+     * there are two lines now.
+     *
+     * Free, because nothing has been cooked: everything up to and including
+     * `confirmed`. **`confirmed` belongs here and was missing** — the app has
+     * always drawn the button in that state and the server answered
+     * `order_not_cancellable`, which is a button that lies.
+     *
+     * Charged, because a kitchen is working: `preparing`, and only `preparing`.
+     * At `ready` the food is packed and a captain is being found, and the
+     * customer stops being the only person whose plans changed — from there it
+     * is an Admin action exactly as before.
+     */
+    public function customerCanCancel(): bool
+    {
+        return $this->customerCancelIsFree() || $this === self::Preparing;
+    }
+
+    public function customerCancelIsFree(): bool
+    {
+        return in_array($this, [
+            self::Pending, self::RestaurantTimeout, self::Accepted,
+            self::AwaitingCustomerConfirmation, self::AwaitingPayment, self::Confirmed,
+        ], true);
+    }
+
     /** States unreachable by a `restaurant_direct` order (doc 04 §12.1). */
     public static function directOrderUnreachable(): array
     {

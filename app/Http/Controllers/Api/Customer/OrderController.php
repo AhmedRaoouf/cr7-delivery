@@ -19,6 +19,7 @@ use App\Models\OrderGroup;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Support\ApiResponse;
+use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Http\JsonResponse;
@@ -108,11 +109,21 @@ class OrderController extends Controller
             ];
         });
 
+        $cancellable = $orders->filter(fn ($order) => $order->status->customerCanCancel());
+
         return ApiResponse::success([
             'rollup_status' => $orderGroup->rollup_status,
             'rollup_label' => OrderStatus::tryFrom($orderGroup->rollup_status)?->label() ?? $orderGroup->rollup_status,
             'eta_minutes' => $subOrders->min('eta_minutes'),
             'destination' => ['latitude' => (float) $orderGroup->delivery_latitude, 'longitude' => (float) $orderGroup->delivery_longitude],
+            // The server draws the cancel button, not the app. The states are
+            // one rule (`OrderStatus::customerCanCancel`) and the price is a
+            // setting, so an app that decided either for itself would show a
+            // button the server refuses or a number the operator has changed.
+            'can_cancel' => $cancellable->isNotEmpty(),
+            'cancellation_fee_due' => LateCancellationFee::appliesTo($cancellable)
+                ? LateCancellationFee::amount()
+                : 0.0,
             'sub_orders' => $subOrders,
         ]);
     }
@@ -214,6 +225,10 @@ class OrderController extends Controller
             'group' => new OrderGroupDetailResource($result['group']->load('orders.restaurant')),
             'cancelled_order_ids' => $result['cancelled'],
             'not_cancelled_order_ids' => $result['not_cancelled'],
+            // What it actually cost, so the confirmation the customer reads is
+            // the charge that was made rather than the one they were quoted.
+            'cancellation_fee' => $result['fee'],
+            'outstanding_fees' => (float) $request->user()->fresh()->outstanding_fees,
         ], 'تم إلغاء الطلب');
     }
 

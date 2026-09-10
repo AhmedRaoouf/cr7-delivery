@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\CreateRestaurantAction;
 use App\Actions\Admin\ResetUserPasswordAction;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
@@ -70,7 +71,7 @@ class RestaurantController extends Controller
     {
         $this->ensureInScope($request, $restaurant);
 
-        $data = $request->validated();
+        $data = $this->guardCommission($request, $restaurant, $request->validated());
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
         $restaurant->update(collect($data)->except('cuisine_ids')->all());
@@ -161,6 +162,43 @@ class RestaurantController extends Controller
         $restaurant->delete();
 
         return ApiResponse::success(message: 'تم حذف المطعم بنجاح');
+    }
+
+    /**
+     * The commission travels on the restaurant form; the authority to change it does not.
+     *
+     * `restaurants.set_commission` is a separate grant from `restaurants.update` (D-51), and
+     * D-52 forbids widening one by way of the other. But the form posts the field on every
+     * save, so refusing its mere presence would lock an admin who holds only `restaurants.update`
+     * out of editing a phone number. The line is the *value*: a save that leaves the number
+     * where it is passes untouched, and a save that moves it is refused **by name** rather than
+     * dropped in silence — which is what `validated()` did before the rule existed, answering
+     * 200 to an edit it had thrown away.
+     */
+    private function guardCommission(Request $request, Restaurant $restaurant, array $data): array
+    {
+        if (! array_key_exists('commission_rate', $data)) {
+            return $data;
+        }
+
+        if (round((float) $data['commission_rate'], 2) === round((float) $restaurant->commission_rate, 2)) {
+            unset($data['commission_rate']);
+
+            return $data;
+        }
+
+        // `ApiException`, not `abort(403)`. The dashboard reads the doc 08 §1 envelope
+        // and `abort()` answers with Laravel's HTML error page, so the operator would
+        // have been shown «حدث خطأ غير متوقع» for a refusal that has a reason.
+        if (! $request->user()->can('restaurants.set_commission')) {
+            throw new ApiException(
+                'commission_not_permitted',
+                'لا تملك صلاحية تعديل نسبة العمولة',
+                403,
+            );
+        }
+
+        return $data;
     }
 
     private function ensureInScope(Request $request, Restaurant $restaurant): void

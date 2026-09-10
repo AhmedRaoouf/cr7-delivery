@@ -28,7 +28,13 @@ class UpdateRestaurantRequest extends FormRequest
             'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
-            'avg_prep_minutes' => ['nullable', 'integer', 'min:1'],
+            'avg_prep_minutes' => ['nullable', 'integer', 'min:1', 'max:240'],
+            // Accepted here, but not authorised here: `restaurants.set_commission`
+            // is its own grant, and the controller refuses a value that would
+            // actually move the number for an admin who does not hold it. Without
+            // the rule the field was dropped by `validated()` and every edit from
+            // the dashboard answered 200 having changed nothing.
+            'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // The window the customer is shown. Both nullable: a shop that sets
             // neither keeps its zone's estimate, and one that sets them equal
             // publishes a single figure rather than a range — «‎35‎ دقيقة».

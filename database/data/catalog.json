@@ -46,63 +46,63 @@
    "name_ar": "معجنات",
    "name_en": "Pastries",
    "icon": "pastry",
-   "image": null,
+   "image": "catalog/cuisines/pastry.jpg",
    "sort_order": 6
   },
   {
    "name_ar": "مشروبات",
    "name_en": "Drinks",
    "icon": "drink",
-   "image": null,
+   "image": "catalog/cuisines/drink.jpg",
    "sort_order": 7
   },
   {
    "name_ar": "سندوتشات",
    "name_en": "Sandwiches",
    "icon": "sandwich",
-   "image": null,
+   "image": "catalog/cuisines/sandwich.jpg",
    "sort_order": 8
   },
   {
    "name_ar": "مصري",
    "name_en": "Egyptian",
    "icon": "egyptian",
-   "image": null,
+   "image": "catalog/cuisines/egyptian.jpg",
    "sort_order": 9
   },
   {
    "name_ar": "دجاج",
    "name_en": "Chicken",
    "icon": "chicken",
-   "image": null,
+   "image": "catalog/cuisines/chicken.jpg",
    "sort_order": 10
   },
   {
    "name_ar": "بروست",
    "name_en": "Broast",
    "icon": "broast",
-   "image": null,
+   "image": "catalog/cuisines/broast.jpg",
    "sort_order": 11
   },
   {
    "name_ar": "شرقي",
    "name_en": "Oriental",
    "icon": "oriental",
-   "image": null,
+   "image": "catalog/cuisines/oriental.jpg",
    "sort_order": 12
   },
   {
    "name_ar": "فطير",
    "name_en": "Fateer",
    "icon": "fateer",
-   "image": null,
+   "image": "catalog/cuisines/fateer.jpg",
    "sort_order": 13
   },
   {
    "name_ar": "مخبوزات",
    "name_en": "Bakery",
    "icon": "bakery",
-   "image": null,
+   "image": "catalog/cuisines/bakery.jpg",
    "sort_order": 14
   }
  ],

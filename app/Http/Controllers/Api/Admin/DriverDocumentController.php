@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDriverDocumentRequest;
+use App\Http\Resources\Admin\DriverDocumentResource;
 use App\Models\Driver;
 use App\Models\DriverDocument;
 use App\Support\ApiResponse;
@@ -20,7 +21,7 @@ class DriverDocumentController extends Controller
 
     public function index(Driver $driver): JsonResponse
     {
-        return ApiResponse::success($driver->documents()->latest()->get());
+        return ApiResponse::success(DriverDocumentResource::collection($driver->documents()->latest()->get()));
     }
 
     public function store(StoreDriverDocumentRequest $request, Driver $driver): JsonResponse
@@ -28,15 +29,45 @@ class DriverDocumentController extends Controller
         $data = $this->withPrivateUpload($request->validated(), $request, 'file', 'driver-documents');
         $document = $driver->documents()->create($data);
 
-        return ApiResponse::success($document, 'تم رفع المستند بنجاح', status: 201);
+        return ApiResponse::success(new DriverDocumentResource($document), 'تم رفع المستند بنجاح', status: 201);
     }
 
-    /** doc 12 §5 — the only way to see a driver document: never a public URL. */
-    public function file(DriverDocument $driverDocument): StreamedResponse
+    /**
+     * doc 12 §5 — the only way to see a driver document: never a public URL.
+     *
+     * Operator, 2026-09-10: «امكانيه تنزل المستندات المرفوعه (صور البطاقه الشخصيه)
+     * ورؤيتها كصور في الداشبورد». Both, off one route, because they are the same bytes
+     * and only the header differs:
+     *
+     * - **inline** (the default) is what an `<img src>` needs. A browser handed
+     *   `attachment` on an image tag renders nothing at all and logs no error — the
+     *   picture is simply absent, which is exactly how this card came to be a list of
+     *   filenames.
+     * - **`?download=1`** is `attachment`, with a filename an operator can find again.
+     *   `national_id.jpg` in a folder of thirty downloads is useless, so the name
+     *   carries the captain and the kind: `captain-17-national_id.jpg`.
+     *
+     * The extension comes off the stored path rather than from the client: the name is
+     * echoed back into a `Content-Disposition` header, and a name taken from a request
+     * is a header-injection hole.
+     */
+    public function file(Request $request, DriverDocument $driverDocument): StreamedResponse
     {
         abort_unless(Storage::disk('local')->exists($driverDocument->file), 404);
 
-        return Storage::disk('local')->response($driverDocument->file);
+        if (! $request->boolean('download')) {
+            return Storage::disk('local')->response($driverDocument->file);
+        }
+
+        $extension = pathinfo($driverDocument->file, PATHINFO_EXTENSION);
+        $type = $driverDocument->type instanceof \BackedEnum
+            ? $driverDocument->type->value
+            : (string) $driverDocument->type;
+
+        $name = 'captain-'.$driverDocument->driver_id.'-'.($type !== '' ? $type : 'document')
+            .($extension === '' ? '' : '.'.$extension);
+
+        return Storage::disk('local')->download($driverDocument->file, $name);
     }
 
     public function review(Request $request, DriverDocument $driverDocument): JsonResponse
@@ -51,6 +82,6 @@ class DriverDocumentController extends Controller
             'note' => $validated['note'] ?? null,
         ]);
 
-        return ApiResponse::success($driverDocument, 'تم تحديث حالة المستند بنجاح');
+        return ApiResponse::success(new DriverDocumentResource($driverDocument), 'تم تحديث حالة المستند بنجاح');
     }
 }

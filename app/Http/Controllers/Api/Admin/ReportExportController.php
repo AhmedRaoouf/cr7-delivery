@@ -11,6 +11,8 @@ use App\Models\PromoCode;
 use App\Models\Refund;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Enums\OrderStatus;
+use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
 use App\Support\BusinessTime;
 use App\Support\ReportExporter;
@@ -55,6 +57,10 @@ class ReportExportController extends Controller
         $stamp = BusinessTime::now()->format('Ymd-Hi');
 
         return match ($report) {
+            // Not a report: the order **list** an operator is looking at, downloaded.
+            // It reads its own filters rather than `$from`/`$to`, so a search for one
+            // restaurant's Friday exports that and not the last thirty days.
+            'orders' => $this->orders($request, $stamp),
             'sales' => $this->sales($request, $from, $to, $stamp),
             'restaurants' => $this->restaurants($request, $from, $to, $stamp),
             'products' => $this->products($stamp),
@@ -66,6 +72,74 @@ class ReportExportController extends Controller
             'customers' => $this->customers($request, $stamp),
             default => abort(404),
         };
+    }
+
+    /**
+     * `ADM-04` as a workbook — «عايزين في الطلبات اللي في الأدمن يطبعها برده اكسل».
+     *
+     * The row is the row on the screen plus the four columns a table cannot carry on a
+     * laptop: the restaurant's own POS number, the captain, the payment method and the
+     * money broken into its four parts. An operator reconciling a night with a restaurant
+     * needs the breakdown; an operator scanning the board does not, which is why the two
+     * differ.
+     *
+     * `AdminOrderFilters` rather than a second filter chain — see that class. The scope
+     * is applied first and separately: a regional admin downloads their own region, and
+     * that must not depend on a query parameter being present.
+     */
+    private function orders(Request $request, string $stamp): StreamedResponse
+    {
+        $query = AdminOrderFilters::apply(
+            AdminScope::applyToOrders(Order::query(), $request->user())->with(['restaurant:id,name_ar', 'driver.user:id,name', 'user:id,name,phone']),
+            $request,
+        )->latest()->limit(self::MAX_ROWS);
+
+        $summary = [];
+        foreach (['status' => 'الحالة', 'origin' => 'المصدر', 'restaurant_id' => 'المطعم'] as $key => $label) {
+            $value = trim((string) ($request->input('filter.'.$key) ?? $request->input($key) ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $summary[] = [$label, $key === 'restaurant_id'
+                ? (Restaurant::query()->whereKey($value)->value('name_ar') ?? $value)
+                : $value];
+        }
+
+        return ReportExporter::stream(
+            "orders-{$stamp}.xlsx",
+            'الطلبات',
+            [
+                'رقم الطلب', 'رقم الطلب في المطعم', 'التاريخ', 'الوقت', 'المصدر', 'المطعم',
+                'العميل', 'هاتف العميل', 'الكابتن', 'الحالة', 'طريقة الدفع',
+                'قيمة الأصناف', 'رسوم التوصيل', 'الخصم', 'الإجمالي', 'العمولة',
+            ],
+            $this->generate($query->cursor(), fn (Order $order) => [
+                $order->order_number,
+                // The number the restaurant reads back over the phone. Null until the
+                // kitchen has answered, and an empty cell says that better than a zero.
+                $order->restaurant_order_ref,
+                BusinessTime::localDate($order->created_at),
+                BusinessTime::localTime($order->created_at),
+                $order->origin instanceof \App\Enums\OrderOrigin && $order->origin === \App\Enums\OrderOrigin::RestaurantDirect ? 'مباشر' : 'من التطبيق',
+                $order->restaurant?->name_ar ?? $order->restaurant_name_snapshot,
+                $order->guest_customer_name ?? $order->user?->name ?? $order->customer_name_snapshot,
+                $order->guest_customer_phone ?? $order->user?->phone,
+                $order->driver?->user?->name,
+                $order->status instanceof OrderStatus ? $order->status->label() : (string) $order->status,
+                match ((string) ($order->payment_method instanceof \BackedEnum ? $order->payment_method->value : $order->payment_method)) {
+                    'cash' => 'نقدًا',
+                    'vodafone_cash' => 'فودافون كاش',
+                    'instapay' => 'إنستاباي',
+                    default => '—',
+                },
+                (float) $order->subtotal,
+                (float) $order->delivery_fee_share,
+                (float) $order->discount_share,
+                (float) $order->total,
+                (float) $order->commission_amount,
+            ]),
+            $summary,
+        );
     }
 
     private function sales(Request $request, $from, $to, string $stamp): StreamedResponse

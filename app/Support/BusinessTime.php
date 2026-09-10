@@ -119,6 +119,12 @@ final class BusinessTime
         return $moment->copy()->setTimezone(self::timezone())->toDateString();
     }
 
+    /** The same wall clock as [localDate], for a column that prints the hour. */
+    public static function localTime(Carbon $moment): string
+    {
+        return $moment->copy()->setTimezone(self::timezone())->format('H:i');
+    }
+
     /**
      * A SQL expression that reads `$column` on that wall clock.
      *

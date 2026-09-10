@@ -10,10 +10,10 @@ use App\Actions\Admin\UnassignDriverAction;
 use App\Actions\Restaurant\ExtendPrepTimeAction;
 use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
-use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
+use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -25,27 +25,12 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — order management + the doc 24 §3 intervention console. `{id}` addresses a sub-order (orders.id). */
 class OrderController extends Controller
 {
-    use FiltersLists;
-
     public function index(Request $request): JsonResponse
     {
-        $orders = AdminScope::applyToOrders(Order::query(), $request->user())
-            ->with(['restaurant', 'driver.user'])
-            ->when($request->string('filter.origin')->isNotEmpty(), fn ($q) => $q->where('origin', $request->string('filter.origin')))
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->when($request->integer('filter.city_id'), fn ($q, $id) => $q->where('city_id', $id))
-            ->when($request->integer('filter.zone_id'), fn ($q, $id) => $q->where('service_zone_id', $id))
-            ->when($request->date('filter.date_from'), fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
-            ->when($request->date('filter.date_to'), fn ($q, $d) => $q->whereDate('created_at', '<=', $d))
-            // The one an operator reaches for first: «find me CR7-260830-0007», or the
-            // customer who just phoned. The endpoint had no search filter at all, so the
-            // box on `ADM-04` returned the same unfiltered page whatever was typed.
-            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                $term = '%'.$this->filterString($request, 'search').'%';
-                $q->where(fn ($sq) => $sq
-                    ->where('order_number', 'like', $term)
-                    ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $term)->orWhere('phone', 'like', $term)));
-            })
+        $orders = AdminOrderFilters::apply(
+            AdminScope::applyToOrders(Order::query(), $request->user())->with(['restaurant', 'driver.user']),
+            $request,
+        )
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

@@ -106,6 +106,19 @@ class CaptainApplicationController extends Controller
 
         abort_unless(filled($path) && Storage::disk('local')->exists($path), 404);
 
+        // `?download=1` saves it instead of drawing it — the same flag
+        // `DriverDocumentController::file` carries, so the dashboard has one spelling to
+        // remember. The filename is built here, never taken from the request: it is
+        // echoed into a `Content-Disposition` header.
+        if ($request->boolean('download')) {
+            $extension = pathinfo((string) $path, PATHINFO_EXTENSION);
+
+            return Storage::disk('local')->download(
+                $path,
+                "applicant-{$row->id}-{$kind}".($extension === '' ? '' : '.'.$extension),
+            );
+        }
+
         return Storage::disk('local')->response($path);
     }
 

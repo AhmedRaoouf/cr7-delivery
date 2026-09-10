@@ -53,6 +53,18 @@ class HomePopupResource extends JsonResource
             'secondary_action' => $this->secondary_action,
 
             'frequency' => $this->frequency,
+            // `0 = Sunday … 6 = Saturday`. Null is «every day» — the client must not
+            // turn that into `[0,1,2,3,4,5,6]`, because a card the operator never
+            // restricted should keep running if a seventh weekday is ever added.
+            'days_of_week' => $this->days_of_week,
+            'show_countdown' => (bool) $this->show_countdown,
+            // The clock, resolved **on the server**.
+            //
+            // The app could subtract `ends_at` from `DateTime.now()` itself, and on a
+            // phone whose clock is a day out it would draw «باقي يوم واحد» on an offer
+            // that ended yesterday. A count of seconds is a count of seconds wherever it
+            // is read; the phone ticks it down locally from the moment it arrived.
+            'countdown_seconds' => $this->resource->countdownSeconds(),
             // Who the card is for. The app never filters on it — the queue it
             // receives is already narrowed — but the dashboard reads the same
             // resource back into its own form.

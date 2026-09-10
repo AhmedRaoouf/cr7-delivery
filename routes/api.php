@@ -567,6 +567,11 @@ Route::prefix('v1')->group(function () {
         // Orders — doc 12 §3, the intervention console (doc 24 §3)
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('/orders', [AdminOrderController::class, 'index']);
+            // **Before** `/orders/{order}`, or the binder reads «export» as an order id
+            // and answers 404. Same trap as `/reports/top-products/export` above.
+            // It is the list, not a report, so it carries `orders.view` — the grant that
+            // already draws the table on `ADM-04`.
+            Route::get('/orders/export', [AdminReportExportController::class, 'export'])->defaults('report', 'orders');
             Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
             Route::get('/orders/{order}/attempts', [AdminOrderController::class, 'attempts']);
             Route::get('/orders/{order}/eligible-drivers', [AdminOrderController::class, 'eligibleDrivers']);

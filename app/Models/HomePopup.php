@@ -6,6 +6,7 @@ use App\Enums\BannerAudience;
 use App\Enums\BannerLinkType;
 use App\Enums\HomePopupFrequency;
 use App\Enums\HomePopupSecondaryAction;
+use App\Support\BusinessTime;
 use App\Support\FirstOrderPerk;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -29,7 +30,7 @@ class HomePopup extends Model
         'link_type', 'restaurant_id', 'product_id', 'store_category_id', 'code', 'url',
         'audience',
         'primary_label_ar', 'primary_label_en', 'secondary_label_ar', 'secondary_label_en',
-        'secondary_action', 'frequency', 'is_active', 'sort_order',
+        'secondary_action', 'frequency', 'days_of_week', 'show_countdown', 'is_active', 'sort_order',
         'starts_at', 'ends_at', 'theme',
     ];
 
@@ -40,6 +41,8 @@ class HomePopup extends Model
             'audience' => BannerAudience::class,
             'secondary_action' => HomePopupSecondaryAction::class,
             'frequency' => HomePopupFrequency::class,
+            'days_of_week' => 'array',
+            'show_countdown' => 'boolean',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
             'starts_at' => 'datetime',
@@ -76,7 +79,40 @@ class HomePopup extends Model
         return $query
             ->where('is_active', true)
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+            ->where(fn ($q) => $q->whereNull('days_of_week')->orWhereJsonContains('days_of_week', self::todayIndex()));
+    }
+
+    /**
+     * `0 = Sunday … 6 = Saturday` for the **local** day, not UTC's.
+     *
+     * A Cairo Thursday begins at 22:00Z on Wednesday. Reading `now()->dayOfWeek` on a
+     * UTC server means a «خميس وجمعة وسبت» offer switches on two hours into Thursday
+     * and off two hours into Sunday — the two hours either side being exactly the
+     * evening rush the offer was written for.
+     */
+    public static function todayIndex(): int
+    {
+        return (int) BusinessTime::now()->dayOfWeek;
+    }
+
+    /**
+     * A window's remaining seconds, or null when there is nothing to count.
+     *
+     * Null covers three different «no clock» cases and deliberately does not
+     * distinguish them for the client: the operator did not ask for a countdown, the
+     * card has no end, or the end is already behind us (`scopeLive` will have dropped
+     * it, but a card fetched by id has no such filter).
+     */
+    public function countdownSeconds(): ?int
+    {
+        if (! $this->show_countdown || $this->ends_at === null) {
+            return null;
+        }
+
+        $seconds = (int) now()->diffInSeconds($this->ends_at, absolute: false);
+
+        return $seconds > 0 ? $seconds : null;
     }
 
     /**

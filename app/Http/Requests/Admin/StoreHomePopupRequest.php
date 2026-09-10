@@ -51,6 +51,15 @@ class StoreHomePopupRequest extends FormRequest
             'secondary_action' => ['nullable', 'in:dismiss,snooze,link'],
 
             'frequency' => ['nullable', 'in:always,once_per_day,once'],
+            // «العرض مثلا خميس وجمعه وسبت» — `0 = Sunday … 6 = Saturday`, PHP's own
+            // `date('w')`. Absent means every day; an **empty array** is refused by
+            // `min:1` rather than saved, because a card that runs on no day at all is
+            // indistinguishable from a broken one and the operator would never find it.
+            'days_of_week' => ['nullable', 'array', 'min:1', 'max:7'],
+            'days_of_week.*' => ['integer', 'min:0', 'max:6'],
+            // Not derived from `ends_at`: a card that runs all season has an end date
+            // too, and a clock ticking on it would be a lie about urgency.
+            'show_countdown' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'starts_at' => ['nullable', 'date'],

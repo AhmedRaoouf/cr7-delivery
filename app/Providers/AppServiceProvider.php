@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Observers\AuditableObserver;
 use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
+use App\Services\Maps\ChainGeocoder;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\MapboxRouter;
@@ -116,17 +117,22 @@ class AppServiceProvider extends ServiceProvider
             default => LogOtpChannel::class,
         });
 
-        // D-84 — Mapbox when there is a token, OpenStreetMap's own Nominatim
-        // when there is not, and silence only if the operator has turned that
-        // off too. Nothing else in the app has to know which it is talking to.
+        // D-84 — Mapbox first when there is a token, OpenStreetMap's own
+        // Nominatim behind it always, and silence only if the operator has
+        // turned that off too. Nothing else in the app has to know which one
+        // answered.
+        //
+        // The fallback is a chain rather than a choice because a token is a
+        // preference, not a dependency: a paid provider that is down, throttled
+        // or refusing the query must not take geocoding down with it while a
+        // keyless one sits configured and unasked. See {@see ChainGeocoder}.
         $this->app->singleton(Geocoder::class, function (): Geocoder {
-            if (filled(config('maps.mapbox.token'))) {
-                return new MapboxGeocoder;
-            }
+            $chain = array_values(array_filter([
+                filled(config('maps.mapbox.token')) ? new MapboxGeocoder : null,
+                new OsmGeocoder,
+            ], fn (?Geocoder $g) => $g?->isConfigured() === true));
 
-            $osm = new OsmGeocoder;
-
-            return $osm->isConfigured() ? $osm : new NullGeocoder;
+            return $chain === [] ? new NullGeocoder : new ChainGeocoder($chain);
         });
 
         // The same token, and the same rule: configured means real roads, absent

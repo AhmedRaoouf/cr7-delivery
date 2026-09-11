@@ -41,11 +41,19 @@ class MapboxGeocoder implements Geocoder
                 'language' => $language,
                 // Most specific first, and more than one of them: a pin on a
                 // building answers `poi` **and** `address`, and the street name
-                // lives on the second. Asking for `limit=1` — which Mapbox only
-                // permits alongside a single `types` value — was what left this
-                // returning a district for a doorstep.
+                // lives on the second. That is the default for a reverse lookup
+                // — one feature per requested type — so there is nothing to ask
+                // for beyond the types themselves.
+                //
+                // **Never send `limit` here.** Mapbox rejects it on a reverse
+                // lookup unless it comes with a *single* `types` value:
+                // «limit must be combined with a single type parameter when
+                // reverse geocoding», HTTP 422. A `limit=5` alongside these five
+                // types shipped to production on 2026-09-11 and answered `null`
+                // for every pin — the exact symptom D-84 was written to fix,
+                // reintroduced by the commit that fixed it. The test suite
+                // mocked the response and never saw the request.
                 'types' => 'address,poi,neighborhood,locality,place',
-                'limit' => 5,
             ]);
 
             $first = $features[0] ?? null;

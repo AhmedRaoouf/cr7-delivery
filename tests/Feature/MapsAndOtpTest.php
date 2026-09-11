@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\StoreCategory;
+use App\Services\Maps\ChainGeocoder;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\NullGeocoder;
+use App\Services\Maps\OsmGeocoder;
 use App\Support\MapStyles;
 use App\Support\Otp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -280,6 +282,80 @@ class MapsAndOtpTest extends TestCase
         $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
             ->assertOk()
             ->assertJsonPath('data.address', null);
+    }
+
+    /**
+     * The defect that reached production on 2026-09-11, pinned at the layer it
+     * happened in: the **request**, not the response.
+     *
+     * Every geocoding test above fakes what Mapbox sends back, so all of them
+     * passed while the deployed server was answering `null` for every pin —
+     * Mapbox was refusing the query with «limit must be combined with a single
+     * type parameter when reverse geocoding» and a faked 200 can never say so.
+     */
+    public function test_the_reverse_request_never_carries_a_limit(): void
+    {
+        config(['maps.mapbox.token' => 'pk.test-token']);
+        Cache::flush();
+        Http::fake(['api.mapbox.com/*' => Http::response(['features' => [['text' => 'شارع البحر']]])]);
+
+        (new MapboxGeocoder)->reverse(31.4472, 31.5142);
+
+        Http::assertSent(function ($request) {
+            parse_str((string) parse_url((string) $request->url(), PHP_URL_QUERY), $query);
+
+            $this->assertArrayNotHasKey('limit', $query, 'Mapbox answers 422 to a reverse lookup carrying `limit` with more than one type.');
+            $this->assertSame('address,poi,neighborhood,locality,place', $query['types'] ?? null);
+
+            return true;
+        });
+    }
+
+    public function test_a_refused_mapbox_query_falls_through_to_the_keyless_geocoder(): void
+    {
+        config(['maps.mapbox.token' => 'pk.test-token', 'maps.osm.geocoding' => true]);
+        Cache::flush();
+
+        Http::fake([
+            'api.mapbox.com/*' => Http::response(['message' => 'limit must be combined with a single type parameter when reverse geocoding'], 422),
+            'nominatim.openstreetmap.org/*' => Http::response([
+                'name' => null,
+                'address' => [
+                    'road' => 'شارع الكورنيش',
+                    'neighbourhood' => 'منطقة العاشر من رمضان',
+                    'city' => 'جمصة',
+                ],
+                'display_name' => 'شارع الكورنيش, جمصة, الدقهلية, مصر',
+            ]),
+        ]);
+
+        $this->app->instance(Geocoder::class, new ChainGeocoder([new MapboxGeocoder, new OsmGeocoder]));
+
+        // A token the operator is paying for is a preference. When the provider
+        // holding it refuses the query, the pin still gets a name.
+        $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
+            ->assertOk()
+            ->assertJsonPath('data.address', 'شارع الكورنيش، منطقة العاشر من رمضان')
+            ->assertJsonPath('data.street', 'شارع الكورنيش')
+            ->assertJsonPath('data.city', 'جمصة');
+    }
+
+    public function test_the_chain_prefers_the_first_provider_that_answers(): void
+    {
+        config(['maps.mapbox.token' => 'pk.test-token', 'maps.osm.geocoding' => true]);
+        Cache::flush();
+
+        Http::fake([
+            'api.mapbox.com/*' => Http::response(['features' => [['text' => 'شارع البحر']]]),
+            'nominatim.openstreetmap.org/*' => Http::response(['address' => ['road' => 'شارع آخر']]),
+        ]);
+
+        $row = (new ChainGeocoder([new MapboxGeocoder, new OsmGeocoder]))->reverse(31.4472, 31.5142);
+
+        $this->assertSame('شارع البحر', $row['address'] ?? null);
+        // The fallback is a fallback, not a second opinion: nothing is sent to
+        // Nominatim while the paid provider is answering.
+        Http::assertNotSent(fn ($request) => str_contains((string) $request->url(), 'nominatim'));
     }
 
     public function test_forward_search_is_biased_to_the_launch_city(): void

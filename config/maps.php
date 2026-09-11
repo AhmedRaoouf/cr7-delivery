@@ -85,6 +85,25 @@ return [
         'tile_size' => 256,
         'zoom_offset' => 0,
         'max_zoom' => 19,
+
+        /**
+         * D-84 — geocoding with no account anywhere.
+         *
+         * Operator, 2026-09-11: «شوف خريطه عليها كل المناطق وتكون مجانيه يعني
+         * يبقا فيها كل حاجه google maps». Google's geocoder cannot be called
+         * without a billing account; Nominatim can be called without anything,
+         * and it reads the same OpenStreetMap data CARTO's tiles are drawn
+         * from — so the names on the map and the names from the lookup agree.
+         *
+         * Its usage policy asks for two things and both are honoured here: an
+         * identifying `User-Agent` (below), and no bulk traffic — every answer
+         * is cached server-side for `cache.reverse_days`, so a dragged pin
+         * spends one request per ‪11‬ m of *new* ground and none at all on
+         * ground any customer has already covered.
+         */
+        'geocoding' => (bool) env('OSM_GEOCODING', true),
+        'nominatim' => env('NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'CR7Delivery/1.0 (+https://cr7-delivery.com)'),
     ],
 
     /**

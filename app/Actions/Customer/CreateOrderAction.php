@@ -42,7 +42,12 @@ class CreateOrderAction
             throw new ApiException('cart_empty', 'السلة فارغة', 422);
         }
 
-        $address = UserAddress::query()->where('user_id', $user->id)->findOrFail($data['address_id']);
+        // D-83 — the two names ride into the snapshot, so the relations are
+        // loaded with the row rather than lazily inside the transaction.
+        $address = UserAddress::query()
+            ->where('user_id', $user->id)
+            ->with(['city', 'serviceZone'])
+            ->findOrFail($data['address_id']);
 
         $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
 
@@ -63,8 +68,8 @@ class CreateOrderAction
                 'payment_method' => $data['payment_method'],
                 'restaurant_count' => $quote['restaurant_count'],
                 'dispatch_mode' => $quote['dispatch_mode'],
-                'delivery_address_text' => $this->composeAddressText($address),
-                'delivery_contact_phone' => $address->contact_phone ?? $user->phone,
+                'delivery_address_text' => $address->composeText(),
+                'delivery_contact_phone' => $address->resolvedContactPhone($user),
                 'delivery_latitude' => $address->latitude,
                 'delivery_longitude' => $address->longitude,
                 'max_distance_km' => $quote['max_distance_km'],
@@ -117,8 +122,8 @@ class CreateOrderAction
                     'restaurant_name_snapshot' => $restaurant->name_ar,
                     // DRV-13 names the person the captain is delivering to.
                     'customer_name_snapshot' => $user->name,
-                    'delivery_address_text' => $this->composeAddressText($address),
-                    'delivery_contact_phone' => $address->contact_phone ?? $user->phone,
+                    'delivery_address_text' => $address->composeText(),
+                    'delivery_contact_phone' => $address->resolvedContactPhone($user),
                     'delivery_latitude' => $address->latitude,
                     'delivery_longitude' => $address->longitude,
                     'distance_km' => $groupQuote['distance_km'],
@@ -225,12 +230,5 @@ class CreateOrderAction
 
             return $group->load(['orders.restaurant', 'payment']);
         });
-    }
-
-    private function composeAddressText(UserAddress $address): string
-    {
-        return collect([$address->street, $address->building, $address->floor, $address->apartment, $address->landmark])
-            ->filter()
-            ->implode('، ');
     }
 }

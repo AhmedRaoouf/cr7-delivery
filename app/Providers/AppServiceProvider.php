@@ -28,6 +28,7 @@ use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\MapboxRouter;
 use App\Services\Maps\NullGeocoder;
 use App\Services\Maps\NullRouter;
+use App\Services\Maps\OsmGeocoder;
 use App\Services\Maps\Router;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
@@ -115,11 +116,18 @@ class AppServiceProvider extends ServiceProvider
             default => LogOtpChannel::class,
         });
 
-        // A token turns geocoding on; its absence turns it off. Nothing else
-        // in the app has to know which of the two it is talking to.
-        $this->app->singleton(Geocoder::class, fn () => filled(config('maps.mapbox.token'))
-            ? new MapboxGeocoder
-            : new NullGeocoder);
+        // D-84 — Mapbox when there is a token, OpenStreetMap's own Nominatim
+        // when there is not, and silence only if the operator has turned that
+        // off too. Nothing else in the app has to know which it is talking to.
+        $this->app->singleton(Geocoder::class, function (): Geocoder {
+            if (filled(config('maps.mapbox.token'))) {
+                return new MapboxGeocoder;
+            }
+
+            $osm = new OsmGeocoder;
+
+            return $osm->isConfigured() ? $osm : new NullGeocoder;
+        });
 
         // The same token, and the same rule: configured means real roads, absent
         // means the caller draws the straight line it always drew.

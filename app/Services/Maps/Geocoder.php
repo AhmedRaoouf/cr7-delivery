@@ -11,7 +11,11 @@ interface Geocoder
      * pin without a street label is still a usable pin, so a geocoding outage
      * must never be an error the customer has to clear.
      *
-     * @return array{address: string, place: ?string, neighborhood: ?string, city: ?string}|null
+     * `address` is the composed line the picker prints; the parts are sent
+     * beside it because `CUS-24` prefills «الشارع» from `street` and cannot cut
+     * it back out of a sentence (D-84).
+     *
+     * @return array{address: string, place: ?string, street?: ?string, house_number?: ?string, neighborhood: ?string, city: ?string}|null
      */
     public function reverse(float $lat, float $lng, string $language = 'ar'): ?array;
 

@@ -34,13 +34,17 @@ class MapsAndOtpTest extends TestCase
         $this->assertStringContainsString('tile.openstreetmap.org', $maps['tile_url_light']);
         // OSM has no dark set, so the client is told to invert the light one.
         $this->assertTrue($maps['invert_dark']);
-        $this->assertFalse($maps['geocoding']);
         $this->assertSame(256, $maps['tile_size']);
         $this->assertSame(0, $maps['zoom_offset']);
         // Zoom 20 answers 400 on this render, and a client that asks for it
         // draws a grey square over the one street the customer was reading.
         $this->assertSame(19, $maps['max_zoom']);
         $this->assertSame('© OpenStreetMap', $maps['attribution']);
+        // D-84 — geocoding is no longer a property of the **tile** provider.
+        // With no Mapbox token the platform binds `OsmGeocoder`, so the client
+        // is told to go on asking for street names; it used to be told `false`
+        // on exactly the deployments that needed Nominatim most.
+        $this->assertTrue($maps['geocoding']);
         // No shard placeholder, so no list to fill it from.
         $this->assertSame([], $maps['subdomains']);
     }
@@ -243,7 +247,10 @@ class MapsAndOtpTest extends TestCase
 
         $this->getJson('/api/v1/geo/reverse?lat=31.4472&lng=31.5142')
             ->assertOk()
-            ->assertJsonPath('data.address', 'شارع البحر، جمصة، الدقهلية')
+            // D-84 — the composed line, not `place_name`: «شارع البحر، جمصة،
+            // الدقهلية، مصر» wraps to three lines to say what this says in one,
+            // and the governorate is not an address a captain rides to.
+            ->assertJsonPath('data.address', 'شارع البحر، الكورنيش')
             ->assertJsonPath('data.neighborhood', 'الكورنيش')
             ->assertJsonPath('data.city', 'جمصة');
     }

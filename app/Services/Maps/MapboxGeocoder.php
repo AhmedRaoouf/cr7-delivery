@@ -39,8 +39,13 @@ class MapboxGeocoder implements Geocoder
         return Cache::remember($key, now()->addDays((int) config('maps.cache.reverse_days', 30)), function () use ($lat, $lng, $language) {
             $features = $this->call("{$lng},{$lat}", [
                 'language' => $language,
+                // Most specific first, and more than one of them: a pin on a
+                // building answers `poi` **and** `address`, and the street name
+                // lives on the second. Asking for `limit=1` — which Mapbox only
+                // permits alongside a single `types` value — was what left this
+                // returning a district for a doorstep.
                 'types' => 'address,poi,neighborhood,locality,place',
-                'limit' => 1,
+                'limit' => 5,
             ]);
 
             $first = $features[0] ?? null;
@@ -48,10 +53,39 @@ class MapboxGeocoder implements Geocoder
                 return null;
             }
 
+            $streetFeature = self::ofType($features, 'address') ?? $first;
+            $street = self::isType($streetFeature, 'address') ? ($streetFeature['text'] ?? null) : null;
+            // On an `address` feature Mapbox puts the house number in
+            // `address` and the street in `text` — the opposite way round from
+            // every other feature type it returns.
+            $houseNumber = self::isType($streetFeature, 'address') ? ($streetFeature['address'] ?? null) : null;
+            $poi = self::ofType($features, 'poi');
+            $neighborhood = $this->context($first, 'neighborhood') ?? ($this->firstTextOfType($features, 'neighborhood'));
+
+            $line = trim(implode(' ', array_filter([
+                $houseNumber === null ? null : "\u{202A}{$houseNumber}\u{202C}",
+                $street,
+            ])));
+
+            $parts = array_values(array_unique(array_filter([
+                // The POI, the street, or — for a feature typed as something
+                // this code does not special-case — whatever Mapbox called it.
+                // Dropping that last case cost the street name on every answer
+                // whose `place_type` was absent.
+                $poi['text'] ?? null,
+                $line !== '' ? $line : ($street ?? ($first['text'] ?? null)),
+                $neighborhood,
+            ])));
+
             return [
-                'address' => (string) ($first['place_name'] ?? ''),
-                'place' => $this->context($first, 'poi') ?? ($first['text'] ?? null),
-                'neighborhood' => $this->context($first, 'neighborhood'),
+                // The composed line, not `place_name`: «شارع البحر، الكورنيش»
+                // reads, and «شارع البحر، جمصة، الدقهلية، مصر» wraps to three
+                // lines and says nothing extra.
+                'address' => $parts === [] ? (string) ($first['place_name'] ?? '') : implode('، ', $parts),
+                'place' => $poi['text'] ?? ($first['text'] ?? null),
+                'street' => $street,
+                'house_number' => is_string($houseNumber) ? $houseNumber : null,
+                'neighborhood' => $neighborhood,
                 'city' => $this->context($first, 'place') ?? $this->context($first, 'locality'),
             ];
         });
@@ -120,6 +154,36 @@ class MapboxGeocoder implements Geocoder
 
             return [];
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $features
+     * @return array<string, mixed>|null
+     */
+    private static function ofType(array $features, string $type): ?array
+    {
+        foreach ($features as $feature) {
+            if (self::isType($feature, $type)) {
+                return $feature;
+            }
+        }
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $feature */
+    private static function isType(array $feature, string $type): bool
+    {
+        return in_array($type, (array) ($feature['place_type'] ?? []), true);
+    }
+
+    /** @param list<array<string, mixed>> $features */
+    private function firstTextOfType(array $features, string $type): ?string
+    {
+        $feature = self::ofType($features, $type);
+        $text = $feature['text'] ?? null;
+
+        return is_string($text) && $text !== '' ? $text : null;
     }
 
     /** @param array<string, mixed> $feature */

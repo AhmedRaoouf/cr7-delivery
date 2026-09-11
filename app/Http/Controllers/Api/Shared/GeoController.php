@@ -117,6 +117,11 @@ class GeoController extends Controller
         return ApiResponse::success([
             'address' => $result['address'] ?? null,
             'place' => $result['place'] ?? null,
+            // D-84 — the parts, not only the sentence: `CUS-24` prefills
+            // «الشارع» from `street`, and it cannot cut that back out of a
+            // composed line without guessing where the commas mean something.
+            'street' => $result['street'] ?? null,
+            'house_number' => $result['house_number'] ?? null,
             'neighborhood' => $result['neighborhood'] ?? null,
             'city' => $result['city'] ?? null,
         ]);

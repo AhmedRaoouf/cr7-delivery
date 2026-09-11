@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Customer;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreAddressRequest;
 use App\Http\Requests\Customer\UpdateAddressRequest;
+use App\Http\Resources\Customer\AddressResource;
 use App\Models\UserAddress;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -16,7 +17,12 @@ class AddressController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        return ApiResponse::success($request->user()->addresses()->latest()->get());
+        // `user` rides along because `AddressResource` resolves the phone the
+        // captain will call from the address's **owner** — without it that is
+        // one lazy load per row.
+        $addresses = $request->user()->addresses()->with(['city', 'serviceZone', 'user'])->latest()->get();
+
+        return ApiResponse::success(AddressResource::collection($addresses));
     }
 
     public function store(StoreAddressRequest $request): JsonResponse
@@ -30,7 +36,7 @@ class AddressController extends Controller
             return $address;
         });
 
-        return ApiResponse::success($address->fresh(), 'تم إضافة العنوان بنجاح', status: 201);
+        return ApiResponse::success($this->resource($address), 'تم إضافة العنوان بنجاح', status: 201);
     }
 
     public function update(UpdateAddressRequest $request, UserAddress $address): JsonResponse
@@ -44,7 +50,7 @@ class AddressController extends Controller
             $this->syncDefault($request, $address);
         });
 
-        return ApiResponse::success($address->fresh(), 'تم تحديث العنوان بنجاح');
+        return ApiResponse::success($this->resource($address), 'تم تحديث العنوان بنجاح');
     }
 
     public function destroy(Request $request, UserAddress $address): JsonResponse
@@ -65,7 +71,17 @@ class AddressController extends Controller
             $this->syncDefault($request, $address, force: true);
         });
 
-        return ApiResponse::success($address->fresh(), 'تم تعيين العنوان كافتراضي');
+        return ApiResponse::success($this->resource($address), 'تم تعيين العنوان كافتراضي');
+    }
+
+    /**
+     * D-81/D-83 — the row plus the two names and the fee the client would
+     * otherwise have to look up, refetched so the write's own changes and the
+     * sibling `is_default` clear are both in it.
+     */
+    private function resource(UserAddress $address): AddressResource
+    {
+        return new AddressResource($address->fresh()->load(['city', 'serviceZone', 'user']));
     }
 
     private function mapZone(array $data): array

@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Providers\AppServiceProvider;
+
 /**
  * The `maps` block of `GET /config` — one place that decides what every client
  * draws under its pins.
@@ -88,7 +90,7 @@ final class MapStyles
             'attribution' => '© OpenStreetMap © CARTO',
             'attribution_url' => 'https://carto.com/attributions',
             'invert_dark' => false,
-            'geocoding' => false,
+            'geocoding' => self::hasGeocoder(),
             'default_center' => config('maps.default_center'),
         ];
     }
@@ -113,9 +115,25 @@ final class MapStyles
             // Dark is a real Mapbox style, so the client must stop inverting the
             // light one — an inverted dark style comes back out white.
             'invert_dark' => false,
-            'geocoding' => true,
+            'geocoding' => self::hasGeocoder(),
             'default_center' => config('maps.default_center'),
         ];
+    }
+
+    /**
+     * Whether `/geo/reverse` and `/geo/search` will answer with anything.
+     *
+     * D-84 — this used to be a property of the **tile** provider, which is a
+     * different question with a different answer: the OSM basemap reported
+     * `geocoding: false`, so the app stopped asking for street names on exactly
+     * the deployments that have no Mapbox token and therefore needed Nominatim
+     * most. It now reports whichever geocoder {@see AppServiceProvider}
+     * would bind.
+     */
+    public static function hasGeocoder(): bool
+    {
+        return filled(config('maps.mapbox.token'))
+            || ((bool) config('maps.osm.geocoding', true) && filled(config('maps.osm.nominatim')));
     }
 
     /**
@@ -143,7 +161,7 @@ final class MapStyles
             'attribution' => '© OpenStreetMap',
             'attribution_url' => 'https://www.openstreetmap.org/copyright',
             'invert_dark' => true,
-            'geocoding' => false,
+            'geocoding' => self::hasGeocoder(),
             'default_center' => config('maps.default_center'),
         ];
     }

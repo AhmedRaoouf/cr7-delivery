@@ -185,6 +185,9 @@ class OperatorWalkFixesTest extends TestCase
 
         $this->postJson('/api/v1/addresses', [
             'label' => 'home',
+            // D-82 — `street` is required now: an order whose destination is an
+            // empty string is a delivery nobody can make.
+            'street' => 'شارع البحر',
             'city_id' => $this->city->id,
             'zone_id' => $far->id,
             'latitude' => 31.3833,
@@ -194,6 +197,9 @@ class OperatorWalkFixesTest extends TestCase
         // The honest pick still works.
         $this->postJson('/api/v1/addresses', [
             'label' => 'home',
+            // D-82 — `street` is required now: an order whose destination is an
+            // empty string is a delivery nobody can make.
+            'street' => 'شارع البحر',
             'city_id' => $this->city->id,
             'zone_id' => $this->zone->id,
             'latitude' => 31.3833,
@@ -209,6 +215,9 @@ class OperatorWalkFixesTest extends TestCase
 
         $this->postJson('/api/v1/addresses', [
             'label' => 'home',
+            // D-82 — `street` is required now: an order whose destination is an
+            // empty string is a delivery nobody can make.
+            'street' => 'شارع البحر',
             'city_id' => $this->city->id,
             'zone_id' => $this->zone->id,
             // Cairo.

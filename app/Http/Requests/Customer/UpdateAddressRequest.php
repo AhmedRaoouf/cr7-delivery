@@ -2,13 +2,15 @@
 
 namespace App\Http\Requests\Customer;
 
+use App\Http\Requests\Concerns\NamesAddressFields;
 use App\Http\Requests\Concerns\ValidatesAddressZone;
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
 class UpdateAddressRequest extends FormRequest
 {
-    use ValidatesAddressZone;
+    use NamesAddressFields, ValidatesAddressZone;
 
     public function authorize(): bool
     {
@@ -19,15 +21,15 @@ class UpdateAddressRequest extends FormRequest
     {
         return [
             'label' => ['sometimes', 'required', 'in:home,work,other'],
-            'title' => ['nullable', 'string', 'max:255'],
+            'title' => ['nullable', 'required_if:label,other', 'string', 'max:255'],
             'city_id' => ['sometimes', 'required', 'exists:cities,id'],
             'zone_id' => ['sometimes', 'required', 'exists:service_zones,id'],
-            'street' => ['nullable', 'string', 'max:255'],
+            'street' => ['sometimes', 'required', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:255'],
             'apartment' => ['nullable', 'string', 'max:255'],
             'landmark' => ['nullable', 'string', 'max:255'],
-            'contact_phone' => ['nullable', 'string'],
+            'contact_phone' => ['nullable', 'string', 'regex:'.PhoneNumber::PATTERN],
             'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'is_default' => ['nullable', 'boolean'],

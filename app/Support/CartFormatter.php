@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\Cart;
+use App\Models\City;
+use App\Models\ServiceZone;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 
@@ -98,7 +100,53 @@ class CartFormatter
             // 20 EGP between the basket and the checkout screen, with no line
             // naming it, reads as a bug or a swindle.
             'outstanding_fees' => (float) $cart->user->outstanding_fees,
+            // D-81 — the delivery price of the area this basket is heading to.
+            //
+            // Operator, 2026-09-11: «لما اختار المنطقه … يجدد السعر علي اساسها».
+            // The app computed `20 + 10 × (n − 1)` on the device with the zone
+            // nowhere in it, so a basket bound for an area priced at 30 said 20
+            // until the last screen of checkout. The quote is still what bills;
+            // this is the same arithmetic from the same source, published early
+            // enough that the basket cannot disagree with it.
+            ...self::deliveryEstimate($cart),
             'issues' => $basketIssues,
+        ];
+    }
+
+    /**
+     * The base fee of the account's default address, with the extra-stop line
+     * beside it so the client adds rather than invents.
+     *
+     * With no address saved yet — every first basket — it is the **cheapest
+     * selectable area of the launch city**, which is the lowest true price on
+     * the operator's list rather than a number chosen to look good.
+     *
+     * @return array<string, mixed>
+     */
+    private static function deliveryEstimate(Cart $cart): array
+    {
+        $extraStopFee = (float) (Setting::query()->where('key', 'delivery.extra_stop_fee')->value('value') ?? 10);
+
+        $address = $cart->user->defaultAddress()->with('serviceZone')->first()
+            ?? $cart->user->addresses()->with('serviceZone')->latest()->first();
+
+        if ($address?->serviceZone !== null) {
+            return [
+                'delivery_address_id' => $address->id,
+                'delivery_base_fee' => (float) $address->serviceZone->delivery_fee,
+                'extra_stop_fee' => $extraStopFee,
+            ];
+        }
+
+        $city = City::query()->where('is_active', true)->orderBy('sort_order')->first();
+        $cheapest = $city === null
+            ? null
+            : ZoneLocator::selectableFor($city->id)->sortBy(fn (ServiceZone $zone) => (float) $zone->delivery_fee)->first();
+
+        return [
+            'delivery_address_id' => null,
+            'delivery_base_fee' => (float) ($cheapest?->delivery_fee ?? 0),
+            'extra_stop_fee' => $extraStopFee,
         ];
     }
 }

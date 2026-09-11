@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Support\ApiResponse;
+use App\Support\DispatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -25,7 +26,7 @@ class DriverMeController extends Controller
         return ApiResponse::success($driver);
     }
 
-    public function status(Request $request): JsonResponse
+    public function status(Request $request, DispatchService $dispatch): JsonResponse
     {
         $validated = $request->validate(['is_online' => ['required', 'boolean']]);
         $driver = $request->user()->driver()->firstOrFail();
@@ -33,6 +34,14 @@ class DriverMeController extends Controller
         if (! $driver->is_active) {
             throw new ApiException('account_suspended', 'حسابك موقوف حاليًا', 423);
         }
+
+        // Before the busy check, not after it. A leftover `active_order_id` —
+        // an order long since delivered or cancelled by an admin — made the
+        // refusal below permanent: the captain could not go online, so could not
+        // take a trip, so nothing ever cleared the lock. The only way out was a
+        // manual UPDATE. See {@see DispatchService::releaseIfStale()}.
+        $dispatch->releaseIfStale($driver);
+        $driver->refresh();
 
         if ($validated['is_online'] && $driver->active_order_id) {
             throw new ApiException('driver_already_busy', 'لا يمكن الاتصال بالإنترنت أثناء وجود طلب نشط', 422);
@@ -46,6 +55,14 @@ class DriverMeController extends Controller
             'is_online' => $validated['is_online'],
             'online_since' => $validated['is_online'] ? ($goingOnline ? now() : $driver->online_since) : null,
         ]);
+
+        // «لو في طلبات ملهاش حد وفي كابتن لسه فاتح، أهو تبدأ تبعتله طلب» — the
+        // captain hears about the backlog the moment they come on shift rather
+        // than whenever the next sweep happens to run. It is also what keeps
+        // dispatch alive on a host whose cron is not firing, which is this one.
+        if ($goingOnline) {
+            $dispatch->offerBacklogTo($driver);
+        }
 
         return ApiResponse::success([
             'is_online' => $driver->is_online,

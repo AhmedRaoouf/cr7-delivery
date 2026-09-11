@@ -135,7 +135,29 @@ class OneOrderPerCaptainTest extends TestCase
         $this->accept($driver, $first)->assertOk();
 
         // The guard is «carrying an order», not «has ever carried one».
+        //
+        // `refresh()` first, and it matters: `accept()` set `is_available` to
+        // false on the row, while this local instance still remembers the true
+        // it was created with. Assigning true to an attribute the model already
+        // believes is true leaves it clean, so `save()` writes nothing and the
+        // captain stays unavailable in the database while reading available in
+        // the test. It was invisible until `offerBacklogTo` began reading that
+        // column.
+        $driver->refresh();
         $driver->update(['active_order_id' => null, 'is_available' => true]);
+
+        // Accepting `first` now closes this captain's open offer on `second`
+        // too, which it did not before 2026-09-12. That is deliberate: a captain
+        // can be handed the whole backlog at once
+        // ({@see DispatchService::offerBacklogTo}), and an offer left open while
+        // they were mid-trip draws a «قبول» that can only answer
+        // `already_on_a_trip`.
+        //
+        // So the offer is re-issued here, which is exactly what the real path
+        // does — `DeliverOrderAction` frees the captain and immediately offers
+        // them the backlog. The two lines above are that path's shortcut, and
+        // the shortcut had stopped modelling it.
+        $dispatch->offerBacklogTo($driver->fresh());
 
         $this->accept($driver, $second)->assertOk();
         $this->assertSame($second->id, $driver->fresh()->active_order_id);

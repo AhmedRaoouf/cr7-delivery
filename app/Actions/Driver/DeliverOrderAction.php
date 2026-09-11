@@ -7,6 +7,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Support\DispatchService;
 use App\Support\DriverLedger;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 /** doc 05 §8.2 — the customer's delivery code is the only path to `delivered`, except an origin=restaurant_direct order (D-49), which has none. */
 class DeliverOrderAction
 {
+    public function __construct(private readonly DispatchService $dispatch) {}
+
     public function execute(Driver $driver, Order $order, ?string $otp, ?float $collectedAmount): Order
     {
         abort_unless($order->driver_id === $driver->id, 404);
@@ -40,7 +43,7 @@ class DeliverOrderAction
             }
         }
 
-        return DB::transaction(function () use ($driver, $order, $collectedAmount) {
+        $delivered = DB::transaction(function () use ($driver, $order, $collectedAmount) {
             $from = $order->status;
 
             $order->update(['status' => OrderStatus::Delivered, 'delivered_at' => now()]);
@@ -77,5 +80,13 @@ class DeliverOrderAction
 
             return $order->fresh();
         });
+
+        // Outside the transaction on purpose: writing offer rows for other
+        // orders inside this one would hold locks across them, and a captain who
+        // has just handed over a bag should hear about the next job in the same
+        // second — «مفيش طلب يبقى من غير كابتن وبأسرع ما يمكن».
+        $this->dispatch->offerBacklogTo($driver);
+
+        return $delivered;
     }
 }

@@ -58,6 +58,11 @@ class CancelTripAction
 
         $this->dispatch->dispatchRound($order->fresh(), $round);
 
+        // The captain who stepped off this trip is free again, so they get the
+        // rest of the backlog rather than sitting idle until a sweep. Their own
+        // `cancelled_after_accept` row keeps this order from coming back to them.
+        $this->dispatch->offerBacklogTo($driver);
+
         return $order->fresh();
     }
 }

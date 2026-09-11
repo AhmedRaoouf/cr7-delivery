@@ -7,6 +7,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\OrderDriverAttempt;
 use App\Support\DriverEarningCalculator;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\Cache;
@@ -82,6 +83,20 @@ class AcceptOfferAction
 
                 $order->driverAttempts()
                     ->where('driver_id', '!=', $driver->id)
+                    ->where('result', 'sent')
+                    ->update(['result' => 'superseded']);
+
+                // …and this captain's open offers on **other** orders, which
+                // nothing closed before. It did not matter while offers only
+                // ever arrived one at a time; it does now that
+                // {@see \App\Support\DispatchService::offerBacklogTo()} hands a
+                // captain coming on shift everything unclaimed at once. Left
+                // open, the next poll would draw an offer they can no longer
+                // take, and «قبول» would answer `already_on_a_trip` — the
+                // button that lies, again.
+                OrderDriverAttempt::query()
+                    ->where('driver_id', $driver->id)
+                    ->where('order_id', '!=', $order->id)
                     ->where('result', 'sent')
                     ->update(['result' => 'superseded']);
 

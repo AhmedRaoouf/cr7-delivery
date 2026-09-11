@@ -98,6 +98,11 @@ Route::prefix('v1')->group(function () {
 
     // §2 Public / shared — no auth.
     Route::get('/config', [ConfigController::class, 'index']);
+    // Every priced area, flat, in one call. This is what the app reads now:
+    // the two below are the city-first pair it replaced, kept because older
+    // installs are still asking for them (operator ruling 2026-09-12 — «هي
+    // مناطق على طول»). The old pair also cost one request **per city**.
+    Route::get('/areas', [GeoController::class, 'areas']);
     Route::get('/cities', [SharedCityController::class, 'index']);
     Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
     Route::post('/geo/resolve', [GeoController::class, 'resolve']);

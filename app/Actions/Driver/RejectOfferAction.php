@@ -51,6 +51,13 @@ class RejectOfferAction
         $this->tellTheOperator($attempt, $driver, $reasonCode);
 
         $this->dispatch->advanceIfRoundExhausted($attempt->order()->lockForUpdate()->first());
+
+        // «ولو رفضه، ابعت التاني اللي لسه مش لاقي ليه كابتن، وهكذا» — a captain
+        // who says no to one order is still on shift and still free, so the next
+        // unclaimed order goes to them in the same breath rather than waiting
+        // for a sweep. Their `rejected` row on *this* order keeps it from coming
+        // straight back.
+        $this->dispatch->offerBacklogTo($driver);
     }
 
     private function tellTheOperator(OrderDriverAttempt $attempt, Driver $driver, string $reasonCode): void

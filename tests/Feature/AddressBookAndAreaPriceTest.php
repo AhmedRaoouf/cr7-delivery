@@ -60,8 +60,16 @@ class AddressBookAndAreaPriceTest extends TestCase
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors([
-            'title', 'street', 'city_id', 'zone_id', 'latitude', 'longitude', 'contact_phone',
+            'title', 'street', 'zone_id', 'latitude', 'longitude', 'contact_phone',
         ]);
+
+        // `city_id` is deliberately **not** on that list any more. The app has no
+        // city step since the operator ruled «هي مناطق على طول» (2026-09-12), so
+        // it sends none, and the server derives it from the area — which it could
+        // always have done, since every area belongs to exactly one city.
+        // Demanding it back would be asking the customer to fix a field no screen
+        // shows them.
+        $response->assertJsonMissingValidationErrors(['city_id']);
 
         $errors = $response->json('errors');
 

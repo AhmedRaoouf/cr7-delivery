@@ -10,7 +10,11 @@ use Illuminate\Validation\Validator;
 
 class UpdateAddressRequest extends FormRequest
 {
-    use NamesAddressFields, ValidatesAddressZone;
+    /* Aliased, not overridden — see the note in {@see StoreAddressRequest}. */
+    use NamesAddressFields {
+        prepareForValidation as private prepareAddressFields;
+    }
+    use ValidatesAddressZone;
 
     public function authorize(): bool
     {
@@ -22,6 +26,8 @@ class UpdateAddressRequest extends FormRequest
         return [
             'label' => ['sometimes', 'required', 'in:home,work,other'],
             'title' => ['nullable', 'required_if:label,other', 'string', 'max:255'],
+            // Derived from `zone_id` when the client sends an area and no city —
+            // the app has no city step any more (operator ruling 2026-09-12).
             'city_id' => ['sometimes', 'required', 'exists:cities,id'],
             'zone_id' => ['sometimes', 'required', 'exists:service_zones,id'],
             'street' => ['sometimes', 'required', 'string', 'max:255'],
@@ -34,6 +40,12 @@ class UpdateAddressRequest extends FormRequest
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'is_default' => ['nullable', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->prepareAddressFields();
+        $this->fillCityFromZone();
     }
 
     /**

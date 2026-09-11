@@ -468,6 +468,152 @@ class DispatchService
     }
 
     /**
+     * The other direction: a captain just became free, so hand them the backlog.
+     *
+     * Every path into dispatch was **order-driven** — an order becomes `ready`
+     * and asks who is around. Nothing was **captain-driven**, so a captain who
+     * came online one minute after the single `ready` round was never asked
+     * about that order again until {@see \App\Console\Commands\TickCommand}'s
+     * ‪120‬-second sweep came round. On this deployment that sweep has never run:
+     * `storage/logs/cron.log` is ‪0‬ bytes and was last touched on 2026-09-05, so
+     * hPanel's cron entry is not firing and the order machine has no clock.
+     *
+     * Operator, 2026-09-12: «لو في طلبات ملهاش حد وفي كابتن لسه فاتح، أهو تبدأ
+     * تبعتله طلب، ولو رفضه ابعت التاني اللي لسه مش لاقي ليه كابتن، وهكذا…
+     * مفيش طلب يبقى من غير كابتن وبأسرع ما يمكن».
+     *
+     * So this is called the moment a captain becomes available by any route —
+     * going online, rejecting an offer, finishing a delivery, having a trip
+     * cancelled. It is cheap (one indexed query) and idempotent (a captain
+     * already holding an offer for an order is not given a second row), which is
+     * what lets it sit on all four paths without any of them coordinating.
+     *
+     * Oldest order first: the customer who has been waiting longest is the one
+     * the next free captain should hear about.
+     *
+     * @return int how many orders this captain was newly offered
+     */
+    public function offerBacklogTo(Driver $driver, int $limit = 10): int
+    {
+        $driver = $driver->fresh() ?? $driver;
+
+        // A captain mid-trip is not free, whatever the flags say. This also
+        // makes the method safe to call from anywhere without the caller having
+        // to know the captain's state.
+        if (! $driver->is_active || ! $driver->is_online || ! $driver->is_available || $driver->active_order_id !== null) {
+            return 0;
+        }
+
+        $zoneIds = $driver->assignedZones()->pluck('service_zones.id')->all();
+
+        $orders = Order::query()
+            ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereNull('driver_id')
+            ->where('created_at', '>=', now()->subHours(24))
+            // A captain with no zone rows is unrestricted — the same rule the
+            // order-driven path uses, stated from the captain's side.
+            ->when($zoneIds !== [], fn ($q) => $q->whereIn('service_zone_id', $zoneIds))
+            // Neither one they are already holding — two live offers for one
+            // order is two «قبول» buttons and a race — nor one they have just
+            // turned down, which this path would otherwise hand straight back
+            // to them, since {@see \App\Actions\Driver\RejectOfferAction} calls
+            // it immediately after writing the refusal.
+            //
+            // That is not the same ruling as {@see self::rebroadcast()}, which
+            // deliberately re-rings a captain who declined: a rebroadcast comes
+            // minutes later and asks «still no?», where this comes in the same
+            // second and would just be the same offer again.
+            ->whereDoesntHave('driverAttempts', fn ($q) => $q
+                ->where('driver_id', $driver->id)
+                ->whereIn('result', ['sent', 'rejected', 'cancelled_after_accept']))
+            ->with('restaurant')
+            ->oldest()
+            ->limit($limit)
+            ->get();
+
+        $offered = 0;
+
+        foreach ($orders as $order) {
+            $round = (int) $order->dispatch_round + 1;
+
+            $order->driverAttempts()->create([
+                'driver_id' => $driver->id,
+                'round' => $round,
+                'distance_km' => $driver->hasFix() && $order->restaurant !== null
+                    ? round(Geo::haversineKm(
+                        (float) $driver->current_lat,
+                        (float) $driver->current_lng,
+                        (float) $order->restaurant->latitude,
+                        (float) $order->restaurant->longitude,
+                    ), 3)
+                    : null,
+                'result' => 'sent',
+                'sent_at' => now(),
+                'expires_at' => null,
+            ]);
+
+            $order->update([
+                'status' => OrderStatus::SearchingDriver,
+                'dispatch_round' => $round,
+                'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+                'dispatch_last_offer_at' => now(),
+            ]);
+            $this->syncGroupRollup($order);
+
+            $this->wake($order, ['driver' => $driver, 'distance_km' => null], $round);
+            $offered++;
+        }
+
+        return $offered;
+    }
+
+    /**
+     * Let go of a trip lock whose order is over — the reason a captain can be
+     * «متصل» all day and never hear a thing.
+     *
+     * `drivers.is_available` and `drivers.active_order_id` are cleared on the
+     * paths that finish an order properly, and on **no other path**. Signing out
+     * deliberately leaves them ({@see \App\Http\Controllers\Api\AuthController}),
+     * an admin force-cancel clears them only through its own action, and nothing
+     * ever swept the leftovers. Both {@see self::dispatchRound} and
+     * {@see self::availableCandidates} require `active_order_id IS NULL`, so one
+     * stuck row takes that captain out of every future search permanently —
+     * while their phone keeps showing «أنت متصل الآن», because the app reads
+     * `is_online`, which is a different column and is still true.
+     *
+     * Called wherever a captain announces themselves, so the repair happens
+     * without a cron and without anyone noticing there was anything to repair.
+     */
+    public function releaseIfStale(Driver $driver): bool
+    {
+        if ($driver->active_order_id === null) {
+            return false;
+        }
+
+        $order = Order::query()->find($driver->active_order_id);
+
+        // Gone, finished, or handed to somebody else — three different ways for
+        // the lock to be a leftover, and none of them leaves the captain busy.
+        $stale = $order === null
+            || $order->status->isTerminal()
+            || ($order->driver_id !== null && (int) $order->driver_id !== (int) $driver->id);
+
+        if (! $stale) {
+            return false;
+        }
+
+        Log::info('[dispatch] released a stale trip lock', [
+            'driver_id' => $driver->id,
+            'order_id' => $driver->active_order_id,
+            'order_status' => $order?->status->value,
+        ]);
+
+        $driver->forceFill(['active_order_id' => null, 'is_available' => true])->save();
+
+        return true;
+    }
+
+    /**
      * «متصل وفاضي» — the whole condition, ranked by distance and never filtered by it.
      *
      * @return Collection<int, array{driver: Driver, distance_km: float|null}>

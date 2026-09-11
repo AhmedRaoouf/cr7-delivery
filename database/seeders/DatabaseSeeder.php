@@ -16,6 +16,11 @@ class DatabaseSeeder extends Seeder
             RolesSeeder::class,
             SettingsSeeder::class,
             LocationSeeder::class,
+            // The launch city's own address book — ‪6 128‬ doors, ‪224‬ streets,
+            // ‪32‬ areas from OpenStreetMap. Read before any map provider is, so
+            // a pin is named «‪145‬ شارع إسماعيل فريد، منطقة الكرنك» rather than
+            // after whichever delivery zone happened to contain it.
+            GazetteerSeeder::class,
             // The four cities the platform actually delivers in…
             ServiceAreaSeeder::class,
             // …and, over them, the operator's printed price list: 31 named areas with

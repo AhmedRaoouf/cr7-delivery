@@ -97,6 +97,85 @@ class ZoneLocator
     }
 
     /**
+     * Every area a customer may pick, anywhere, as one flat list.
+     *
+     * Operator ruling 2026-09-12: «سيبك من المدينة دي — قسّمها مناطق بس وحطّ كل
+     * المناطق في الخيارات، مش عايز حوار في الأول مدينة وبعدين منطقة».
+     *
+     * The two-step picker was never a product decision, it was the schema
+     * leaking: `service_zones.city_id` is a foreign key, so the UI asked for the
+     * parent first. The customer does not think in cities — every area we serve
+     * is Gamasa or a short drive from it, the names are unique across the whole
+     * list, and each one carries its own fee. So the list is flat, ordered the
+     * way the printed flyer is: by city sort order, then the area's own, then
+     * price. `city_id` still rides on every row for the server's benefit; no
+     * screen has to show it.
+     *
+     * @return Collection<int, ServiceZone>
+     */
+    public static function allSelectable()
+    {
+        return ServiceZone::query()
+            ->with('city')
+            ->join('cities', 'cities.id', '=', 'service_zones.city_id')
+            // Both tables carry `is_active`, so both sides must be qualified —
+            // unqualified, MySQL refuses the whole query as ambiguous rather
+            // than picking one.
+            ->where('service_zones.is_active', true)
+            ->where('service_zones.is_selectable', true)
+            // A city switched off takes its areas with it. Nothing enforced this
+            // while the picker asked for the city first, because a deactivated
+            // city was never on the list to open.
+            ->where('cities.is_active', true)
+            ->orderBy('cities.sort_order')
+            ->orderBy('service_zones.sort_order')
+            ->orderBy('service_zones.delivery_fee')
+            ->select('service_zones.*')
+            ->get();
+    }
+
+    /**
+     * The priced area to put in front of the customer for this point — a
+     * suggestion they can overrule, never a decision made for them.
+     *
+     * D-70 left the flyer areas shapeless, and {@see self::forPoint} therefore
+     * returns one of the wide legacy circles for every pin in the launch city.
+     * Only one of those circles actually covers Gamasa — «الشاطئ», centre
+     * 31.4411/31.5380, radius ‪6‬ km — so every address in town was labelled with
+     * the name of a beach that is two rows of buildings. That is the whole of
+     * «مش عايز جمصة الشاطئ دي تبقى مكتوبة دايمًا».
+     *
+     * So this deliberately prefers a **priced** area, and only ever one that
+     * carries a real shape or a real centre. When no priced area can be placed
+     * it returns null and the customer picks from the flat list — an honest
+     * «we do not know» rather than a confident wrong answer.
+     */
+    public static function suggestFor(float $lat, float $lng): ?ServiceZone
+    {
+        $selectable = self::allSelectable();
+
+        $containing = $selectable->first(fn (ServiceZone $zone) => self::contains($zone, $lat, $lng));
+
+        if ($containing !== null) {
+            return $containing;
+        }
+
+        return $selectable
+            ->filter(fn (ServiceZone $zone) => $zone->center_lat !== null
+                && $zone->center_lng !== null
+                && $zone->radius_km !== null)
+            ->map(fn (ServiceZone $zone) => [
+                'zone' => $zone,
+                'distance' => Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng),
+            ])
+            // A suggestion from further out than the fraud guard would accept is
+            // not a suggestion, it is the next town's price on this town's pin.
+            ->filter(fn (array $row) => $row['distance'] <= self::PICK_TOLERANCE_KM)
+            ->sortBy('distance')
+            ->first()['zone'] ?? null;
+    }
+
+    /**
      * The areas a customer may pick in a city, cheapest first — the flyer's own order.
      *
      * @return Collection<int, ServiceZone>

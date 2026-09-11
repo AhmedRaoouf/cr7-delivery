@@ -10,7 +10,18 @@ use Illuminate\Validation\Validator;
 
 class StoreAddressRequest extends FormRequest
 {
-    use NamesAddressFields, ValidatesAddressZone;
+    /*
+     * `prepareForValidation` is aliased rather than simply overridden, and that
+     * is load-bearing. A method defined on the class silently wins over the
+     * trait's copy of the same name — no error, no warning — so declaring one
+     * here to derive `city_id` quietly deleted {@see NamesAddressFields}'s
+     * blank-to-null trim and phone normalisation, and «+20 109 000 9599» started
+     * failing the eleven-digit rule it exists to satisfy.
+     */
+    use NamesAddressFields {
+        prepareForValidation as private prepareAddressFields;
+    }
+    use ValidatesAddressZone;
 
     public function authorize(): bool
     {
@@ -25,7 +36,9 @@ class StoreAddressRequest extends FormRequest
             // address filed under it with no title shows up in the book as a
             // row the customer cannot tell from the next one.
             'title' => ['nullable', 'required_if:label,other', 'string', 'max:255'],
-            'city_id' => ['required', 'exists:cities,id'],
+            // Derived from `zone_id` when absent — see {@see ValidatesAddressZone::fillCityFromZone()}.
+            // The app has no city step any more (operator ruling 2026-09-12).
+            'city_id' => ['nullable', 'exists:cities,id'],
             'zone_id' => ['required', 'exists:service_zones,id'],
             // D-83 — the street is the whole of most Gamasa addresses, and an
             // order whose destination is an empty string is a delivery nobody
@@ -41,6 +54,12 @@ class StoreAddressRequest extends FormRequest
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'is_default' => ['nullable', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->prepareAddressFields();
+        $this->fillCityFromZone();
     }
 
     public function withValidator(Validator $validator): void

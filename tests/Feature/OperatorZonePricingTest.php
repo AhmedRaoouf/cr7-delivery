@@ -103,13 +103,25 @@ class OperatorZonePricingTest extends TestCase
         $this->assertTrue($response->json('data.requires_zone_choice'));
         $this->assertSame('المنصورة الجديدة', $response->json('data.city.name_ar'));
 
+        // `zones` is now **every** priced area, not the resolved city's slice
+        // (operator ruling 2026-09-12 — one flat list, no city step). The city's
+        // own fifteen are still all present and still in flyer order; what
+        // changed is that Gamasa's are there too, because a customer standing in
+        // one town and ordering to another was previously shown nothing they
+        // could pick.
         $zones = $response->json('data.zones');
-        $this->assertCount(15, $zones);
+        $mansoura = array_values(array_filter(
+            $zones,
+            fn (array $zone) => $zone['city_id'] === $response->json('data.city.id'),
+        ));
+
+        $this->assertGreaterThan(15, count($zones));
+        $this->assertCount(15, $mansoura);
         // Cheapest first — a price list is read in price order.
-        $this->assertSame('الصناعية الأولى', $zones[0]['name_ar']);
-        $this->assertSame(30.0, (float) $zones[0]['delivery_fee']);
-        $this->assertSame('زاهية 4', $zones[14]['name_ar']);
-        $this->assertSame(150.0, (float) $zones[14]['delivery_fee']);
+        $this->assertSame('الصناعية الأولى', $mansoura[0]['name_ar']);
+        $this->assertSame(30.0, (float) $mansoura[0]['delivery_fee']);
+        $this->assertSame('زاهية 4', $mansoura[14]['name_ar']);
+        $this->assertSame(150.0, (float) $mansoura[14]['delivery_fee']);
     }
 
     public function test_a_pin_nowhere_near_any_city_is_still_out_of_range(): void
@@ -119,7 +131,15 @@ class OperatorZonePricingTest extends TestCase
 
         $this->assertFalse($response->json('data.is_serviceable'));
         $this->assertNull($response->json('data.city'));
-        $this->assertSame([], $response->json('data.zones'));
+        $this->assertNull($response->json('data.suggested_zone_id'));
+
+        // The area list still comes back, and that is the point of the flat list:
+        // «we cannot place your pin» and «here is nowhere you can order to» are
+        // different answers, and the second one strands a customer whose GPS is
+        // wrong or off with no way forward. The screen reads this as «اختر
+        // منطقتك» — which is the manual route the operator asked to always be
+        // reachable.
+        $this->assertNotEmpty($response->json('data.zones'));
     }
 
     public function test_the_public_zone_list_can_be_narrowed_to_what_a_customer_may_pick(): void

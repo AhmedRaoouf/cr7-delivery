@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Driver;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\DriverEarningCalculator;
@@ -19,9 +20,23 @@ class OfferController extends Controller
         // The old `expires_at > now()` filter hid every one of them, so the recovery
         // list a captain falls back to after a missed push would have come back empty
         // for exactly the offers that are still theirs to take.
+        // A captain already on a trip has no offers, whatever rows are lying
+        // about. Without this the recovery poll could draw an offer whose
+        // «قبول» answers `already_on_a_trip` — and the client shows
+        // `offers.first`, so one stale row is enough to wedge the screen.
+        if ($driver->active_order_id !== null) {
+            return ApiResponse::success([]);
+        }
+
         $offers = $driver->driverAttempts()
             ->where('result', 'sent')
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            // An order that has since found a captain, been cancelled or been
+            // delivered is not an offer any more. The row said `sent` forever
+            // because only the accepting path ever superseded its siblings.
+            ->whereHas('order', fn ($q) => $q
+                ->whereNull('driver_id')
+                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
             ->with(['order.restaurant', 'assignedBy:id,name'])
             ->get()
             ->map(fn ($attempt) => $this->formatOffer($attempt));

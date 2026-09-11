@@ -39,45 +39,50 @@ class GeoController extends Controller
         $lat = (float) $validated['lat'];
         $lng = (float) $validated['lng'];
 
-        $zone = ZoneLocator::forPoint($lat, $lng);
+        // The wide coverage circle the point falls in. It decides **serviceability**
+        // and nothing else — it is not a price and it is no longer ever shown.
+        $coverage = ZoneLocator::forPoint($lat, $lng);
 
-        if ($zone) {
-            return ApiResponse::success([
-                'city' => $zone->city,
-                'zone' => $zone,
-                'is_serviceable' => true,
-                'requires_zone_choice' => ! $zone->is_selectable,
-                'zones' => ServiceZoneResource::collection($this->pricedZones($zone->city_id)),
-            ]);
-        }
+        // The priced area to put in front of the customer. Null is a legitimate
+        // answer and means «pick one», not «we do not deliver here».
+        $suggested = ZoneLocator::suggestFor($lat, $lng);
 
-        // D-70 — the priced areas from the operator's flyer are names, not shapes: no
-        // geocoder can place «جنة 3» or «الصناعية الرابعة», so they carry no radius and
-        // no point ever falls inside one. Coverage is therefore the **city** circle, and
-        // the price is whichever area the customer picks off the list this returns.
-        // Without this fallback every address in New Mansoura resolved to «خارج نطاق
-        // التوصيل» the moment the wide legacy circles stopped being the price.
-        $city = ZoneLocator::cityForPoint($lat, $lng);
+        $city = $suggested?->city ?? $coverage?->city ?? ZoneLocator::cityForPoint($lat, $lng);
 
-        if (! $city) {
-            return ApiResponse::success([
-                'city' => null,
-                'zone' => null,
-                'is_serviceable' => false,
-                'requires_zone_choice' => false,
-                'zones' => [],
-            ]);
-        }
+        // Every area, one flat list, no city step (operator ruling 2026-09-12).
+        // The whole list goes out rather than the resolved city's slice: the
+        // customer may be standing in one town and ordering to another, and the
+        // old behaviour hid every area they could legitimately want.
+        $areas = ZoneLocator::allSelectable();
 
         return ApiResponse::success([
             'city' => $city,
-            // Deliberately null. The pin says which town; only the customer can say
-            // which area of it, and the fee follows that answer, not this one.
-            'zone' => null,
-            'is_serviceable' => true,
-            'requires_zone_choice' => true,
-            'zones' => ServiceZoneResource::collection($this->pricedZones($city->id)),
+            // Kept for the older clients that read it; `suggested_zone_id` is the
+            // field to use. A suggestion is not a decision — the customer confirms
+            // it, because D-70's flyer areas have no shapes and a confident wrong
+            // area is worse than an obvious empty one.
+            'zone' => $suggested,
+            'suggested_zone_id' => $suggested?->id,
+            'is_serviceable' => $coverage !== null || $city !== null,
+            'requires_zone_choice' => $suggested === null,
+            'zones' => ServiceZoneResource::collection($areas),
         ]);
+    }
+
+    /**
+     * `GET /areas` — every priced area, flat, no city above it.
+     *
+     * The two-step «city, then area» picker existed because `service_zones`
+     * hangs off `cities` and the UI followed the foreign key. The operator ruled
+     * it out on 2026-09-12: «هي مناطق على طول». Area names are unique across the
+     * whole list and each carries its own fee, so nothing is lost by flattening
+     * and one whole screen is saved.
+     */
+    public function areas(): JsonResponse
+    {
+        return ApiResponse::success(
+            ServiceZoneResource::collection(ZoneLocator::allSelectable()),
+        );
     }
 
     /**

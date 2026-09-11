@@ -29,6 +29,31 @@ use Illuminate\Validation\Validator;
  */
 trait ValidatesAddressZone
 {
+    /**
+     * Derive `city_id` from `zone_id` when the client did not send one.
+     *
+     * Operator ruling 2026-09-12 — «هي مناطق على طول»: the app no longer has a
+     * city step, so it no longer has a `city_id` to send. Every area belongs to
+     * exactly one city in the schema, so the answer was always derivable and
+     * asking the client for it only created a way for the two to disagree.
+     *
+     * A `city_id` that *is* sent is left alone and still checked below, so an
+     * older install keeps failing loudly rather than silently getting its
+     * mismatch corrected for it.
+     */
+    protected function fillCityFromZone(): void
+    {
+        if ($this->filled('city_id') || ! is_numeric($this->input('zone_id'))) {
+            return;
+        }
+
+        $cityId = ServiceZone::query()->whereKey($this->input('zone_id'))->value('city_id');
+
+        if ($cityId !== null) {
+            $this->merge(['city_id' => $cityId]);
+        }
+    }
+
     protected function validateZoneAgainstPoint(Validator $validator): void
     {
         $data = $validator->getData();
@@ -62,9 +87,11 @@ trait ValidatesAddressZone
         }
 
         if ($zone->city_id !== $city->id) {
+            // Worded without the word «مدينة» on purpose: the customer no longer
+            // chooses one and should not be told to fix something they cannot see.
             $validator->errors()->add(
                 'zone_id',
-                'المنطقة المختارة لا تتبع '.$city->name_ar.' — اختر منطقة داخل المدينة التي يقع فيها العنوان.',
+                'المنطقة المختارة بعيدة عن الموقع المحدد على الخريطة — اختر المنطقة الصحيحة.',
             );
 
             return;

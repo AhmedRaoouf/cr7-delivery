@@ -25,6 +25,7 @@ use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
 use App\Services\Maps\ChainGeocoder;
 use App\Services\Maps\Geocoder;
+use App\Services\Maps\LocalGazetteerGeocoder;
 use App\Services\Maps\MapboxGeocoder;
 use App\Services\Maps\MapboxRouter;
 use App\Services\Maps\NullGeocoder;
@@ -126,8 +127,26 @@ class AppServiceProvider extends ServiceProvider
         // preference, not a dependency: a paid provider that is down, throttled
         // or refusing the query must not take geocoding down with it while a
         // keyless one sits configured and unasked. See {@see ChainGeocoder}.
+        // The local address book comes **first**, and that ordering is the fix
+        // for «مش دايمًا ألاقي جمصة الشاطئ».
+        //
+        // Measured on production 2026-09-12: Mapbox answers a street for every
+        // pin in Gamasa and `neighborhood: null` for every one of them. The
+        // chain stops at the first non-empty line, so that street-only answer
+        // won, the screen had no area to print, and it fell back to the
+        // **delivery zone** — of which the only circle covering the town is
+        // «الشاطئ». The beach is two rows of buildings; the app was naming the
+        // whole town after it.
+        //
+        // Nominatim answers «منطقة آمون» for the same point. It sat second,
+        // configured, and was never asked. Swapping the two would only move the
+        // gap to whatever Nominatim is thin on, so neither ordering is the
+        // answer: for the launch city we hold better data than either API
+        // exposes, and {@see LocalGazetteerGeocoder} returns null the moment a
+        // pin leaves its bbox.
         $this->app->singleton(Geocoder::class, function (): Geocoder {
             $chain = array_values(array_filter([
+                new LocalGazetteerGeocoder,
                 filled(config('maps.mapbox.token')) ? new MapboxGeocoder : null,
                 new OsmGeocoder,
             ], fn (?Geocoder $g) => $g?->isConfigured() === true));

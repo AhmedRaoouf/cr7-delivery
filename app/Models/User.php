@@ -86,15 +86,6 @@ class User extends Authenticatable
         return $this->hasMany(DeviceToken::class);
     }
 
-    /**
-     * Apple / Google identities attached to this account — at most one per provider,
-     * enforced by the unique index rather than by anything that reads this.
-     */
-    public function socialAccounts(): HasMany
-    {
-        return $this->hasMany(SocialAccount::class);
-    }
-
     public function restaurant(): HasOne
     {
         return $this->hasOne(Restaurant::class);
@@ -195,9 +186,10 @@ class User extends Authenticatable
      */
     public function scopeWhereLogin(Builder $query, string $login): void
     {
-        $query->where(
-            PhoneNumber::isEmail($login) ? 'email' : 'phone',
-            PhoneNumber::normaliseLogin($login),
-        );
+        // Phone only, since 2026-09-11. The email branch is gone with the email sign-in
+        // it served: an account is reached by the number that receives its codes, and a
+        // second identifier is a second way in to keep in step for no benefit anybody
+        // asked for.
+        $query->where('phone', PhoneNumber::normaliseLogin($login));
     }
 }

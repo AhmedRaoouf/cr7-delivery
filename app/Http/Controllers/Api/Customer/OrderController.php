@@ -22,6 +22,7 @@ use App\Support\ApiResponse;
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\Notifications\NotificationDispatcher;
+use App\Support\RatingState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -124,6 +125,10 @@ class OrderController extends Controller
             'cancellation_fee_due' => LateCancellationFee::appliesTo($cancellable)
                 ? LateCancellationFee::amount()
                 : 0.0,
+            // D-80 — the tracking screen is where the customer is standing when the
+            // order is delivered, and «يظهر على طول التقييم» is measured from that
+            // moment. It cannot ask a second endpoint to find out whether to.
+            ...RatingState::for($orderGroup->setRelation('orders', $orders)),
             'sub_orders' => $subOrders,
         ]);
     }
@@ -275,7 +280,14 @@ class OrderController extends Controller
     {
         $action->execute($request->user(), $orderGroup, $request->validated());
 
-        return ApiResponse::success(message: 'تم إرسال التقييم بنجاح');
+        // The submitted rating comes back with the order, so the app never has to guess
+        // whether the button is spent: it redraws from the answer.
+        return ApiResponse::success(
+            new OrderGroupDetailResource(
+                $orderGroup->fresh()->load(['orders.restaurant', 'orders.driver.user', 'orders.items.options', 'orders.statusHistory']),
+            ),
+            'تم إرسال التقييم بنجاح',
+        );
     }
 
     private function ensureOwned(Request $request, OrderGroup $orderGroup): void

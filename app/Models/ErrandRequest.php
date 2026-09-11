@@ -16,7 +16,7 @@ class ErrandRequest extends Model
         'reference', 'user_id', 'city_id', 'service_zone_id', 'status',
         'pickup_lat', 'pickup_lng', 'pickup_address_text', 'pickup_contact_phone',
         'dropoff_lat', 'dropoff_lng', 'dropoff_address_text', 'dropoff_contact_phone',
-        'details', 'distance_km', 'offered_fee', 'suggested_fee',
+        'details', 'distance_km', 'offered_fee', 'driver_earning', 'platform_margin', 'suggested_fee',
         'driver_id', 'assigned_by', 'assigned_by_user_id',
         'offered_driver_id', 'offered_by_user_id', 'offered_at', 'declined_driver_ids',
         'purchases_amount', 'purchases_note', 'receipt_urls',

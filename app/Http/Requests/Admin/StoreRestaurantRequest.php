@@ -46,7 +46,9 @@ class StoreRestaurantRequest extends FormRequest
             'address' => ['nullable', 'string'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'commission_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            // D-75 — no commission on food. The field stays accepted so an older
+            // dashboard build does not 422, and defaults to 0 when it is not sent.
+            'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
             'avg_prep_minutes' => ['nullable', 'integer', 'min:1'],
             // The window the customer is shown. Both nullable: a shop that sets

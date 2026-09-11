@@ -69,6 +69,11 @@ class AcceptOfferAction
                     // moving `delivery.platform_commission_rate` can never re-price a
                     // trip that has already been accepted.
                     'platform_delivery_margin' => DriverEarningCalculator::platformMargin($order, $driver),
+                    // A taken order is no longer stranded. Clearing the stamp is what lets
+                    // a *second* stranding — this captain cancels, or an operator unassigns
+                    // — reach the operators again; it was written once and never reset, so
+                    // the second time an order lost its captain nobody was told.
+                    'dispatch_admin_notified_at' => null,
                 ]);
 
                 $driver->update(['is_available' => false, 'active_order_id' => $order->id]);

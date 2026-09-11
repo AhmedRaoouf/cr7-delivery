@@ -65,6 +65,64 @@ class Order extends Model
         return $this;
     }
 
+    /**
+     * How many pieces the kitchen has to make — quantities summed, not rows.
+     *
+     * The captain's offer payload has published `items_count` this way since it was
+     * written (`Driver\OfferController`), and the place's board had no figure at all: its
+     * card counted the item rows client-side, so «صنفان» meant two lines and could be six
+     * sandwiches.
+     */
+    public function getItemsCountAttribute(): int
+    {
+        return (int) ($this->relationLoaded('items')
+            ? $this->items->sum('quantity')
+            : $this->items()->sum('quantity'));
+    }
+
+    /**
+     * What the place is owed for its own food — «حساب المكان».
+     *
+     * `subtotal − commission`, which is exactly what `GenerateSettlementAction` pays it
+     * per item. D-75 retires the commission (every rate is 0), so today it equals the
+     * subtotal; the subtraction stays because the historical orders in the table do carry
+     * one, and a settlement and a board card that disagree about an old order is worse
+     * than an expression with a zero in it.
+     */
+    public function getRestaurantAmountAttribute(): float
+    {
+        return round((float) $this->subtotal - (float) $this->commission_amount, 2);
+    }
+
+    /** The two figures the place's own screens and its push are entitled to. */
+    public function withRestaurantMoney(): static
+    {
+        return $this->append(['items_count', 'restaurant_amount']);
+    }
+
+    /**
+     * What the captain takes from the customer at the door, in cash.
+     *
+     * The sub-order's total **plus** any balance D-74 carried over from a late
+     * cancellation on an earlier basket. `CheckoutPricer` adds `outstanding_fees` to the
+     * *group's* total and the customer's screen shows it as its own line — but the
+     * captain's card read the sub-order total, which does not contain it, so the app
+     * asked for ‪20‬ ج.م the captain was never told to collect. It rides on the first
+     * sub-order because a basket has one balance however many kitchens are in it.
+     */
+    public function cashToCollect(): float
+    {
+        if ($this->payment_method?->value !== 'cash') {
+            return 0.0;
+        }
+
+        $carried = (int) $this->group_sequence === 1
+            ? (float) ($this->orderGroup?->outstanding_fees ?? 0)
+            : 0.0;
+
+        return round((float) $this->total + $carried, 2);
+    }
+
     protected function casts(): array
     {
         return [

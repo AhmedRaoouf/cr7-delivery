@@ -55,7 +55,7 @@ class OrderController extends Controller
 
         // `RES-03` reads the code straight off the card. Order::$hidden keeps it off
         // every other payload; this is the one reader entitled to it.
-        $items = array_map(fn (Order $o) => $o->revealPickupOtp(), $orders->items());
+        $items = array_map(fn (Order $o) => $o->revealPickupOtp()->withRestaurantMoney(), $orders->items());
 
         return ApiResponse::success($items, meta: [
             'current_page' => $orders->currentPage(),
@@ -87,7 +87,7 @@ class OrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        $payload = $order->load(['items.options', 'driver.user', 'statusHistory'])->revealPickupOtp()->toArray();
+        $payload = $order->load(['items.options', 'driver.user', 'statusHistory'])->revealPickupOtp()->withRestaurantMoney()->toArray();
         $payload['awaiting_customer_payment'] = $order->orderGroup->rollup_status === 'awaiting_payment';
         $payload['payment_deadline_at'] = $order->orderGroup->payment?->deadline_at;
 

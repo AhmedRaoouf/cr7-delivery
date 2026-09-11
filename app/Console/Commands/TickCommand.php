@@ -10,6 +10,7 @@ use App\Enums\UserType;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\AdminScope;
 use App\Support\DispatchService;
 use App\Support\ErrandDispatcher;
 use App\Support\Notifications\NotificationDispatcher;
@@ -113,7 +114,6 @@ class TickCommand extends Command
         // riding on the back of a dead round.
         $this->sweep('widen search', fn () => $this->widenSearches($dispatch));
         $this->sweep('unclaimed orders', fn () => $this->escalateUnclaimed());
-        $this->sweep('stranded orders', fn () => $this->retryStranded($dispatch));
         // doc 40 §3 — an errand nobody took. Notifies once and leaves it open: the
         // operator assigning it by hand is the fallback, not the only path.
         $this->sweep('stranded errands', fn () => $errands->escalateStranded());
@@ -250,10 +250,11 @@ class TickCommand extends Command
      */
     private function widenSearches(DispatchService $dispatch): int
     {
-        $seconds = self::seconds('dispatch.rebroadcast_interval_seconds', 60);
+        $seconds = self::seconds('dispatch.rebroadcast_interval_seconds', 120);
 
         $orders = Order::query()
             ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereNull('driver_id')
             ->where(fn ($q) => $q
                 ->whereNull('dispatch_last_offer_at')
                 ->orWhere('dispatch_last_offer_at', '<=', now()->subSeconds($seconds)))
@@ -262,15 +263,17 @@ class TickCommand extends Command
             ->limit(25)
             ->get();
 
-        $widened = 0;
+        $rung = 0;
 
         foreach ($orders as $order) {
-            if ($dispatch->widenSearch($order)) {
-                $widened++;
+            // 2026-09-11: the whole shift, every two minutes, not only whoever is new
+            // since the last pass. See `DispatchService::rebroadcast()`.
+            if ($dispatch->rebroadcast($order) > 0) {
+                $rung++;
             }
         }
 
-        return $widened;
+        return $rung;
     }
 
     /**
@@ -283,15 +286,16 @@ class TickCommand extends Command
      */
     private function escalateUnclaimed(): int
     {
-        $seconds = self::seconds('dispatch.escalate_after_seconds', 300);
+        $seconds = self::seconds('dispatch.escalate_after_seconds', 120);
 
         $orders = Order::query()
-            ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereIn('status', [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereNull('driver_id')
             ->whereNull('dispatch_admin_notified_at')
             ->whereNotNull('dispatch_started_at')
             ->where('dispatch_started_at', '<=', now()->subSeconds($seconds))
             ->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS))
-            ->with('restaurant')
+            ->with(['restaurant.owner'])
             ->limit(25)
             ->get();
 
@@ -301,18 +305,45 @@ class TickCommand extends Command
 
         $admins = User::query()->where('type', UserType::Admin)->where('is_active', true)->get();
         $notifications = app(NotificationDispatcher::class);
+        $minutes = (int) ceil($seconds / 60);
+        $supportPhone = (string) (Setting::query()->where('key', 'support.phone')->value('value') ?? '');
 
         foreach ($orders as $order) {
+            /*
+             * Only the operators who could act on it. D-51: a Gamasa sub-admin is not
+             * told that a New Mansoura order is stuck — and if they tapped the push they
+             * would get the 404 that same decision guarantees.
+             */
             foreach ($admins as $admin) {
+                if (! AdminScope::coversOrder($admin, $order)) {
+                    continue;
+                }
+
                 $notifications->send($admin, 'order.unclaimed_admin', [
                     'order_number' => $order->order_number,
                     'restaurant' => $order->restaurant?->name_ar,
-                    'minutes' => (int) ceil($seconds / 60),
-                ], deepLink: '/orders/'.$order->id, orderId: $order->id);
+                    'minutes' => $minutes,
+                ], deepLink: '/orders/'.$order->id, orderId: $order->id, data: ['order_id' => (string) $order->id]);
+            }
+
+            /*
+             * And the kitchen, which is standing over food nobody has come for.
+             *
+             * Operator, 2026-09-11: «يروح اشعار للادمن وابعت اشعار للمطعم تواصل مع الدعم».
+             * It used to be told the moment the dispatcher ran out of *new* captains to
+             * ask, which could be the same second the food was marked ready.
+             */
+            if ($order->restaurant?->owner !== null) {
+                $notifications->send($order->restaurant->owner, 'order.no_driver_restaurant', [
+                    'order_number' => $order->order_number,
+                    'minutes' => $minutes,
+                    'support_phone' => $supportPhone,
+                ], deepLink: '/orders/'.$order->id, orderId: $order->id, data: ['order_id' => (string) $order->id]);
             }
 
             // Stamped whether or not anyone was there to tell — otherwise a deployment
-            // with no active operators rescans the same rows forever.
+            // with no active operators rescans the same rows forever. Cleared again when
+            // a captain takes the order, so a second stranding is a second alert.
             $order->forceFill(['dispatch_admin_notified_at' => now()])->save();
         }
 
@@ -326,45 +357,12 @@ class TickCommand extends Command
         return is_numeric($value) ? max(15, (int) $value) : $fallback;
     }
 
-    /**
-     * doc 04 E-71 — `waiting_for_driver` is «nobody took it», not «nobody ever will».
+    /*
+     * `retryStranded()` is **gone** (2026-09-11).
      *
-     * Before this, that status was terminal in practice: the rounds were spent inside a
-     * single request and no code path ever looked at the order again. An operator's only
-     * move was «إعادة توزيع الطلب» by hand, one order at a time, which is what the
-     * seventeen stranded orders on the deployment were waiting for.
-     *
-     * The retry **climbs the ladder** rather than restarting it. Starting at round 1
-     * again was the whole reason a lonely order never found anyone: a round that finds
-     * nobody parks the order here with zero attempts, `advanceRounds` only looks at
-     * orders with an *expired* offer, and so the radius that exists to be widened was
-     * re-searched at its narrowest every ninety seconds, forever. Measured on the
-     * deployment: one captain on shift, 7.42 km out, a 5 km circle retried until an
-     * operator assigned by hand.
-     *
-     * It still forgives a captain who let an offer lapse and still excludes one who
-     * declined it.
+     * It read `updated_at ≤ now − 90 s`, and the widening sweep above bumps `updated_at`
+     * every pass — so it had not fired since 2026-09-08 and nobody noticed, which is the
+     * clearest argument there is for one clock instead of two. `rebroadcast()` covers
+     * both `searching_driver` and `waiting_for_driver` every two minutes.
      */
-    private function retryStranded(DispatchService $dispatch): int
-    {
-        $seconds = (int) (Setting::query()->where('key', 'dispatch.retry_interval_seconds')->value('value') ?? 90);
-        $maxRounds = (int) (Setting::query()->where('key', 'dispatch.max_rounds')->value('value') ?? 3);
-
-        $orders = Order::query()
-            ->where('status', OrderStatus::WaitingForDriver)
-            ->where('updated_at', '<=', now()->subSeconds($seconds))
-            // Same reasoning as the accept window: an order stranded since last week is
-            // an operator's problem, not a dispatcher's.
-            ->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS))
-            ->with('restaurant')
-            ->limit(25)
-            ->get();
-
-        foreach ($orders as $order) {
-            $next = min(max(1, (int) $order->dispatch_round + 1), max(1, $maxRounds));
-            $dispatch->dispatchRound($order, $next, retry: true);
-        }
-
-        return $orders->count();
-    }
 }

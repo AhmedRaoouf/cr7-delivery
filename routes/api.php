@@ -43,7 +43,6 @@ use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
-use App\Http\Controllers\Api\Auth\SocialAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\CheckoutController;
@@ -146,16 +145,17 @@ Route::prefix('v1')->group(function () {
         // unauthenticated route that creates a row in `users`.
         Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:10,1');
 
-        // «المتابعة باستخدام Apple / Google». `/social` verifies the provider's id_token
-        // server-side and answers `signed_in` or `needs_phone`; `/social/link` is the
-        // second half — neither provider gives up a phone number, so `CUS-07a` asks for
-        // one and this attaches the identity to the account that answers its code.
-        // Throttled per IP for the same reason `/register` is.
-        Route::post('/social', [SocialAuthController::class, 'store'])->middleware('throttle:20,1');
-        Route::post('/social/link', [SocialAuthController::class, 'link'])->middleware('throttle:20,1');
+        /*
+         * «المتابعة باستخدام Apple / Google» is **gone**, operator ruling 2026-09-11:
+         * «شيل تسجيل الدخول بالايميل و google و apple». The two routes that verified a
+         * provider's id_token and attached the identity are deleted rather than hidden —
+         * a door nobody can see is still a door. The `social_accounts` table and its
+         * migration stay: dropping a table to remove a feature loses the record of who
+         * ever used it, and nothing reads it now.
+         */
 
-        // driver / restaurant / admin — Admin-created accounts, phone|email + password (FR-AUTH-04).
-        // X-App decides the expected users.type (doc 12 §1.1).
+        // driver / restaurant / admin — Admin-created accounts, **phone** + password
+        // (FR-AUTH-04). X-App decides the expected users.type (doc 12 §1.1).
         Route::post('/login', [PasswordAuthController::class, 'login']);
 
         Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);

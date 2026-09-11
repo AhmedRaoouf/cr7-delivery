@@ -8,6 +8,8 @@ use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\DeliveryCommission;
+use App\Support\DriverLedger;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\DB;
 
@@ -221,8 +223,23 @@ class ErrandLifecycleAction
             throw new ApiException('invalid_transition', 'أكّد الاستلام أولًا', 422);
         }
 
-        $errand->update(['status' => ErrandStatus::Delivered, 'delivered_at' => now()]);
+        /*
+         * D-75 — «على أي order من فلوس الديليفري». An errand's fee is delivery money, so
+         * it splits like every other: the captain keeps 85 %, the platform's 15 % falls
+         * out of the two meters (D-71). Nothing here moved a single piastre before.
+         */
+        $fee = (float) $errand->offered_fee;
+        $driverEarning = DeliveryCommission::driverShare($fee);
+
+        $errand->update([
+            'status' => ErrandStatus::Delivered,
+            'delivered_at' => now(),
+            'driver_earning' => $driverEarning,
+            'platform_margin' => round($fee - $driverEarning, 2),
+        ]);
         $errand->record(ErrandStatus::Delivered, $driver->user, 'driver');
+
+        DriverLedger::recordErrand($driver, $errand->reference, $driverEarning, $fee);
 
         $this->notifications->send($errand->customer, 'errand.delivered_customer', [],
             deepLink: 'cr7://errands/'.$errand->id);

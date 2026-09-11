@@ -4,6 +4,7 @@ namespace App\Http\Resources\Customer;
 
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
+use App\Support\RatingState;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -51,6 +52,10 @@ class OrderGroupDetailResource extends JsonResource
             'cancellation_fee_due' => $this->whenLoaded('orders', fn () => LateCancellationFee::appliesTo(
                 $this->orders->filter(fn ($order) => $order->status->customerCanCancel()),
             ) ? LateCancellationFee::amount() : 0.0),
+            // D-80 — one rating per basket: whether it has been given, whether it may
+            // be, and what it said. `CUS-33` draws its button off `can_rate` and its
+            // stars off `rating`.
+            ...RatingState::for($this->resource),
             'sub_orders' => $this->whenLoaded('orders', fn () => $this->orders->map(fn ($order) => [
                 'id' => $order->id,
                 'order_number' => $order->order_number,

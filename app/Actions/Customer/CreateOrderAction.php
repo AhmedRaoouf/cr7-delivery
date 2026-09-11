@@ -135,8 +135,18 @@ class CreateOrderAction
                         2,
                     ),
                     'min_order_value_snapshot' => $restaurant->min_order_value,
-                    'commission_rate_snapshot' => $restaurant->commission_rate,
-                    'commission_amount' => round($groupQuote['subtotal'] * ((float) $restaurant->commission_rate / 100), 2),
+                    /*
+                     * D-75 — there is no commission on food any more.
+                     *
+                     * Operator, 2026-09-11: «عمولة المنصة اللي هو الأدمن كلها ‪15‬٪ على أي
+                     * order من فلوس الديليفري، مش عايز حاجة غيرها». Every restaurant's rate
+                     * is zeroed by migration, and the snapshot is taken from the setting-free
+                     * constant rather than the column so that a rate typed back into a row by
+                     * hand cannot start charging places again without the decision being
+                     * re-opened. The column and its permission stay for the history.
+                     */
+                    'commission_rate_snapshot' => 0,
+                    'commission_amount' => 0,
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
                     'pickup_otp' => Otp::orderCode(),

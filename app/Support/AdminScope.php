@@ -7,6 +7,7 @@ use App\Models\City;
 use App\Models\ServiceZone;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * doc 12 §10 / doc 24 §1.2 — a permission answers "what", a scope answers "which rows".
@@ -129,6 +130,27 @@ class AdminScope
             'defaultAddress',
             fn (Builder $aq) => $aq->whereIn('city_id', $cityIds),
         );
+    }
+
+    /**
+     * Is this one order inside this operator's scope?
+     *
+     * The same rule as {@see self::applyToOrders()}, asked about a row rather than a
+     * query — for the places that *push* to an operator instead of answering them. A push
+     * ignoring the scope is worse than a wasted notification: tapping it opens the 404
+     * that D-51 promises, which reads as a broken app rather than as a boundary.
+     */
+    public static function coversOrder(User $admin, Model $order): bool
+    {
+        if (self::isGlobal($admin)) {
+            return true;
+        }
+
+        $zoneIds = self::scopedZoneIds($admin);
+        $cityIds = self::scopedCityIds($admin);
+
+        return in_array((int) $order->service_zone_id, array_map('intval', $zoneIds), true)
+            || in_array((int) $order->city_id, array_map('intval', $cityIds), true);
     }
 
     /** doc 24 §1.2 — orders/order_groups follow the delivery zone, else its city. */

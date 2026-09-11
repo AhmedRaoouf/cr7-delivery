@@ -81,14 +81,20 @@ class DispatchService
             FILTER_VALIDATE_BOOL,
         );
 
-        // A captain who declined is out for good; a captain still *holding* an open
-        // offer must not be sent a second copy of it. Everyone else is a candidate
-        // again — including one who let a pre-2026-09-08 offer lapse, which is what
-        // `$retry` has always meant.
+        /*
+         * Who is already out of this round.
+         *
+         * 🔴 The `orWhere` was not grouped, so it escaped the relation's own
+         * `order_id = ?` and the subquery read «…this order's attempts… OR anybody
+         * holding an open offer **anywhere**». One captain sitting on an unanswered
+         * offer for order A was therefore excluded from every other order in the town
+         * for as long as it stayed open — and offers stopped expiring on 2026-09-08, so
+         * «as long as it stays open» became «forever».
+         */
         $excludedDriverIds = $order->driverAttempts()
-            ->when($retry, fn ($q) => $q
+            ->when($retry, fn ($q) => $q->where(fn ($inner) => $inner
                 ->whereIn('result', ['rejected', 'cancelled_after_accept'])
-                ->orWhere(fn ($open) => $open->where('result', 'sent')->whereNull('expires_at')))
+                ->orWhere(fn ($open) => $open->where('result', 'sent')->whereNull('expires_at'))))
             ->pluck('driver_id');
 
         $candidates = Driver::query()
@@ -234,7 +240,7 @@ class DispatchService
      * captain still finds it on their next poll, and the dispatch round still
      * advances on time.
      *
-     * @param  array{driver: Driver, distance_km: float}  $candidate
+     * @param  array{driver: Driver, distance_km: float|null}  $candidate
      */
     private function ring(Order $order, array $candidate): void
     {
@@ -372,6 +378,144 @@ class DispatchService
         }
 
         $this->dispatchRound($order, $order->dispatch_round + 1, retry: true);
+    }
+
+    /**
+     * Every two minutes, ask **everybody** again.
+     *
+     * Operator, 2026-09-11: «وخلال دقيقتين لو محدش قبل يبعت للناس كلها تاني، المتصلة
+     * والمتفرغة، لحد ما حد يقبل». That is a different rule from {@see self::widenSearch()},
+     * which only ever asked captains who had *not* been asked — so a town where every
+     * captain had seen the offer once and put the phone down had nothing left to do, and
+     * the order sat in `searching_driver` with three silent offers until an operator
+     * noticed.
+     *
+     * Every online, free captain is a candidate on every pass:
+     *
+     * - one already **holding** an open offer is rung again, not given a second row —
+     *   two live offers for one order is two «قبول» buttons and a race the database
+     *   would refuse anyway;
+     * - one who **declined** earlier is asked again. That is the ruling: «الناس كلها».
+     *   A refusal at 19:03 was about 19:03 — they were eating, or two streets from a
+     *   drop-off — and the alternative is an order nobody is allowed to take.
+     *
+     * Distance still ranks the ring order (nearest hears first) and never hides anyone.
+     *
+     * @return int how many captains were rung — new offers and re-rings together
+     */
+    public function rebroadcast(Order $order): int
+    {
+        if (! in_array($order->status, [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver], true)) {
+            return 0;
+        }
+
+        if ($order->driver_id !== null) {
+            return 0;
+        }
+
+        $candidates = $this->availableCandidates($order);
+
+        if ($candidates->isEmpty()) {
+            // Nobody is on shift. Keep the clock honest so the next pass tries again,
+            // and let the order say so on the board and in the alert dock.
+            $stillOpen = $order->driverAttempts()->where('result', 'sent')->exists();
+
+            $order->update([
+                'status' => $stillOpen ? OrderStatus::SearchingDriver : OrderStatus::WaitingForDriver,
+                'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+                'dispatch_last_offer_at' => now(),
+            ]);
+            $this->syncGroupRollup($order);
+
+            return 0;
+        }
+
+        $openHolders = $order->driverAttempts()
+            ->where('result', 'sent')
+            ->pluck('driver_id')
+            ->all();
+
+        $round = (int) $order->dispatch_round + 1;
+        $rung = 0;
+
+        foreach ($candidates as $candidate) {
+            $driverId = (int) $candidate['driver']->id;
+
+            if (! in_array($driverId, $openHolders, true)) {
+                $order->driverAttempts()->create([
+                    'driver_id' => $driverId,
+                    'round' => $round,
+                    'distance_km' => $candidate['distance_km'] === null ? null : round($candidate['distance_km'], 3),
+                    'result' => 'sent',
+                    'sent_at' => now(),
+                    'expires_at' => null,
+                ]);
+            }
+
+            $this->wake($order, $candidate, $round);
+            $rung++;
+        }
+
+        $order->update([
+            'status' => OrderStatus::SearchingDriver,
+            'dispatch_round' => $round,
+            'dispatch_started_at' => $order->dispatch_started_at ?? now(),
+            'dispatch_last_offer_at' => now(),
+        ]);
+        $this->syncGroupRollup($order);
+
+        return $rung;
+    }
+
+    /**
+     * «متصل وفاضي» — the whole condition, ranked by distance and never filtered by it.
+     *
+     * @return Collection<int, array{driver: Driver, distance_km: float|null}>
+     */
+    private function availableCandidates(Order $order): Collection
+    {
+        return Driver::query()
+            ->where('is_active', true)
+            ->where('is_online', true)
+            ->where('is_available', true)
+            ->whereNull('active_order_id')
+            // A captain with no zone rows is unrestricted, not «matches no zone».
+            ->where(fn ($q) => $q
+                ->whereDoesntHave('assignedZones')
+                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id)))
+            ->get()
+            ->map(fn (Driver $driver) => [
+                'driver' => $driver,
+                'distance_km' => $driver->hasFix()
+                    ? Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude)
+                    : null,
+            ])
+            ->sortBy([
+                fn ($a, $b) => ($a['distance_km'] ?? INF) <=> ($b['distance_km'] ?? INF),
+                fn ($a, $b) => $b['driver']->rating_avg <=> $a['driver']->rating_avg,
+                fn ($a, $b) => $b['driver']->completed_orders <=> $a['driver']->completed_orders,
+            ])
+            ->values();
+    }
+
+    /**
+     * Wake one captain: the socket for a phone that is awake, the push for one that is not.
+     *
+     * @param  array{driver: Driver, distance_km: float|null}  $candidate
+     */
+    private function wake(Order $order, array $candidate, int $round): void
+    {
+        try {
+            DriverOfferSent::dispatch((int) $candidate['driver']->id, (int) $order->id, $round, null);
+        } catch (\Throwable $e) {
+            Log::warning('offer broadcast failed', [
+                'order_id' => $order->id,
+                'driver_id' => $candidate['driver']->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $this->ring($order, $candidate);
     }
 
     /**

@@ -47,6 +47,9 @@ final class PhoneNumber
         return $digits;
     }
 
+    /** The stored shape: eleven digits, `01` plus one of the four network digits. */
+    public const PATTERN = '/^01[0125][0-9]{8}$/';
+
     /** True when the identifier is an email rather than a phone. */
     public static function isEmail(string $login): bool
     {
@@ -54,12 +57,18 @@ final class PhoneNumber
     }
 
     /**
-     * A `login` field accepts either shape. An email is only trimmed — case folding it
-     * would be a silent behaviour change on any store that compares case-sensitively —
-     * while a phone is normalised.
+     * Operator ruling 2026-09-11: «شيل تسجيل الدخول بالايميل». A `login` is a phone and
+     * nothing else, so this only normalises — an email arrives here as its digits, which
+     * is nothing, and `LoginRequest` refuses it before any lookup runs.
      */
     public static function normaliseLogin(string $login): string
     {
-        return self::isEmail($login) ? trim($login) : self::normalise($login);
+        return self::normalise($login);
+    }
+
+    /** True when the normalised form is a real Egyptian mobile. */
+    public static function isValid(string $raw): bool
+    {
+        return (bool) preg_match(self::PATTERN, self::normalise($raw));
     }
 }

@@ -21,6 +21,15 @@ use Illuminate\Support\Facades\Log;
  */
 class RejectOfferAction
 {
+    /** The five codes `Driver\OrderController` validates, as an operator reads them. */
+    private const REASONS = [
+        'too_far' => 'المسافة بعيدة',
+        'busy' => 'مشغول بطلب آخر',
+        'vehicle_issue' => 'عطل في المركبة',
+        'restaurant_issue' => 'مشكلة مع المكان',
+        'other' => 'سبب آخر',
+    ];
+
     public function __construct(
         private readonly DispatchService $dispatch,
         private readonly NotificationDispatcher $notifications,
@@ -59,10 +68,13 @@ class RejectOfferAction
                 [
                     'driver' => $driver->user?->name,
                     'order_number' => $order?->order_number,
-                    'reason' => $reasonCode,
+                    // The raw code («too_far») was printed to an operator as the reason.
+                    'reason' => self::REASONS[$reasonCode] ?? $reasonCode,
                 ],
                 deepLink: '/orders/'.$attempt->order_id,
                 orderId: $attempt->order_id,
+                // Without this the push had nothing to open: the app routes on `order_id`.
+                data: ['order_id' => (string) $attempt->order_id],
             );
         } catch (\Throwable $e) {
             // A captain's «رفض» must land whether or not anyone could be told about it.

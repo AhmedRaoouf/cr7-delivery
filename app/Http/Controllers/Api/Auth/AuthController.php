@@ -6,6 +6,7 @@ use App\Actions\Auth\ChangePasswordAction;
 use App\Actions\Auth\DeleteAccountAction;
 use App\Actions\Auth\ForgotPasswordAction;
 use App\Actions\Auth\ResetPasswordAction;
+use App\Http\Controllers\Api\Shared\DeviceController;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ChangePasswordRequest;
@@ -78,9 +79,25 @@ class AuthController extends Controller
         ];
     }
 
+    /**
+     * Signing out also unregisters the phone.
+     *
+     * The client calls `DELETE /devices` first, but four of the app's five sign-out
+     * buttons never called anything at all — so the device row outlived the session and
+     * the next person to sign in on that phone kept receiving the previous account's
+     * pushes (operator, 2026-09-11). Doing it here as well means a sign-out that reaches
+     * the server is a sign-out that stops the notifications, whatever the client did.
+     */
     public function logout(Request $request): JsonResponse
     {
         self::endCaptainShift($request->user());
+
+        DeviceController::forget(
+            $request->user(),
+            $request->header('X-Device-Id') ?? $request->string('device_id')->value(),
+            $request->string('token')->value(),
+        );
+
         $request->user()->currentAccessToken()->delete();
 
         return ApiResponse::success(message: 'تم تسجيل الخروج');
@@ -89,6 +106,7 @@ class AuthController extends Controller
     public function logoutAll(Request $request): JsonResponse
     {
         self::endCaptainShift($request->user());
+        $request->user()->deviceTokens()->delete();
         $request->user()->tokens()->delete();
 
         return ApiResponse::success(message: 'تم تسجيل الخروج من كل الأجهزة');

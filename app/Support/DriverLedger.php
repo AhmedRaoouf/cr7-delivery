@@ -69,6 +69,54 @@ class DriverLedger
     }
 
     /**
+     * An errand completed («اطلب كابتن»).
+     *
+     * D-75 makes the platform's whole income 15 % of the delivery money, and an errand's
+     * fee **is** delivery money — but `ErrandLifecycleAction` moved none of it: no wallet
+     * credit, no cash row, no margin anywhere. A captain doing errands all day earned
+     * nothing the ledger knew about, and the platform's share of every one of them was
+     * lost. The two rows are written exactly as a food order's are: the captain's 85 %
+     * into the wallet, and the fee they are holding in cash against the cash meter, so
+     * `net_due_to_platform` comes out at the 15 %.
+     *
+     * `order_id` is null and the reference goes in the note: an errand has no order row,
+     * and inventing one to carry a ledger line would be worse.
+     *
+     * @return array{earning: DriverTransaction, cash: DriverTransaction|null}
+     */
+    public static function recordErrand(Driver $driver, string $reference, float $driverEarning, float $cashFee): array
+    {
+        $driver->increment('wallet_balance', round($driverEarning, 2));
+
+        $earning = $driver->transactions()->create([
+            'order_id' => null,
+            'type' => 'order_earning',
+            'amount' => round($driverEarning, 2),
+            'balance_after' => (float) $driver->fresh()->wallet_balance,
+            'note' => 'مشوار '.$reference,
+            'created_by' => null,
+        ]);
+
+        if ($cashFee <= 0) {
+            return ['earning' => $earning, 'cash' => null];
+        }
+
+        $driver->increment('cash_in_hand', round($cashFee, 2));
+
+        return [
+            'earning' => $earning,
+            'cash' => $driver->transactions()->create([
+                'order_id' => null,
+                'type' => 'cash_collected',
+                'amount' => round($cashFee, 2),
+                'balance_after' => (float) $driver->fresh()->cash_in_hand,
+                'note' => 'رسوم مشوار '.$reference,
+                'created_by' => null,
+            ]),
+        ];
+    }
+
+    /**
      * The customer paid cash. The captain is now holding the platform's money.
      *
      * `amount` is positive and `balance_after` is `cash_in_hand`, not the wallet:

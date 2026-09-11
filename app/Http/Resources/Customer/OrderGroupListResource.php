@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Customer;
 
 use App\Support\Locale;
+use App\Support\RatingState;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,6 +22,8 @@ class OrderGroupListResource extends JsonResource
             'total' => (float) $this->total,
             'placed_at' => $this->placed_at,
             'restaurants' => $this->orders->map(fn ($order) => $order->restaurant->{"name_{$locale}"}),
+            // «طلباتي» offers the rating too, and it has to agree with the receipt.
+            ...RatingState::for($this->resource),
         ];
     }
 }

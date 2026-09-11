@@ -84,10 +84,14 @@ class MobileFourShellsTest extends TestCase
     {
         $this->account('restaurant');
 
+        // D-78 — refused, and refused in the words of a wrong password. The old 403
+        // named the account's own type back at an anonymous caller.
         $this->withHeaders(['X-App' => 'admin'])
             ->postJson('/api/v1/auth/login', ['login' => '01020508483', 'password' => 'Cr7Delivery#2026'])
-            ->assertStatus(403)
-            ->assertJsonPath('error', 'wrong_client');
+            ->assertStatus(422)
+            // The message is whatever `__()` renders for the caller's locale — the point
+            // is that it is the *same* refusal as a wrong password, code and all.
+            ->assertJsonPath('error', 'invalid_credentials');
     }
 
     public function test_a_captains_token_is_still_refused_on_the_admin_origin(): void

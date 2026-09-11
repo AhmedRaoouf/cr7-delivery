@@ -22,11 +22,15 @@ class SettingsSeeder extends Seeder
             // `order_driver_attempts` rows still read against a number that explains
             // them.
             'dispatch.offer_ttl_seconds' => [30, 'dispatch'],
-            // Every minute, offer the order to captains who have not been asked yet.
-            // The ones already holding it keep it.
-            'dispatch.rebroadcast_interval_seconds' => [60, 'dispatch'],
-            // …and after five minutes of that, tell the operators once.
-            'dispatch.escalate_after_seconds' => [300, 'dispatch'],
+            // D-76, operator 2026-09-11: «خلال دقيقتين لو محدش قبل يبعت للناس كلها
+            // تاني، المتصلة والمتفرغة، لحد ما حد يقبل». Every two minutes the offer goes
+            // out to **every** online, free captain again — the ones already holding it
+            // are rung rather than given a second row, and the ones who declined are
+            // asked again, because a refusal at 19:03 was about 19:03.
+            'dispatch.rebroadcast_interval_seconds' => [120, 'dispatch'],
+            // …and at the same two minutes, the operators and the kitchen are told once:
+            // «طلب لم نجد له كابتن» in the alert dock, «تواصل مع الدعم» to the place.
+            'dispatch.escalate_after_seconds' => [120, 'dispatch'],
             'dispatch.max_rounds' => [3, 'dispatch'],
             'dispatch.allow_neighbour_zones' => [true, 'dispatch'],
             'dispatch.mode_multi_restaurant' => ['driver_per_restaurant', 'dispatch'],
@@ -100,7 +104,11 @@ class SettingsSeeder extends Seeder
             // request was published had never been told it existed.
             'errands.republish_interval_minutes' => [1, 'errands'],
 
-            'commission.default_rate' => [10.00, 'commission'],
+            // D-75, operator 2026-09-11: «عمولة المنصة اللي هو الأدمن كلها ‪15‬٪ على أي
+            // order من فلوس الديليفري، مش عايز حاجة غيرها». There is no commission on
+            // food any more — `CreateOrderAction` snapshots 0 whatever a row says, and
+            // this default exists so a new place is created on the same rule.
+            'commission.default_rate' => [0, 'commission'],
 
             // «رسوم الإلغاء المتأخر» — operator, 2026-09-09: «الغاء الطلب ينفع
             // طالما المطعم مبدأش تحضير، ولو عايز يلغي بعد كدا لازم يحول رسوم

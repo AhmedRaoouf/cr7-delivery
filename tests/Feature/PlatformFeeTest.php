@@ -296,10 +296,13 @@ class PlatformFeeTest extends TestCase
         );
 
         $this->assertSame('5.00', (string) $settlement->platform_fee_total);
-        // gross 100 − commission 10 − refunds 0 − cash 0. The fee is not in it.
-        $this->assertSame('90.00', (string) $settlement->net_amount);
+        // gross 100 − commission **0** (D-75, 2026-09-11) − refunds 0 − cash 0. The
+        // service fee is reported and not deducted, which is the point of this test; the
+        // commission line is now always zero because the platform charges none.
+        $this->assertSame('0.00', (string) $settlement->commission_total);
+        $this->assertSame('100.00', (string) $settlement->net_amount);
         $this->assertSame('5.00', (string) $settlement->items->first()->platform_fee);
-        $this->assertSame('90.00', (string) $settlement->items->first()->net);
+        $this->assertSame('100.00', (string) $settlement->items->first()->net);
     }
 
     public function test_the_config_endpoint_publishes_the_amount(): void

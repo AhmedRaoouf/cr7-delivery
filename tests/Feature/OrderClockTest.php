@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Restaurant\StartPreparingAction;
+use App\Enums\AdminScopeType;
 use App\Enums\OrderStatus;
 use App\Enums\UserType;
 use App\Models\Driver;
@@ -277,6 +278,9 @@ class OrderClockTest extends TestCase
         $this->makeDriver('كابتن رامي');
 
         $admin = User::factory()->create(['type' => UserType::Admin, 'is_active' => true]);
+        // D-51 — only the operators whose scope covers the order are told, so a test
+        // admin needs one. A global scope is what the super admin carries.
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         app(DispatchService::class)->dispatchRound($order->fresh(), 1);
 
@@ -319,7 +323,15 @@ class OrderClockTest extends TestCase
         $this->assertDatabaseHas('order_driver_attempts', ['order_id' => $order->id, 'result' => 'sent']);
     }
 
-    public function test_a_retry_forgives_a_lapsed_offer_but_not_a_refusal(): void
+    /**
+     * D-76 — «يبعت للناس كلها تاني، المتصلة والمتفرغة، لحد ما حد يقبل».
+     *
+     * This test used to assert the opposite of its second half: a captain who declined
+     * was excluded for ever. The operator ruled on 2026-09-11 that two minutes later
+     * everybody is asked again, a refusal included — a «رفض» at 19:03 was about 19:03,
+     * and the alternative is an order that nobody in town is allowed to take.
+     */
+    public function test_every_free_captain_is_asked_again_two_minutes_later(): void
     {
         $restaurant = $this->makeRestaurant('ابن البلد');
         $order = $this->makeOrder($restaurant);
@@ -340,23 +352,62 @@ class OrderClockTest extends TestCase
             'sent_at' => now(),
         ]);
 
-        $this->travel(2)->minutes();
+        $this->travel(3)->minutes();
         Driver::query()->update(['location_updated_at' => now()]);
         $this->artisan('cr7:tick --once');
 
         $offered = $order->fresh()->driverAttempts()->where('result', 'sent')->pluck('driver_id');
 
         $this->assertTrue($offered->contains($lapsed->id), 'a captain whose phone was in a pocket gets asked again');
-        $this->assertFalse($offered->contains($refused->id), 'a captain who pressed «رفض» does not');
+        $this->assertTrue($offered->contains($refused->id), 'and so does one who declined the last round');
     }
 
-    public function test_a_stranded_order_does_not_ring_the_same_restaurant_every_minute(): void
+    /** One captain, one live offer — a re-ring, never a second row to accept twice. */
+    public function test_a_captain_holding_an_offer_is_rung_again_not_offered_twice(): void
+    {
+        $restaurant = $this->makeRestaurant('ابن البلد');
+        $order = $this->makeOrder($restaurant);
+        $order->update(['status' => OrderStatus::Preparing]);
+
+        $driver = $this->makeDriver('كابتن منتظر');
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        $this->assertSame(1, $order->driverAttempts()->where('driver_id', $driver->id)->count());
+
+        $this->travel(3)->minutes();
+        Driver::query()->update(['location_updated_at' => now()]);
+        $this->artisan('cr7:tick --once');
+
+        $this->assertSame(
+            1,
+            $order->driverAttempts()->where('driver_id', $driver->id)->where('result', 'sent')->count(),
+            'the offer in their hand stays the only one',
+        );
+    }
+
+    /**
+     * D-76 — the kitchen is told once, at two minutes, and told what to do about it.
+     *
+     * It used to be told the moment the dispatcher ran out of *new* captains to ask,
+     * which can be the same second the food was marked ready, and the customer was told
+     * as well («لم نجد كابتنًا متاحًا لطلبك») — which is our problem, not theirs.
+     */
+    public function test_the_place_is_told_once_at_two_minutes_and_the_customer_never(): void
     {
         $restaurant = $this->makeRestaurant('ابن البلد');
         $order = $this->makeOrder($restaurant);
         $order->update(['status' => OrderStatus::Preparing]);
 
         app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        // One minute in: nothing yet. The food has barely reached the counter.
+        $this->travel(1)->minutes();
+        $this->artisan('cr7:tick --once');
+
+        $this->assertSame(0, Notification::query()
+            ->where('order_id', $order->id)
+            ->where('type', 'order.no_driver_restaurant')
+            ->count());
 
         $this->travel(2)->minutes();
         $this->artisan('cr7:tick --once');
@@ -365,8 +416,17 @@ class OrderClockTest extends TestCase
 
         $this->assertSame(
             1,
+            Notification::query()
+                ->where('order_id', $order->id)
+                ->where('type', 'order.no_driver_restaurant')
+                ->count(),
+            'said once, not once a minute',
+        );
+
+        $this->assertSame(
+            0,
             Notification::query()->where('order_id', $order->id)->where('type', 'order.no_driver')->count(),
-            'the retry is silent; only the first failure speaks',
+            'the customer is never told about our search',
         );
     }
 }

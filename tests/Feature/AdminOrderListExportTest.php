@@ -190,8 +190,11 @@ class AdminOrderListExportTest extends TestCase
         $this->actingAsSuperAdmin();
         $place = $this->makeRestaurant('كنج بروست');
 
-        $theirs = $this->makeOrder($place, ['restaurant_order_ref' => '104']);
-        $this->makeOrder($place, ['restaurant_order_ref' => '221']);
+        // Pinned, not random: the search also matches `order_number`, and a random
+        // «O521048» contains «104» — which made this test fail about one full run in
+        // two, for a reason that had nothing to do with what it is testing.
+        $theirs = $this->makeOrder($place, ['restaurant_order_ref' => '104', 'order_number' => 'O700001']);
+        $this->makeOrder($place, ['restaurant_order_ref' => '221', 'order_number' => 'O700002']);
 
         $rows = $this->getJson('/api/v1/admin/orders')->assertOk()->json('data');
         $this->assertContains('104', array_column($rows, 'restaurant_order_ref'));

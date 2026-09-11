@@ -34,7 +34,14 @@ class CancelTripAction
 
             $driver->update(['is_available' => true, 'active_order_id' => null, 'cancelled_orders' => $driver->cancelled_orders + 1]);
 
-            $order->update(['driver_id' => null, 'status' => OrderStatus::SearchingDriver]);
+            // The search starts again, so the two-minute clock does too: this order has
+            // been without a captain for zero seconds, not since it was first made ready.
+            $order->update([
+                'driver_id' => null,
+                'status' => OrderStatus::SearchingDriver,
+                'dispatch_started_at' => now(),
+                'dispatch_admin_notified_at' => null,
+            ]);
 
             $order->statusHistory()->create([
                 'from_status' => $from->value,

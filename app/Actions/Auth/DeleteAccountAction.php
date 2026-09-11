@@ -20,6 +20,9 @@ class DeleteAccountAction
             'is_active' => false,
         ])->save();
 
+        // A soft delete never fires the cascade, so the device rows outlived the account
+        // and kept its pushes arriving on a phone somebody else now signs in on.
+        $user->deviceTokens()->delete();
         $user->tokens()->delete();
         $user->delete();
     }

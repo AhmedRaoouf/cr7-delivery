@@ -33,13 +33,19 @@ class PasswordLoginAction
             throw new ApiException('invalid_credentials', 'بيانات الدخول غير صحيحة', 422);
         }
 
+        /*
+         * The wrong shell is a wrong sign-in, and says so in exactly those words.
+         *
+         * Operator ruling 2026-09-11: «خلى role ال admin بس اللي يدخل الادمن و role
+         * المطاعم اللي يدخل المطاعم. لو role دخل في مكان غلط قوله بيانات دخول خاطئه».
+         * The old answer — 403 `wrong_client` naming the account's own type, and a
+         * dashboard that then offered to carry you to the other one — told an anonymous
+         * caller that this phone *is* an admin account and that its password was right.
+         * It is the same refusal as a wrong password now, byte for byte, and no meta
+         * to distinguish them.
+         */
         if (! in_array($user->type, $allowed, true)) {
-            throw new ApiException(
-                'wrong_client',
-                "هذا الحساب ({$user->type->label()}) لا يستخدم هذه الواجهة",
-                403,
-                meta: ['account_type' => $user->type->value],
-            );
+            throw new ApiException('invalid_credentials', 'بيانات الدخول غير صحيحة', 422);
         }
 
         if (! $user->is_active) {

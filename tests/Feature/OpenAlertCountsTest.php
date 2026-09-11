@@ -144,6 +144,12 @@ class OpenAlertCountsTest extends TestCase
             'subtotal' => 100,
             'delivery_fee_share' => 20,
             'total' => 120,
+            // D-76 — «stranded» is now «no captain, and the search started at least two
+            // minutes ago», so a test order that means to be stranded has to have been
+            // looking for one. Backdated past `dispatch.escalate_after_seconds` (120).
+            'dispatch_started_at' => in_array($status, ['ready', 'searching_driver', 'waiting_for_driver'], true)
+                ? now()->subMinutes(5)
+                : null,
         ]);
     }
 

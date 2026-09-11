@@ -45,9 +45,12 @@ class NotificationCopy
             'ar' => ['جارٍ تحضير طلبك 👨‍🍳', 'يتبقّى {prep_minutes} دقيقة تقريبًا'],
             'en' => ['Preparing your food 👨‍🍳', 'About {prep_minutes} min left'],
         ],
+        // The customer is told about their own order and nothing about our dispatcher
+        // (operator, 2026-09-11). «جارٍ إشعار أقرب الكباتن» was a promise about a search
+        // that could still be running twenty minutes later.
         'order.ready' => [
-            'ar' => ['طلبك جاهز', 'جارٍ إشعار أقرب الكباتن إليك'],
-            'en' => ['Your order is ready', 'Notifying the nearest captains'],
+            'ar' => ['طلبك جاهز ✅', 'انتهى {restaurant} من تحضير طلبك'],
+            'en' => ['Your order is ready ✅', '{restaurant} has finished preparing it'],
         ],
         'order.driver_assigned' => [
             'ar' => ['الكابتن {driver} في الطريق 🛵', 'سيستلم طلبك من {restaurant}'],
@@ -75,20 +78,26 @@ class NotificationCopy
             'ar' => ['لم يردّ المطعم بعد', 'طلبك {order_number} ما زال بانتظار ردّ {restaurant} — يمكنك إلغاؤه'],
             'en' => ['The restaurant has not answered', 'Your order {order_number} is still waiting on {restaurant} — you may cancel it'],
         ],
-        // doc 04 E-71 — every round is spent and nobody took it.
-        'order.no_driver' => [
-            'ar' => ['نبحث عن كابتن', 'لم نجد كابتنًا متاحًا لطلبك {order_number} بعد — نعيد المحاولة الآن'],
-            'en' => ['Looking for a captain', 'No captain is available for {order_number} yet — we are retrying'],
-        ],
+        /*
+         * `order.no_driver` is **deleted**, not merely unused.
+         *
+         * It went to the customer every time the dispatcher ran out of new captains to
+         * ask — which a single «رفض» is enough to cause — and said «لم نجد كابتنًا
+         * متاحًا لطلبك». Operator, 2026-09-11: a customer hears about their order, not
+         * about our search. The place and the operators hear instead, at two minutes.
+         */
         'order.issue' => [
             'ar' => ['توجد مشكلة في طلبك', 'سيتواصل معك فريق الدعم فورًا'],
             'en' => ["There's an issue with your order", 'Support is contacting you now'],
         ],
 
         // -------------------------------------------------------- restaurant
+        // `{total}` is «حساب المكان» — what this place is owed for its own food. It was
+        // the sub-order total, delivery and service fees included, which is the
+        // customer's number and never the kitchen's (operator, 2026-09-11).
         'order.new' => [
-            'ar' => ['🔔 طلب جديد {order_number}', '{items} أصناف · {total}'],
-            'en' => ['🔔 New order {order_number}', '{items} items · {total}'],
+            'ar' => ['🔔 طلب جديد {order_number}', '{items} أصناف · حساب المكان {total}'],
+            'en' => ['🔔 New order {order_number}', '{items} items · your share {total}'],
         ],
         'order.awaiting_customer_confirmation' => [
             'ar' => ['⏳ الطلب {order_number} بانتظار تأكيد العميل', 'لا تبدأ التحضير الآن'],
@@ -107,9 +116,12 @@ class NotificationCopy
             'ar' => ['⏰ الطلب {order_number} بانتظار ردّك', 'انتهت مهلة الرد — اقبل الطلب أو ارفضه الآن'],
             'en' => ['⏰ Order {order_number} is waiting for you', 'The accept window is over — accept or reject it now'],
         ],
+        // Sent once, {minutes} minutes after the food was marked ready and still nobody
+        // has taken it. The kitchen can do nothing about dispatch, so the line that
+        // matters is the phone number of somebody who can.
         'order.no_driver_restaurant' => [
-            'ar' => ['لم نجد كابتنًا متاحًا', 'الطلب {order_number} جاهز ولم يقبله أي كابتن — نعيد المحاولة'],
-            'en' => ['No captain available', 'Order {order_number} is ready and unclaimed — we are retrying'],
+            'ar' => ['لم يقبل أي كابتن الطلب بعد', 'الطلب {order_number} جاهز منذ {minutes} دقيقة ولم يقبله أي كابتن — تواصل مع الدعم على {support_phone}'],
+            'en' => ['No captain has taken the order yet', 'Order {order_number} has been ready for {minutes} min and no captain has accepted — contact support on {support_phone}'],
         ],
         // The board already draws «وصل الكابتن إلى المطعم». Nothing told a kitchen
         // that was not looking at the board.
@@ -212,8 +224,8 @@ class NotificationCopy
         // No offer expires any more, so «ran out of rounds» can no longer be the thing
         // that reaches an operator. This is: still nobody, {minutes} minutes in.
         'order.unclaimed_admin' => [
-            'ar' => ['طلب بلا كابتن منذ {minutes} دقيقة', 'الطلب {order_number} من {restaurant} ما زال بانتظار كابتن'],
-            'en' => ['Order unclaimed for {minutes} min', 'Order {order_number} from {restaurant} is still waiting for a captain'],
+            'ar' => ['طلب لم نجد له كابتن منذ {minutes} دقيقة', 'الطلب {order_number} من {restaurant} جاهز وما زال بانتظار كابتن — أسنده بنفسك'],
+            'en' => ['No captain found for {minutes} min', 'Order {order_number} from {restaurant} is ready and still waiting — assign it yourself'],
         ],
 
         // ------------------------------------------------ complaints (D-53)

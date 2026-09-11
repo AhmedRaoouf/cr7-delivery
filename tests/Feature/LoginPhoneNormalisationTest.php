@@ -63,10 +63,16 @@ class LoginPhoneNormalisationTest extends TestCase
             ->assertJsonPath('error', 'invalid_credentials');
     }
 
-    public function test_an_email_login_is_untouched_by_phone_normalisation(): void
+    /**
+     * D-78, operator 2026-09-11: «شيل تسجيل الدخول بالايميل». An email is refused by the
+     * request, with the field named — not by the lookup as «بيانات الدخول غير صحيحة»,
+     * which reads like a wrong password and sends the owner looking for the wrong thing.
+     */
+    public function test_an_email_is_no_longer_a_login(): void
     {
         User::factory()->create([
             'email' => 'owner@cr7-delivery.com',
+            'phone' => '01020508483',
             'type' => 'restaurant',
             'password' => Hash::make('Cr7Delivery#2026'),
             'is_active' => true,
@@ -75,6 +81,15 @@ class LoginPhoneNormalisationTest extends TestCase
         $this->withHeaders(['X-App' => 'restaurant'])
             ->postJson('/api/v1/auth/login', [
                 'login' => ' owner@cr7-delivery.com ',
+                'password' => 'Cr7Delivery#2026',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'validation_failed')
+            ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح');
+
+        $this->withHeaders(['X-App' => 'restaurant'])
+            ->postJson('/api/v1/auth/login', [
+                'login' => '01020508483',
                 'password' => 'Cr7Delivery#2026',
             ])
             ->assertOk();

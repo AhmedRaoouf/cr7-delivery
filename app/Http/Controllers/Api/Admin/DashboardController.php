@@ -10,9 +10,11 @@ use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Setting;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -37,11 +39,27 @@ class DashboardController extends Controller
             'orders_cancelled' => (clone $orders)->where('status', 'cancelled')->count(),
             'gmv' => (float) (clone $orders)->where('status', 'delivered')->sum('subtotal'),
             'commission_total' => (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount'),
-            // D-63 — platform revenue is now two numbers. Anywhere a single "revenue"
-            // figure is printed it has to be commission_total + platform_fees_total.
             'platform_fees_total' => (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share'),
-            'platform_revenue_total' => (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount')
-                + (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share'),
+            /*
+             * 🔴 «دخل المنصة» left out the platform's actual income.
+             *
+             * D-70 has said since 2026-09-05 that the platform keeps 15 % of every
+             * delivery fee, and `orders.platform_delivery_margin` has carried it per
+             * order — but this figure was `commission + service fee`, neither of which
+             * the operator charges any more (D-75, 2026-09-11: «عمولة المنصة كلها ‪15‬٪
+             * على أي order من فلوس الديليفري، مش عايز حاجة غيرها»). Left alone, the
+             * dashboard would have reported a platform that earns **nothing**.
+             *
+             * The two retired lines stay in the sum rather than being deleted: the
+             * historical orders in this table were charged them, and a month that
+             * straddles today has to add up.
+             */
+            'delivery_margin_total' => (float) (clone $orders)->where('status', 'delivered')->sum('platform_delivery_margin'),
+            'late_cancellation_fees_total' => (float) (clone $orders)->sum('cancellation_fee'),
+            'platform_revenue_total' => (float) (clone $orders)->where('status', 'delivered')->sum('platform_delivery_margin')
+                + (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount')
+                + (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share')
+                + (float) (clone $orders)->sum('cancellation_fee'),
             'active_orders' => (clone $orders)->whereNotIn('status', ['delivered', 'cancelled'])->count(),
             'online_drivers' => AdminScope::applyToDrivers(Driver::query(), $request->user())->where('is_online', true)->count(),
         ]);
@@ -136,13 +154,12 @@ class DashboardController extends Controller
                 'receipts' => PaymentProofResource::forAdmin($payment->proofs),
             ]);
 
-        $stranded = (clone $orders)
-            ->where('status', 'waiting_for_driver')
+        $stranded = self::strandedQuery(clone $orders)
             ->with('restaurant:id,name_ar')
-            ->latest('updated_at')
+            ->oldest('dispatch_started_at')
             ->limit(self::ALERT_LIMIT)
             ->get()
-            ->map(fn (Order $order) => $this->orderAlert($order, 'no_driver', 'لم يقبل الطلب أي كابتن'));
+            ->map(fn (Order $order) => $this->orderAlert($order, 'no_driver', 'طلب لم نجد له كابتن'));
 
         $timedOut = (clone $orders)
             ->where('status', 'restaurant_timeout')
@@ -242,7 +259,7 @@ class DashboardController extends Controller
 
         return [
             'payment_review' => Payment::query()->where('status', 'under_review')->count(),
-            'no_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
+            'no_driver' => self::strandedQuery(clone $orders)->count(),
             'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
             'errand_unclaimed' => AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
@@ -257,6 +274,31 @@ class DashboardController extends Controller
         ];
     }
 
+    /**
+     * «في طلب مش لاقيين له delivery» — the operator's own words, 2026-09-11, about the
+     * one thing the dock has to say and could not.
+     *
+     * It used to be `status = waiting_for_driver`, which is «the last pass found nobody
+     * *new*». An order whose three offers are open and unanswered never reaches that
+     * status at all — it stays `searching_driver` for as long as nobody answers — so the
+     * orders most in need of an operator were the ones the dock could not see. And an
+     * order left on `ready` by an unassign-without-requeue was invisible to both.
+     *
+     * Now: no captain, still cooking-done or searching, and the search started at least
+     * `dispatch.escalate_after_seconds` (‪120‬) ago — the same threshold that pushes, so
+     * the dock and the push can never disagree about what counts as stranded.
+     */
+    private static function strandedQuery(Builder $orders): Builder
+    {
+        $seconds = (int) (Setting::query()->where('key', 'dispatch.escalate_after_seconds')->value('value') ?? 120);
+
+        return $orders
+            ->whereIn('status', ['ready', 'searching_driver', 'waiting_for_driver'])
+            ->whereNull('driver_id')
+            ->whereNotNull('dispatch_started_at')
+            ->where('dispatch_started_at', '<=', now()->subSeconds(max(30, $seconds)));
+    }
+
     private function orderAlert(Order $order, string $kind, string $title): array
     {
         return [
@@ -267,7 +309,12 @@ class DashboardController extends Controller
             'order_group_id' => $order->order_group_id,
             'amount' => (float) $order->total,
             'restaurant' => $order->restaurant?->name_ar,
-            'created_at' => $order->updated_at,
+            // Since when, not «last touched». `updated_at` is bumped by every widening
+            // pass, so a stranded order looked seconds old for as long as it was
+            // stranded — the one figure on the card that has to be true.
+            'created_at' => $kind === 'no_driver'
+                ? ($order->dispatch_started_at ?? $order->ready_at ?? $order->updated_at)
+                : $order->updated_at,
             'href' => '/orders/'.$order->id,
             'receipts' => [],
         ];

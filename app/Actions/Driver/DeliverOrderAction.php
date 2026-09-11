@@ -61,7 +61,7 @@ class DeliverOrderAction
             DriverLedger::recordEarning($driver, $order);
 
             if ($order->payment_method->value === 'cash') {
-                $cashTotal = $collectedAmount ?? (float) $order->total;
+                $cashTotal = $collectedAmount ?? $order->cashToCollect();
                 DriverLedger::recordCashCollected($driver, $order, $cashTotal);
 
                 if ($order->orderGroup->payment) {

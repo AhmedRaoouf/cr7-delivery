@@ -18,6 +18,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
+use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -157,7 +158,9 @@ class OrderController extends Controller
             throw new ApiException('invalid_transition', 'لا يمكن إعادة البحث عن كابتن في هذه المرحلة', 422);
         }
 
-        $dispatch->dispatchRound($order, $order->dispatch_round + 1);
+        // «إعادة البحث عن كابتن» means everyone, not «whoever has not been asked yet» —
+        // an operator presses this precisely because the ones already asked said nothing.
+        $dispatch->rebroadcast($order);
 
         AuditLogger::record($request->user(), 'orders.redispatch', $order);
 
@@ -216,9 +219,34 @@ class OrderController extends Controller
         }
 
         $order->increment('renotify_count');
+
+        /*
+         * 🔴 «إعادة تنبيه المطعم» notified nobody.
+         *
+         * It incremented a counter and answered «تم إعادة تنبيه المطعم» — an operator
+         * ringing a kitchen that never heard a thing, told it worked. The push is the
+         * whole point of the button: the same `order.new` the place missed the first
+         * time, with the figures it is owed (D-77).
+         */
+        $fresh = $order->fresh(['items', 'restaurant.owner']);
+
+        app(NotificationDispatcher::class)->send(
+            $fresh->restaurant?->owner,
+            'order.new',
+            [
+                'order_number' => $fresh->order_number,
+                'items' => $fresh->items_count,
+                'total' => number_format((float) $fresh->restaurant_amount, 2).' ج.م',
+            ],
+            deepLink: '/orders/'.$fresh->id,
+            orderId: $fresh->id,
+            data: ['order_id' => (string) $fresh->id],
+            channel: 'offers',
+        );
+
         AuditLogger::record($request->user(), 'orders.renotify', $order);
 
-        return ApiResponse::success($order->fresh(), 'تم إعادة تنبيه المطعم');
+        return ApiResponse::success($fresh, 'تم إعادة تنبيه المطعم');
     }
 
     public function extendPrep(Request $request, Order $order, ExtendPrepTimeAction $action): JsonResponse

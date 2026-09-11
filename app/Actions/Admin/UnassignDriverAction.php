@@ -48,6 +48,12 @@ class UnassignDriverAction
                 'status' => $nextStatus,
                 'pickup_otp' => Otp::orderCode(),
                 'pickup_otp_attempts' => 0,
+                // Whichever way it goes, this order is now waiting for a captain again —
+                // and the two-minute escalation has to be able to speak a second time.
+                // Without a requeue it sits on `ready` with nobody searching, which is
+                // exactly the state the operator most needs the dock to shout about.
+                'dispatch_started_at' => now(),
+                'dispatch_admin_notified_at' => null,
             ]);
 
             $order->statusHistory()->create([

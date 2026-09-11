@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Errand\ErrandReference;
 use App\Enums\AdminScopeType;
 use App\Enums\ErrandStatus;
 use App\Models\Driver;
@@ -51,7 +52,14 @@ class ErrandRequestTest extends TestCase
         $response = $this->postJson('/api/v1/customer/errands', $this->payload());
 
         $response->assertCreated();
-        $this->assertSame('ERR-1000', $response->json('data.reference'));
+        // Derived from the row's own id, not from «this is the first errand ever»:
+        // MySQL does not roll an AUTO_INCREMENT back with the transaction, so any other
+        // test in the run that inserts an errand moves this number and the assertion
+        // failed for a reason that had nothing to do with references.
+        $this->assertSame(
+            ErrandReference::forId((int) $response->json('data.id')),
+            $response->json('data.reference'),
+        );
         $this->assertSame('open', $response->json('data.status'));
         $this->assertEquals(45, $response->json('data.offered_fee'));
         // The suggestion is stored beside the offer, never instead of it.

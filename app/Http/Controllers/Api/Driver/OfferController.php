@@ -67,7 +67,7 @@ class OfferController extends Controller
             'items_count' => $order->items()->sum('quantity'),
             'order_total' => (float) $order->total,
             'payment_method' => $order->payment_method,
-            'cash_to_collect' => $order->payment_method->value === 'cash' ? (float) $order->total : 0,
+            'cash_to_collect' => $order->cashToCollect(),
             'your_earning' => DriverEarningCalculator::calculate($order, $driver),
             'round' => $attempt->round,
             // Both null on every offer written since 2026-09-08. The app reads that as

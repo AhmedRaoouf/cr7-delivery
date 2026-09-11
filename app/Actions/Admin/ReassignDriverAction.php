@@ -9,6 +9,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\DriverEarningCalculator;
 use App\Support\Otp;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,20 @@ class ReassignDriverAction
                 'driver_assigned_at' => now(),
                 'pickup_otp' => Otp::orderCode(),
                 'pickup_otp_attempts' => 0,
+                /*
+                 * 🔴 The money was never recalculated here.
+                 *
+                 * `AcceptOfferAction` snapshots `driver_earning` and
+                 * `platform_delivery_margin` when a captain accepts; an admin assignment
+                 * wrote neither — so an order handed over by an operator carried **0/0**,
+                 * the captain's wallet was credited nothing on delivery, and the platform's
+                 * 15 % (D-70) never appeared in any report. A reassignment was worse: the
+                 * new captain inherited the old one's numbers, which are only right if the
+                 * two are on the same earning rule.
+                 */
+                'driver_earning' => DriverEarningCalculator::calculate($order, $newDriver),
+                'platform_delivery_margin' => DriverEarningCalculator::platformMargin($order, $newDriver),
+                'dispatch_admin_notified_at' => null,
             ]);
 
             $newDriver->update(['is_available' => false, 'active_order_id' => $order->id]);

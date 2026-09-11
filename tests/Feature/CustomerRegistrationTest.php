@@ -157,11 +157,15 @@ class CustomerRegistrationTest extends TestCase
         $this->postJson('/api/v1/auth/login', ['login' => $captainUser->phone, 'password' => 'Ahmed@123'])
             ->assertOk()->assertJsonPath('data.user.type', 'driver');
 
-        // The dashboards are unchanged: a captain's password on `admin.` is still refused.
+        // The dashboards are unchanged in what they refuse, and changed in what they
+        // say: D-78 makes the wrong shell answer exactly like a wrong password, so an
+        // anonymous caller cannot learn from the dashboard that this number is a real
+        // account somewhere else.
         $this->withHeader('X-App', 'admin')
             ->postJson('/api/v1/auth/login', ['login' => $captainUser->phone, 'password' => 'Ahmed@123'])
-            ->assertStatus(403)
-            ->assertJsonPath('error', 'wrong_client');
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'invalid_credentials')
+            ->assertJsonMissingPath('meta.account_type');
     }
 
     /**

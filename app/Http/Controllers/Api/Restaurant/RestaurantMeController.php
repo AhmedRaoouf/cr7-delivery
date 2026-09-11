@@ -33,6 +33,9 @@ class RestaurantMeController extends Controller
         $data = $request->validated();
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
+        // D-58's «المنيو» pill finally has a way in. Images or a PDF; a PDF
+        // arrives as one file and is stored as one image per page.
+        $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus', $restaurant);
 
         $restaurant->update($data);
 

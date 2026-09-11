@@ -58,6 +58,7 @@ class RestaurantController extends Controller
         $data = $request->validated();
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants');
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants');
+        $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus');
 
         $result = $action->execute($data);
 
@@ -74,6 +75,7 @@ class RestaurantController extends Controller
         $data = $this->guardCommission($request, $restaurant, $request->validated());
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
+        $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus', $restaurant);
         $restaurant->update(collect($data)->except('cuisine_ids')->all());
 
         if (array_key_exists('cuisine_ids', $data)) {

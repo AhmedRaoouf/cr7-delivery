@@ -24,6 +24,18 @@ class UpdateRestaurantMeRequest extends FormRequest
             'whatsapp' => ['nullable', 'string'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_cover' => ['nullable', 'boolean'],
+            // D-58 — the printed menu sheets, «المنيو», pill 0 of the tab strip.
+            // The column has existed since 2026-08 and had no write path at all,
+            // so the only sheets on the platform were the ones in the seeder.
+            //
+            // A PDF is allowed and is split into one image per page on the way in
+            // ({@see \App\Support\PdfPages}), so the app needs no PDF reader and
+            // the pages swipe and zoom like any other picture. 10 MB rather than
+            // the 5 MB the logo gets: a scanned four-page menu is a big file and
+            // the operator has no way to shrink one.
+            'menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'menu_sheets.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'remove_menu_sheets' => ['nullable', 'boolean'],
         ];
     }
 }

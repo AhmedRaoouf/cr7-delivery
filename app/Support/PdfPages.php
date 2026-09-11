@@ -97,17 +97,36 @@ class PdfPages
         $pages = [];
 
         try {
-            foreach ($imagick as $index => $page) {
+            // 🔴 **Indexed, and never `foreach ($imagick as $page)`.**
+            //
+            // `mergeImageLayers()` **appends its result to the sequence it was
+            // called on**, and Imagick's iterator walks whatever the sequence
+            // holds *now*. So flattening inside a `foreach` adds a fourth page,
+            // then reads it, flattens it, adds a fifth… A three-page PDF ran
+            // past ‪19‬ pages and was still going when it was killed: an upload
+            // that never returns, filling the disk with identical JPEGs.
+            //
+            // It was invisible locally — `imagick` is not installed on the
+            // development machine, so the test skips there — and it was only
+            // found by running the rasteriser on the deployment. `getImage()`
+            // returns a **copy holding one image**, so the merge below has its
+            // own sequence to append to and the original is never touched.
+            for ($index = 0; $index < $count; $index++) {
+                $imagick->setIteratorIndex($index);
+                $page = $imagick->getImage();
+
                 // A PDF page has no background of its own, and a transparent one
                 // flattens to black in most viewers — a menu nobody can read.
                 $page->setImageBackgroundColor('white');
-                $page = $page->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
-                $page->setImageFormat('jpeg');
-                $page->setImageCompressionQuality(88);
+                $flattened = $page->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+                $page->clear();
+
+                $flattened->setImageFormat('jpeg');
+                $flattened->setImageCompressionQuality(88);
 
                 $path = tempnam(sys_get_temp_dir(), 'menu-page-').'.jpg';
-                $page->writeImage($path);
-                $page->clear();
+                $flattened->writeImage($path);
+                $flattened->clear();
 
                 $pages[] = new UploadedFile(
                     $path,

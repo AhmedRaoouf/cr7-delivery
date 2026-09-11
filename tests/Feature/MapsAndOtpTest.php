@@ -380,6 +380,34 @@ class MapsAndOtpTest extends TestCase
             && str_contains($request->url(), 'country=eg'));
     }
 
+    /**
+     * The live answer on 2026-09-11: «الكورنيش» searched from the middle of
+     * جمصة returned كوبري الجيش in الإسماعيلية first, شارع الكورنيش الجديد in
+     * مرسى مطروح second, and the one ‪7‬ km away third. `proximity` is a hint
+     * name prominence outranks, so the ordering is ours to impose.
+     */
+    public function test_forward_search_puts_the_nearest_result_first(): void
+    {
+        config(['maps.mapbox.token' => 'pk.test-token']);
+        Cache::flush();
+        Http::fake(['api.mapbox.com/*' => Http::response([
+            'features' => [
+                ['text' => 'كوبري الجيش', 'place_name' => 'كوبري الجيش، الإسماعيلية', 'center' => [32.2715, 30.5965]],
+                ['text' => 'شارع الكورنيش الجديد', 'place_name' => 'شارع الكورنيش الجديد، مرسى مطروح', 'center' => [27.2373, 31.3543]],
+                ['text' => 'شارع الكورنيش', 'place_name' => 'شارع الكورنيش، جمصة', 'center' => [31.5190, 31.4501]],
+            ],
+        ])]);
+        $this->app->instance(Geocoder::class, new MapboxGeocoder);
+
+        $this->getJson('/api/v1/geo/search?q='.urlencode('الكورنيش').'&lat=31.4472&lng=31.5142')
+            ->assertOk()
+            ->assertJsonPath('data.0.name', 'شارع الكورنيش')
+            ->assertJsonPath('data.1.name', 'كوبري الجيش')
+            // Nothing is dropped — a box tight enough to rank جمصة first would
+            // answer nothing at all for a customer in the next launch city.
+            ->assertJsonCount(3, 'data');
+    }
+
     public function test_a_one_letter_query_is_refused_before_it_costs_a_request(): void
     {
         $this->getJson('/api/v1/geo/search?q='.urlencode('ا'))

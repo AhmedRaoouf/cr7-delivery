@@ -19,6 +19,8 @@ use Throwable;
  */
 class MapboxGeocoder implements Geocoder
 {
+    use SortsByProximity;
+
     private const ENDPOINT = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
 
     public function isConfigured(): bool
@@ -123,7 +125,7 @@ class MapboxGeocoder implements Geocoder
                 'limit' => 6,
             ]);
 
-            return collect($features)
+            $rows = collect($features)
                 ->map(fn (array $feature) => [
                     'name' => (string) ($feature['text'] ?? ''),
                     'address' => (string) ($feature['place_name'] ?? ''),
@@ -133,6 +135,11 @@ class MapboxGeocoder implements Geocoder
                 ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
                 ->values()
                 ->all();
+
+            // `proximity` is a hint Mapbox lets name prominence outrank, so the
+            // street the customer is standing on can land third behind two in
+            // other governorates. See {@see SortsByProximity}.
+            return self::nearestFirst($rows, $proximityLat, $proximityLng);
         });
     }
 

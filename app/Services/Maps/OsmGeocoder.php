@@ -31,6 +31,8 @@ use Throwable;
  */
 class OsmGeocoder implements Geocoder
 {
+    use SortsByProximity;
+
     public function isConfigured(): bool
     {
         return (bool) config('maps.osm.geocoding', true) && filled(config('maps.osm.nominatim'));
@@ -95,7 +97,7 @@ class OsmGeocoder implements Geocoder
                 return [];
             }
 
-            return collect($rows)
+            $mapped = collect($rows)
                 ->map(function (array $row) use ($language) {
                     $composed = self::compose($row, $language);
 
@@ -109,6 +111,11 @@ class OsmGeocoder implements Geocoder
                 ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
                 ->values()
                 ->all();
+
+            // The viewbox above is un-bounded on purpose — it prefers, it does
+            // not restrict — so Nominatim can still rank a prominent match far
+            // outside it first. See {@see SortsByProximity}.
+            return self::nearestFirst($mapped, $biasLat, $biasLng);
         });
     }
 

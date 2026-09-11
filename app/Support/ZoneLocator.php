@@ -36,6 +36,22 @@ class ZoneLocator
      */
     public const PICK_TOLERANCE_KM = 12.0;
 
+    /**
+     * How far past every area's edge a pin may still be *offered* one.
+     *
+     * Much tighter than {@see self::PICK_TOLERANCE_KM}, because the two answer
+     * different questions. The tolerance above judges a choice the customer has
+     * already made and should be generous — areas overlap in reality and
+     * ordering to the next one over is a normal Tuesday. This one **makes** a
+     * choice on their behalf, and at ‪12‬ km it made bad ones: a pin dropped in
+     * the sea ‪4‬ km off the coast was confidently offered «البستان».
+     *
+     * Past this, `suggestFor` returns null and the customer picks from the flat
+     * list. «We do not know» is a fine thing for a delivery app to say; a
+     * confident wrong area is not.
+     */
+    public const SUGGESTION_REACH_KM = 3.0;
+
     /** The zone whose shape contains the point, or null when no shape does. */
     public static function forPoint(float $lat, float $lng): ?ServiceZone
     {
@@ -154,7 +170,44 @@ class ZoneLocator
     {
         $selectable = self::allSelectable();
 
-        $containing = $selectable->first(fn (ServiceZone $zone) => self::contains($zone, $lat, $lng));
+        // The area the point is **most inside**, not the first one in flyer
+        // order and not simply the smallest.
+        //
+        // The areas overlap by design — «داخلي جمصة» is the whole resort core at
+        // ‪1.6‬ km and «القوات المسلحة» is ‪500‬ m inside it — so flyer order would
+        // have answered with the broad one every time. Ranking by radius alone
+        // is not enough either: «جمصة البلد» and «جمصة شرق» are both ‪800‬ m, both
+        // contain the east mosque, and the tie went to whichever the price list
+        // printed first — which was the wrong one.
+        //
+        // So: **radius first, distance only to break a tie.**
+        //
+        // Distance ÷ radius was tried and is wrong, though it sounds better. It
+        // asks «how far through this circle is the pin», and at the القوات
+        // المسلحة hotel that made «داخلي جمصة» win — the pin is ‪105‬ m into a
+        // ‪500‬ m circle (0.21) and ‪315‬ m into a ‪1 600‬ m one (0.197), so the
+        // resort-wide name beat the specific one on a rounding. Specificity is
+        // not a matter of degree here: a smaller area is a better answer than a
+        // bigger one containing it, every time, and being near the big one's
+        // centre does not change that.
+        //
+        // A polygon sorts ahead of every circle: somebody drew that boundary
+        // deliberately, and it beats an estimated radius.
+        $radius = static fn (ServiceZone $zone): float => $zone->polygon !== null || ! $zone->radius_km
+            ? -1.0
+            : (float) $zone->radius_km;
+
+        $offset = static fn (ServiceZone $zone): float => $zone->center_lat === null
+            ? INF
+            : Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng);
+
+        $containing = $selectable
+            ->filter(fn (ServiceZone $zone) => self::contains($zone, $lat, $lng))
+            ->sortBy([
+                fn (ServiceZone $a, ServiceZone $b) => $radius($a) <=> $radius($b),
+                fn (ServiceZone $a, ServiceZone $b) => $offset($a) <=> $offset($b),
+            ])
+            ->first();
 
         if ($containing !== null) {
             return $containing;
@@ -168,9 +221,7 @@ class ZoneLocator
                 'zone' => $zone,
                 'distance' => Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng),
             ])
-            // A suggestion from further out than the fraud guard would accept is
-            // not a suggestion, it is the next town's price on this town's pin.
-            ->filter(fn (array $row) => $row['distance'] <= self::PICK_TOLERANCE_KM)
+            ->filter(fn (array $row) => $row['distance'] <= self::SUGGESTION_REACH_KM)
             ->sortBy('distance')
             ->first()['zone'] ?? null;
     }

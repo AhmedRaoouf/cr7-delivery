@@ -26,6 +26,10 @@ class DatabaseSeeder extends Seeder
             // …and, over them, the operator's printed price list: 31 named areas with
             // their own fees, plus the city coverage circles those areas rely on (D-70).
             OperatorZonePricingSeeder::class,
+            // …and where those sixteen Gamasa areas actually are. Seeded as
+            // names with no shape, they made every pin in town resolve to the
+            // one wide circle that covers it — «الشاطئ» — on every address.
+            GamasaZoneGeometrySeeder::class,
             // Real contact and wallet numbers over the launch placeholders, and the
             // 15 % delivery split every captain is on (D-70, D-71).
             OperatorSettingsSeeder::class,

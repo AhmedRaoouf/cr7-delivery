@@ -64,6 +64,24 @@ class LocalGazetteerGeocoder implements Geocoder
     /** A ~‪130‬ m box around the pin, widened per-row by the street's own bbox. */
     private const STREET_BOX_DEGREES = 0.0012;
 
+    /**
+     * How far the *nearest named area* may be before it stops being this pin's.
+     *
+     * The gazetteer's bbox is larger than its coverage: villages like الركابية
+     * and زيان sit inside it and OSM has no named area for either. Without a
+     * cap the nearest-centroid fallback reached ‪4‬ km across open farmland and
+     * answered «منطقة صلاح الدين» for a pin in الركابية — a real area name, on
+     * the wrong side of town, which is the most convincing kind of wrong.
+     *
+     * Beyond this the area comes back null, the whole lookup usually returns
+     * null with it, and the chain falls through to the providers — who may
+     * genuinely know the village.
+     */
+    private const AREA_METRES = 1200.0;
+
+    /** A box a little wider than {@see self::AREA_METRES}, to prefilter in SQL. */
+    private const AREA_BOX_DEGREES = 0.013;
+
     public function isConfigured(): bool
     {
         // One count, cached for the process and then for an hour: this is asked
@@ -248,14 +266,19 @@ class LocalGazetteerGeocoder implements Geocoder
             }
         }
 
-        $rows = DB::table('gazetteer_areas')->get(['name', 'lat', 'lng']);
+        $rows = DB::table('gazetteer_areas')
+            ->whereBetween('lat', [$lat - self::AREA_BOX_DEGREES, $lat + self::AREA_BOX_DEGREES])
+            ->whereBetween('lng', [$lng - self::AREA_BOX_DEGREES, $lng + self::AREA_BOX_DEGREES])
+            ->get(['name', 'lat', 'lng']);
 
         $best = null;
-        $bestDistance = INF;
+        $bestDistance = self::AREA_METRES;
 
         foreach ($rows as $row) {
             $distance = Geo::metres($lat, $lng, (float) $row->lat, (float) $row->lng);
 
+            // Strictly nearer than the cap, so a point with nothing within it
+            // keeps `$best` null rather than taking the least-wrong answer.
             if ($distance < $bestDistance) {
                 $bestDistance = $distance;
                 $best = (string) $row->name;

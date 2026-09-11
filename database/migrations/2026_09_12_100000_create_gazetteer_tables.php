@@ -1,5 +1,6 @@
 <?php
 
+use Database\Seeders\GazetteerSeeder;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -91,6 +92,14 @@ return new class extends Migration
             $table->string('city')->nullable();
             $table->index(['lat', 'lng']);
         });
+
+        // Seeded here rather than left to `DatabaseSeeder`, because a deployed
+        // database is never re-seeded — `DEPLOY.md` runs `migrate --force` and
+        // nothing else. Three empty tables would make
+        // {@see \App\Services\Maps\LocalGazetteerGeocoder::isConfigured()}
+        // answer false, the chain would fall straight back to the providers,
+        // and the deploy would ship the schema for this fix without the fix.
+        (new GazetteerSeeder)->run();
     }
 
     public function down(): void

@@ -34,8 +34,15 @@ use Illuminate\Database\Seeder;
  * neighbours. Where a pin falls in no circle the customer picks from the list,
  * which is the honest outcome and the one D-70 was built around.
  *
- * New Mansoura's fifteen areas are untouched: nobody has researched them, and a
- * guess there would reintroduce exactly the defect this seeder exists to fix.
+ * New Mansoura's fifteen areas are untouched, and were searched for again on
+ * 2026-09-12 before this sentence was left standing. OpenStreetMap holds one
+ * feature for the whole city — its university — and an Overpass name sweep for
+ * «جنة», «زاهية», «سكن», «الصناعية», «الناقر» and «كارتة» across the coastal
+ * bbox returns **nothing**; Nominatim reverse on points inside the city answers
+ * nothing either. So they stay shapeless and the customer picks one from the
+ * list, which is honest. What *did* move is the circle that decides whether the
+ * city is served at all — see {@see ServiceAreaSeeder}, where New Mansoura's
+ * centre was sitting on دمياط الجديدة.
  */
 class GamasaZoneGeometrySeeder extends Seeder
 {

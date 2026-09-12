@@ -237,18 +237,71 @@ class FleetVisibilityTest extends TestCase
         $this->assertFalse($driver->refresh()->is_online);
     }
 
-    public function test_a_captain_assigned_to_another_zone_is_still_excluded(): void
+    /**
+     * 🔴 The reverse of what this file asserted until 2026-09-12, and the reason
+     * «الطلب ما بيروحش للكباتن، لازم أعمل إسناد من الأدمن».
+     *
+     * `dispatch.allow_neighbour_zones` has been seeded `true` since day one and
+     * was read by nothing: three queries hard-filtered on `service_zone_driver`,
+     * so a captain assigned to one of D-70's sixteen priced areas was invisible
+     * to an order in any of the other fifteen — at `ready`, at the two-minute
+     * rebroadcast, and when they came on shift. `ReassignDriverAction` checks no
+     * zone at all, which is why the office could hand over the very order the
+     * dispatcher had refused to offer.
+     */
+    public function test_a_captain_assigned_to_another_zone_is_still_offered_the_order(): void
     {
         $restaurant = $this->makeRestaurant('سندوتش عمر');
         $order = $this->makeOrder($restaurant);
+        $driver = $this->inAnotherZone('كابتن نطاق آخر');
 
-        $other = $this->city->serviceZones()->create([
-            'name_ar' => 'نطاق آخر', 'name_en' => 'Other', 'center_lat' => 31.39, 'center_lng' => 31.49,
-            'radius_km' => 3, 'delivery_fee' => 20, 'min_order_value' => 0, 'avg_delivery_minutes' => 30, 'is_active' => true,
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'result' => 'sent',
         ]);
+    }
 
-        $driver = $this->makeDriver('كابتن نطاق آخر');
-        $driver->assignedZones()->sync([$other->id]);
+    /** The same captain, on the path that runs every two minutes. */
+    public function test_the_rebroadcast_reaches_a_captain_from_another_zone(): void
+    {
+        $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $order = $this->makeOrder($restaurant);
+        $order->update(['status' => OrderStatus::WaitingForDriver]);
+        $driver = $this->inAnotherZone('كابتن نطاق آخر');
+
+        $this->assertSame(1, app(DispatchService::class)->rebroadcast($order->fresh()));
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'result' => 'sent',
+        ]);
+    }
+
+    /** And on the third: a captain who comes on shift is handed the backlog. */
+    public function test_the_backlog_reaches_a_captain_from_another_zone(): void
+    {
+        $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $order = $this->makeOrder($restaurant);
+        $order->update(['status' => OrderStatus::WaitingForDriver]);
+        $driver = $this->inAnotherZone('كابتن نطاق آخر');
+
+        $this->assertSame(1, app(DispatchService::class)->offerBacklogTo($driver->fresh()));
+    }
+
+    /** The operator can still put the gate back, with one row. */
+    public function test_the_zone_gate_returns_when_neighbour_zones_are_refused(): void
+    {
+        Setting::query()->updateOrCreate(
+            ['key' => 'dispatch.allow_neighbour_zones'],
+            ['value' => '0', 'group' => 'dispatch'],
+        );
+
+        $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $order = $this->makeOrder($restaurant);
+        $driver = $this->inAnotherZone('كابتن نطاق آخر');
 
         app(DispatchService::class)->dispatchRound($order->fresh(), 1);
 
@@ -256,5 +309,18 @@ class FleetVisibilityTest extends TestCase
             'order_id' => $order->id,
             'driver_id' => $driver->id,
         ]);
+    }
+
+    private function inAnotherZone(string $name): Driver
+    {
+        $other = $this->city->serviceZones()->create([
+            'name_ar' => 'نطاق آخر', 'name_en' => 'Other', 'center_lat' => 31.39, 'center_lng' => 31.49,
+            'radius_km' => 3, 'delivery_fee' => 20, 'min_order_value' => 0, 'avg_delivery_minutes' => 30, 'is_active' => true,
+        ]);
+
+        $driver = $this->makeDriver($name);
+        $driver->assignedZones()->sync([$other->id]);
+
+        return $driver;
     }
 }

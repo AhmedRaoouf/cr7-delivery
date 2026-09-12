@@ -32,6 +32,12 @@ class SettingsSeeder extends Seeder
             // «طلب لم نجد له كابتن» in the alert dock, «تواصل مع الدعم» to the place.
             'dispatch.escalate_after_seconds' => [120, 'dispatch'],
             'dispatch.max_rounds' => [3, 'dispatch'],
+            // Read at last. It was seeded `true` on every deployment and used by
+            // **nothing**: three queries in `DispatchService` hard-filtered on
+            // `service_zone_driver`, so a captain assigned to one of D-70's sixteen
+            // priced areas never heard about an order in any of the other fifteen —
+            // and the office had to hand it over by name. `true` makes a zone rank
+            // the ring rather than close it; `0` puts the old gate back.
             'dispatch.allow_neighbour_zones' => [true, 'dispatch'],
             'dispatch.mode_multi_restaurant' => ['driver_per_restaurant', 'dispatch'],
             'dispatch.multi_pickup_ready_window_seconds' => [600, 'dispatch'],

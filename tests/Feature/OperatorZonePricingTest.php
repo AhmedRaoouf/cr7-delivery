@@ -92,11 +92,15 @@ class OperatorZonePricingTest extends TestCase
 
     public function test_a_pin_in_new_mansoura_is_covered_by_the_city_and_priced_by_the_choice(): void
     {
-        // 13.3 km north of the city centre: outside every zone circle in the country —
-        // New Mansoura's own legacy circle is 12 km — and inside the city's 15 km. This
-        // is the exact gap that answered «خارج نطاق التوصيل» before the fallback, and
-        // «سكن 3» is squarely in it.
-        $response = $this->resolve(31.5636, 31.6553)->assertOk();
+        // ‪8.4‬ km south of the city centre: outside every zone circle in the country —
+        // New Mansoura's own coverage circle is ‪8‬ km — and inside the city's ‪9‬. This is
+        // the exact gap that answered «خارج نطاق التوصيل» before the fallback.
+        //
+        // The point moved on 2026-09-12 with the city. It used to be 31.5636, 31.6553,
+        // which is ‪13‬ km out to **sea** north of دمياط الجديدة, and it read as a
+        // reasonable test only because New Mansoura itself was seeded onto that city —
+        // see `ServiceAreaSeeder` and `CoverageCirclesTest`.
+        $response = $this->resolve(31.3750, 31.4600)->assertOk();
 
         $this->assertTrue($response->json('data.is_serviceable'));
         $this->assertNull($response->json('data.zone'));

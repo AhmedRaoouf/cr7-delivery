@@ -2,8 +2,11 @@
 
 namespace App\Support;
 
+use App\Actions\Admin\ReassignDriverAction;
+use App\Console\Commands\TickCommand;
 use App\Enums\OrderStatus;
 use App\Events\DriverOfferSent;
+use App\Http\Controllers\Api\AuthController;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
@@ -40,7 +43,12 @@ class DispatchService
             'dispatch.max_rounds',
             'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
             'dispatch.last_call_all_drivers', 'dispatch.offer_to_all_online',
+            'dispatch.allow_neighbour_zones',
         ])->pluck('value', 'key');
+
+        // 🔴 The zone was a **gate**, and `dispatch.allow_neighbour_zones` — seeded
+        // `true` since day one — was read by nothing. See {@see self::zoneRestricts()}.
+        $zoneRestricts = self::zoneRestricts($settings);
 
         $batchSize = (int) ($settings['dispatch.batch_size'] ?? 3);
         $baseRadius = (float) ($settings['dispatch.radius_km'] ?? 5);
@@ -116,9 +124,12 @@ class DispatchService
             // an empty `service_zone_driver` — and a bare `whereHas` then matched nobody.
             // Every round found an empty batch, every order fell through to
             // `waiting_for_driver`, and no captain was ever offered anything.
-            ->where(fn ($q) => $q
+            //
+            // With neighbour zones allowed this is not a filter at all — it ranks.
+            ->when($zoneRestricts, fn ($q) => $q->where(fn ($inner) => $inner
                 ->whereDoesntHave('assignedZones')
-                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id)))
+                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id))))
+            ->with('assignedZones:id')
             ->get()
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
@@ -128,9 +139,14 @@ class DispatchService
                 'distance_km' => $driver->hasFix()
                     ? Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude)
                     : null,
+                'in_zone' => self::coversZone($driver, $order),
             ])
             ->filter(fn ($c) => $broadcast || ($c['distance_km'] !== null && $c['distance_km'] <= $radius))
             ->sortBy([
+                // The captain whose zone this is hears first. It orders the ring and
+                // hides nobody — which is the difference between a preference and the
+                // gate this used to be.
+                fn ($a, $b) => ($b['in_zone'] ? 1 : 0) <=> ($a['in_zone'] ? 1 : 0),
                 fn ($a, $b) => ($a['distance_km'] ?? INF) <=> ($b['distance_km'] ?? INF),
                 fn ($a, $b) => $b['driver']->rating_avg <=> $a['driver']->rating_avg,
                 fn ($a, $b) => $b['driver']->completed_orders <=> $a['driver']->completed_orders,
@@ -473,7 +489,7 @@ class DispatchService
      * Every path into dispatch was **order-driven** — an order becomes `ready`
      * and asks who is around. Nothing was **captain-driven**, so a captain who
      * came online one minute after the single `ready` round was never asked
-     * about that order again until {@see \App\Console\Commands\TickCommand}'s
+     * about that order again until {@see TickCommand}'s
      * ‪120‬-second sweep came round. On this deployment that sweep has never run:
      * `storage/logs/cron.log` is ‪0‬ bytes and was last touched on 2026-09-05, so
      * hPanel's cron entry is not firing and the order machine has no clock.
@@ -511,8 +527,13 @@ class DispatchService
             ->whereNull('driver_id')
             ->where('created_at', '>=', now()->subHours(24))
             // A captain with no zone rows is unrestricted — the same rule the
-            // order-driven path uses, stated from the captain's side.
-            ->when($zoneIds !== [], fn ($q) => $q->whereIn('service_zone_id', $zoneIds))
+            // order-driven path uses, stated from the captain's side, and under the
+            // same switch: with neighbour zones allowed a free captain is handed the
+            // whole backlog, not the slice their `service_zone_driver` rows name.
+            ->when(
+                $zoneIds !== [] && self::zoneRestricts(),
+                fn ($q) => $q->whereIn('service_zone_id', $zoneIds),
+            )
             // Neither one they are already holding — two live offers for one
             // order is two «قبول» buttons and a race — nor one they have just
             // turned down, which this path would otherwise hand straight back
@@ -573,7 +594,7 @@ class DispatchService
      *
      * `drivers.is_available` and `drivers.active_order_id` are cleared on the
      * paths that finish an order properly, and on **no other path**. Signing out
-     * deliberately leaves them ({@see \App\Http\Controllers\Api\AuthController}),
+     * deliberately leaves them ({@see AuthController}),
      * an admin force-cancel clears them only through its own action, and nothing
      * ever swept the leftovers. Both {@see self::dispatchRound} and
      * {@see self::availableCandidates} require `active_order_id IS NULL`, so one
@@ -625,18 +646,25 @@ class DispatchService
             ->where('is_online', true)
             ->where('is_available', true)
             ->whereNull('active_order_id')
-            // A captain with no zone rows is unrestricted, not «matches no zone».
-            ->where(fn ($q) => $q
+            // A captain with no zone rows is unrestricted, not «matches no zone» — and
+            // with `dispatch.allow_neighbour_zones` on, which is the seeded default,
+            // a zone is not a filter here at all. «الناس كلها» was the ruling, and a
+            // rebroadcast that silently skipped the captains whose `service_zone_driver`
+            // rows named a different area was not «الناس كلها».
+            ->when(self::zoneRestricts(), fn ($q) => $q->where(fn ($inner) => $inner
                 ->whereDoesntHave('assignedZones')
-                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id)))
+                ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id))))
+            ->with('assignedZones:id')
             ->get()
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
                 'distance_km' => $driver->hasFix()
                     ? Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude)
                     : null,
+                'in_zone' => self::coversZone($driver, $order),
             ])
             ->sortBy([
+                fn ($a, $b) => ($b['in_zone'] ? 1 : 0) <=> ($a['in_zone'] ? 1 : 0),
                 fn ($a, $b) => ($a['distance_km'] ?? INF) <=> ($b['distance_km'] ?? INF),
                 fn ($a, $b) => $b['driver']->rating_avg <=> $a['driver']->rating_avg,
                 fn ($a, $b) => $b['driver']->completed_orders <=> $a['driver']->completed_orders,
@@ -691,6 +719,52 @@ class DispatchService
         $this->dispatchRound($order, $order->dispatch_round + 1, retry: true);
 
         return $order->driverAttempts()->count() > $before;
+    }
+
+    /**
+     * Is a captain's zone list a **gate** on what they may be offered?
+     *
+     * 🔴 It was, and `dispatch.allow_neighbour_zones` — seeded `true` on every
+     * deployment since day one — was read by **nothing**. Three queries carried
+     * the same hard `whereHas('assignedZones', …)` instead, so a captain whose
+     * `service_zone_driver` rows named جمصة was invisible to an order whose
+     * `service_zone_id` was any of D-70's fifteen other priced areas: not
+     * offered when the food was marked ready, not re-rung by the two-minute
+     * rebroadcast, and not handed the backlog on coming on shift. Only
+     * {@see ReassignDriverAction} ignored zones — which is
+     * exactly the shape the operator described on 2026-09-12: «لازم أعمل إسناد
+     * من الأدمن عشان يروح».
+     *
+     * The town has sixteen priced areas and one fleet. So the default answer is
+     * **no**: the zone orders the ring — the captain whose area this is hears
+     * first — and hides nobody. An operator who wants the old behaviour sets
+     * `dispatch.allow_neighbour_zones` to `0` and gets it back with one row.
+     *
+     * @param  Collection<string, mixed>|null  $settings  already-loaded rows, if the
+     *                                                    caller has them
+     */
+    private static function zoneRestricts(?Collection $settings = null): bool
+    {
+        $value = $settings !== null
+            ? ($settings['dispatch.allow_neighbour_zones'] ?? null)
+            : Setting::query()->where('key', 'dispatch.allow_neighbour_zones')->value('value');
+
+        // Absent means allowed: a deployment that predates the key must not be
+        // stricter than one that has it.
+        return $value !== null && ! filter_var($value, FILTER_VALIDATE_BOOL);
+    }
+
+    /** Whether this captain's own areas include the order's — a ranking input, not a gate. */
+    private static function coversZone(Driver $driver, Order $order): bool
+    {
+        $zoneIds = $driver->relationLoaded('assignedZones')
+            ? $driver->assignedZones->pluck('id')
+            : $driver->assignedZones()->pluck('service_zones.id');
+
+        // No zones at all is «anywhere», so it ranks with the ones that match
+        // rather than behind them.
+        return $zoneIds->isEmpty()
+            || $zoneIds->contains(fn ($id) => (int) $id === (int) $order->service_zone_id);
     }
 
     /**

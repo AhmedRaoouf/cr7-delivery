@@ -34,12 +34,28 @@ use Illuminate\Database\Seeder;
  * | مدينة الشيخ زايد، محافظة الجيزة | 30.045607, 30.978735 |
  * | مدينة 15 مايو، محافظة القاهرة | 29.826534, 31.364231 |
  *
- * **المنصورة الجديدة is the exception and is worth checking on the map.** Mapbox has no
- * feature for it under any Arabic or English spelling — forward search returns central
- * Mansoura 45 km inland, and reverse search on the coast returns `null`, which is what a
- * city still under construction looks like in a commercial geocoder. 31.4436, 31.6553 is
- * the coastal site between Gamasa and رأس البر. Correct it in `ADM-23` if it sits wrong;
- * the centre is editable there even though the polygon is not.
+ * 🔴 **المنصورة الجديدة was on دمياط الجديدة, and جمصة was in a field.** Corrected
+ * 2026-09-12 after the operator photographed the picker drawing its coverage circle over
+ * New Damietta while the pin on New Mansoura University answered «خارج نطاق التوصيل».
+ *
+ * | Place | Was | Is | Source |
+ * |---|---|---|---|
+ * | جمصة | 31.3833, 31.4833 | 31.4388, 31.5442 | OSM `place=city` «جمصة», Nominatim |
+ * | المنصورة الجديدة | 31.4436, 31.6553 | 31.4500, 31.4600 | see below |
+ *
+ * The old New Mansoura point is **New Damietta**: Nominatim answers 31.4365, 31.6781 for
+ * `place=city` «دمياط الجديدة», ‪2.2‬ km from it, and a ‪12‬ km circle around it covered that
+ * city and nothing of this one. New Mansoura is on the other side of Gamasa — **west**,
+ * not east. OpenStreetMap holds exactly one feature for it, `way/1305151351`
+ * «New Mansoura University - جامعة المنصورة الجديدة» at 31.4610, 31.4571; Overpass finds
+ * no `place`, `landuse` or boundary for the city itself, and Nominatim reverse on every
+ * point in it answers nothing at all. So the centre is set ‪1.3‬ km south-west of the one
+ * confirmed feature, which puts it ‪2.5‬ km inland of the coastline
+ * (`natural=coastline` crosses lat ‪31.4728‬ at this longitude) and ‪20.7‬ km from New
+ * Damietta — outside every circle here, which is the point.
+ *
+ * Correct it in `ADM-23` if a better source turns up; the centre is editable there even
+ * though the polygon is not.
  *
  * ## Circles, not polygons
  *
@@ -57,12 +73,18 @@ class ServiceAreaSeeder extends Seeder
         // on a **100.00** delivery fee against the beach zone's 15.00 — a dashboard typo
         // for the seeded 10.00, and the kind of number that only shows up in a customer's
         // basket.
-        $gamasa = City::query()->firstOrCreate(
+        // `updateOrCreate`, not `firstOrCreate`. The row already exists on every
+        // deployment, so `firstOrCreate` meant the centre below was documentation
+        // and not data — and the centre it documented was 31.3833, 31.4833, which is
+        // ‪8.6‬ km inland of the town in farmland. Everything reads this: the API's
+        // own serviceability fallback, `ADM-23`, and the distance a captain is
+        // ranked by when the restaurant has no fix.
+        $gamasa = City::query()->updateOrCreate(
             ['name_en' => 'Gamasa'],
             [
                 'name_ar' => 'جمصة',
-                'center_lat' => 31.3833,
-                'center_lng' => 31.4833,
+                'center_lat' => 31.4388,
+                'center_lng' => 31.5442,
                 'pricing_type' => CityPricingType::FixedZone,
                 'default_min_order' => 50.00,
                 'is_active' => true,
@@ -73,14 +95,20 @@ class ServiceAreaSeeder extends Seeder
         // Two zones, one price. The town and the resort strip are 8 km apart and the
         // seeded 3 km circles covered neither end of that, so an address on the مصيف
         // resolved to no zone at all.
-        $this->zone($gamasa, 'Gamasa Center', 'وسط جمصة', 31.3833, 31.4833, 5, 15.00, 30);
+        //
+        // «وسط جمصة» moved with the city, for the same reason: at 31.3833, 31.4833 its
+        // ‪5‬ km circle sat in fields and touched no address in the town it is named
+        // after. Both circles are ‪6‬ km, which reaches the western expansions and the
+        // villages and stops ‪6.7‬ km short of دمياط الجديدة — a city this platform does
+        // not serve and which the old New Mansoura circle covered in full.
+        $this->zone($gamasa, 'Gamasa Center', 'وسط جمصة', 31.4388, 31.5442, 6, 15.00, 30);
         $this->zone($gamasa, 'Gamasa Beach', 'الشاطئ', 31.4411, 31.5380, 6, 15.00, 30);
 
         $cities = [
             [
                 'name_en' => 'New Mansoura', 'name_ar' => 'المنصورة الجديدة',
-                'lat' => 31.4436, 'lng' => 31.6553, 'sort' => 2,
-                'radius' => 12, 'fee' => 30.00, 'minutes' => 40,
+                'lat' => 31.4500, 'lng' => 31.4600, 'sort' => 2,
+                'radius' => 8, 'fee' => 30.00, 'minutes' => 40,
                 'zone_en' => 'New Mansoura City', 'zone_ar' => 'المنصورة الجديدة',
             ],
             [

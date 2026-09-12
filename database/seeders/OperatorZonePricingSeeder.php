@@ -79,10 +79,19 @@ class OperatorZonePricingSeeder extends Seeder
         ['زاهية 4', 'Zahia 4', 150],
     ];
 
-    /** Coverage circles, km. Generous on purpose: this decides «نوصّل هنا؟», not the price. */
+    /**
+     * Coverage circles, km. Generous on purpose: this decides «نوصّل هنا؟», not the price.
+     *
+     * Generous is not unbounded. At ‪15‬ km Gamasa's circle reached دمياط الجديدة — ‪12.7‬ km
+     * east of the town and a city this platform does not serve — so `POST /geo/resolve`
+     * called a pin there serviceable while the app, which resolves against the zone
+     * circles alone, called the same pin «خارج نطاق التوصيل». One point, two answers.
+     * ‪10‬ km covers the western expansions, the universities and the villages and stops
+     * short of Damietta; see {@see ServiceAreaSeeder} for where the two centres moved to.
+     */
     private const CITY_RADIUS_KM = [
-        'Gamasa' => 15,
-        'New Mansoura' => 15,
+        'Gamasa' => 10,
+        'New Mansoura' => 9,
         'Sheikh Zayed City' => 12,
         '15th of May City' => 10,
     ];

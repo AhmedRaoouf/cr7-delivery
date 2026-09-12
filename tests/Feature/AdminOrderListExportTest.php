@@ -194,7 +194,16 @@ class AdminOrderListExportTest extends TestCase
         // «O521048» contains «104» — which made this test fail about one full run in
         // two, for a reason that had nothing to do with what it is testing.
         $theirs = $this->makeOrder($place, ['restaurant_order_ref' => '104', 'order_number' => 'O700001']);
-        $this->makeOrder($place, ['restaurant_order_ref' => '221', 'order_number' => 'O700002']);
+        $other = $this->makeOrder($place, ['restaurant_order_ref' => '221', 'order_number' => 'O700002']);
+
+        // And the same trap one table over: the haystack includes the customer's
+        // phone, which `makeCustomer` builds as '010'.random_int(). That puts a
+        // random digit third, so «010» + «4…» IS «104» and roughly one generated
+        // phone in ten matched this search on its own. Two orders, and the test
+        // failed about one run in three — as a wrong `id` list, which reads like
+        // a broken filter rather than a colliding fixture.
+        $theirs->user->update(['phone' => '01111100001']);
+        $other->user->update(['phone' => '01111100002']);
 
         $rows = $this->getJson('/api/v1/admin/orders')->assertOk()->json('data');
         $this->assertContains('104', array_column($rows, 'restaurant_order_ref'));

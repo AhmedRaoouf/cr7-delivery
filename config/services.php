@@ -58,12 +58,38 @@ return [
         'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 
+    /*
+     * SMS Misr — the OTP gateway. See App\Services\Otp\SmsMisrChannel for the
+     * two traps: it answers HTTP 200 on failure, and `language` is an encoding
+     * rather than a locale.
+     */
     'sms_misr' => [
         'url' => env('SMS_MISR_URL', 'https://smsmisr.com/api/SMS/'),
-        'environment' => env('SMS_MISR_ENVIRONMENT', '2'), // 1 = live, 2 = test — confirm with SMS Misr's dashboard
+        'otp_url' => env('SMS_MISR_OTP_URL', 'https://smsmisr.com/api/OTP/'),
+
+        // 'sms' posts our own text to /api/SMS/. 'otp' posts an SMS-Misr-hosted
+        // template id to /api/OTP/ and needs `template` below. Ask SMS Misr which
+        // one the account is provisioned for — an account set up for templated
+        // OTP traffic refuses free-text sends.
+        'mode' => env('SMS_MISR_MODE', 'sms'),
+        'template' => env('SMS_MISR_TEMPLATE'),
+
+        // 1 = live (real message, real points), 2 = test (validated, not delivered,
+        // paid from the separate test balance). Stays 2 until a Sender ID is approved.
+        'environment' => env('SMS_MISR_ENVIRONMENT', '2'),
+
+        // NOT a locale — an encoding. 1 = English/GSM-7, which cannot carry an
+        // Arabic letter; 2 = Arabic; 3 = Unicode. Try 3 if the Arabic arrives as
+        // question marks, because the copy below mixes Arabic with a Latin brand.
+        'language' => env('SMS_MISR_LANGUAGE', '2'),
+
         'username' => env('SMS_MISR_USERNAME'),
         'password' => env('SMS_MISR_PASSWORD'),
         'sender' => env('SMS_MISR_SENDER'),
+
+        // `:code` is the only placeholder. Arabic bills at 70 characters per
+        // segment against English's 160, so keep it to one segment.
+        'message' => env('SMS_MISR_MESSAGE', 'كود التحقق الخاص بك في CR7 Delivery هو: :code'),
     ],
 
 ];

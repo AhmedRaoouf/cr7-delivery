@@ -35,5 +35,26 @@ if (class_exists(Telescope::class) && config('telescope.enabled') === true) {
  *
  * `withoutOverlapping` is belt to the command's own cache lock's braces: a pass
  * that runs long must never have a second one dispatching the same order.
+ *
+ * 🔴 **The argument is not optional, and leaving it off stopped the order machine
+ * for a week.** `withoutOverlapping()` defaults to **‪1440‬ minutes** — a full day.
+ * It is a *stale-lock expiry*, not a run length: the lock is released in a
+ * `then()` callback, so a pass that is killed rather than finished — a deploy, a
+ * dropped SSH session, an OOM — never releases it, and every invocation for the
+ * next twenty-four hours is silently filtered out.
+ *
+ * There is no error when that happens. `schedule:run` prints «No scheduled
+ * commands are ready to run», `schedule:list` still shows the entry as due, the
+ * crontab is still firing, and `storage/logs/cron.log` stops growing. On
+ * 2026-09-12 the lock was found held until ‪13:09‬ that day, acquired ‪24‬ hours
+ * earlier; with it held, the prep timer, the ‪120‬-second rebroadcast, the
+ * unclaimed-order escalation, the accept-window expiry and scheduled-order
+ * release were all dead, and the diagnosis had been «the hPanel cron entry is
+ * missing» — it was there the whole time.
+ *
+ * ‪2‬ minutes is the right number because it is **just above the braces**:
+ * `TickCommand::LOCK_SECONDS` is ‪110‬, and that lock is a real `Cache::lock`
+ * with a TTL, so it heals itself on the next minute regardless. The belt must
+ * not outlast it by more than a tick, or the belt becomes the failure mode.
  */
-Schedule::command('cr7:tick')->everyMinute()->withoutOverlapping();
+Schedule::command('cr7:tick')->everyMinute()->withoutOverlapping(2);

@@ -67,6 +67,11 @@ return [
         'url' => env('SMS_MISR_URL', 'https://smsmisr.com/api/SMS/'),
         'otp_url' => env('SMS_MISR_OTP_URL', 'https://smsmisr.com/api/OTP/'),
 
+        // Read-only, costs nothing and needs no approved Sender ID, which makes
+        // it the only way to prove a username and password before there is
+        // anything to send with. `cr7:sms-doctor` calls it.
+        'balance_url' => env('SMS_MISR_BALANCE_URL', 'https://smsmisr.com/api/Balance/'),
+
         // 'sms' posts our own text to /api/SMS/. 'otp' posts an SMS-Misr-hosted
         // template id to /api/OTP/ and needs `template` below. Ask SMS Misr which
         // one the account is provisioned for — an account set up for templated

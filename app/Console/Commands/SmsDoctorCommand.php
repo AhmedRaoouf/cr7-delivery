@@ -7,6 +7,7 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\Otp;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -36,6 +37,8 @@ class SmsDoctorCommand extends Command
 
         $ok = $this->verdict();
 
+        $this->balance();
+
         $phone = $this->argument('phone');
 
         if ($phone === null) {
@@ -46,6 +49,50 @@ class SmsDoctorCommand extends Command
         }
 
         return $this->send((string) $phone);
+    }
+
+    /**
+     * `GET /api/Balance/` is the only call that proves a username and password
+     * without an approved Sender ID and without spending anything. With `Active
+     * Sender IDs: 0` on the account it is the whole pre-flight: credentials that
+     * fail here will fail every send, and there is otherwise no way to tell that
+     * apart from a Sender ID that has not been approved yet.
+     */
+    private function balance(): void
+    {
+        $sms = config('services.sms_misr');
+
+        if (blank($sms['username'] ?? null) || blank($sms['password'] ?? null)) {
+            return;
+        }
+
+        $this->newLine();
+        $this->info('balance');
+
+        try {
+            $response = Http::timeout(20)->get((string) $sms['balance_url'], [
+                'environment' => (string) $sms['environment'],
+                'username' => (string) $sms['username'],
+                'password' => (string) $sms['password'],
+            ]);
+        } catch (\Throwable $e) {
+            $this->error('could not reach SMS Misr: '.$e->getMessage());
+
+            return;
+        }
+
+        $body = is_array($response->json()) ? $response->json() : [];
+        $code = (string) ($body['code'] ?? '');
+
+        // 1903 here means the credentials are wrong, and it means the same thing
+        // on every send — worth naming rather than printing a bare number.
+        if ($code === '1903') {
+            $this->error('✗ 1903 — SMS Misr rejected the username or password');
+
+            return;
+        }
+
+        $this->line($response->body());
     }
 
     private function settings(): void

@@ -86,14 +86,36 @@ class GamasaZoneGeometrySeeder extends Seeder
         'Zayan' => [31.4035, 31.5015, 1.2,
             'Four Wikimapia features: «قرية زيان», «مدينة زيان», the primary school and the cemetery. Press places it in مركز بلقاس on the Gamasa-Mansoura road, 517 m from the OSM trunk route.'],
 
-        // «بنزينة توتال» is deliberately absent. There is no Total station in
-        // Gamasa in any source: the nearest is Ras El Bar, ‪27.8‬ km away, and
-        // none of the ‪1 177‬ Wikimapia features around the town carries the
-        // name. Three stations do exist here — Co-op (31.4224, 31.5451), Misr
-        // (31.4344, 31.5122) and one unnamed (31.42794, 31.54706) — and one of
-        // them is probably what people call «توتال», but *probably* is how the
-        // wrong pin gets written. It stays a name the customer picks, and it
-        // is a question for the operator.
+        // Found 2026-09-12, and it was in none of the sources this seeder
+        // originally searched because **it is not in OpenStreetMap at all** —
+        // an Overpass `amenity=fuel` sweep of the whole bbox returns exactly
+        // two nodes, «Co-op» and «Misr», and neither is this. Nominatim,
+        // Photon and Wikimapia have nothing here either.
+        //
+        // Waze does: its venue search answers «محطة وقود توتال» at
+        // 31.43624765, 31.56695765 — the only named station its local editors
+        // know anywhere near Gamasa. Satellite imagery at that point shows a
+        // fuel station and not an approximation of one: a walled paved
+        // forecourt, a long rectangular pump canopy, a service building, two
+        // driveways onto the trunk road, and the station mosque ‪80‬ m
+        // north-east. Nominatim reverse on the point answers «الطريق الساحلى
+        // الدولى, جمصة, الدقهلية», so it is administratively in Gamasa rather
+        // than in Damietta — which matters, because it sits ‪2.9‬ km **east**
+        // of the town, out among the orchards.
+        //
+        // What is still unverified is the brand. TotalEnergies Marketing Egypt
+        // runs ~‪245‬ stations, and its nearest confirmed one is Ras El Bar,
+        // ‪25.8‬ km away (OSM `brand=Total`); no official directory places one
+        // in Gamasa. So «توتال» here is what the town calls it, which is the
+        // only thing a delivery area needs to be right about — the operator
+        // typed that name into the price list, and this is the place the name
+        // points at.
+        //
+        // The earlier note in this file listed a third station at 31.42794,
+        // 31.54706. **There is nothing there** — no OSM element by two queries,
+        // and the imagery shows the town gate, a toll building and chalets.
+        'Total Station' => [31.436248, 31.566958, 0.6,
+            'Waze venue «محطة وقود توتال» 31.43624765/31.56695765; ESRI World Imagery shows the forecourt and pump canopy at the same point; Nominatim reverse puts it on الطريق الساحلى الدولى in جمصة. Radius ‪0.6‬ km — the nearest area edge, «داخلي جمصة», is ‪0.65‬ km further out.'],
     ];
 
     public function run(): void

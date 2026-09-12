@@ -135,6 +135,65 @@ class MenuSheetUploadTest extends TestCase
         $this->assertSame([], $restaurant->fresh()->menu_sheets);
     }
 
+    public function test_a_second_upload_adds_pages_rather_than_replacing_the_first(): void
+    {
+        $restaurant = $this->makeRestaurant('صواني الدمياطي');
+        $restaurant->update(['menu_sheets' => ['catalog/menus/page-1.jpg']]);
+
+        // A menu is photographed a sheet at a time. The first version of this
+        // helper wrote the upload over the column, so the operator's second
+        // visit silently deleted their first visit's pages.
+        $this->asAdmin()
+            ->patchJson("/api/v1/admin/restaurants/{$restaurant->id}", [
+                '_method' => 'PATCH',
+                'menu_sheets' => [UploadedFile::fake()->image('page-2.jpg', 1200, 1700)],
+            ])
+            ->assertOk();
+
+        $sheets = $restaurant->fresh()->menu_sheets;
+
+        $this->assertCount(2, $sheets);
+        $this->assertSame('catalog/menus/page-1.jpg', $sheets[0]);
+    }
+
+    public function test_a_page_the_form_stopped_showing_is_dropped_and_deleted(): void
+    {
+        $restaurant = $this->makeRestaurant('بوكس ع السريع');
+
+        Storage::disk('public')->put('catalog/menus/keep.jpg', 'x');
+        Storage::disk('public')->put('catalog/menus/drop.jpg', 'x');
+
+        // The column holds what `FileUploader::storePublic()` returned, which is
+        // a **URL** — and `deletePublic()` refuses anything that is not one, so
+        // a fixture written as a bare path proves nothing about the delete.
+        $keep = Storage::disk('public')->url('catalog/menus/keep.jpg');
+        $drop = Storage::disk('public')->url('catalog/menus/drop.jpg');
+        $restaurant->update(['menu_sheets' => [$keep, $drop]]);
+
+        $this->asAdmin()
+            ->patchJson("/api/v1/admin/restaurants/{$restaurant->id}", [
+                '_method' => 'PATCH',
+                'keep_menu_sheets' => [$keep],
+            ])
+            ->assertOk();
+
+        $this->assertSame([$keep], $restaurant->fresh()->menu_sheets);
+        Storage::disk('public')->assertExists('catalog/menus/keep.jpg');
+        Storage::disk('public')->assertMissing('catalog/menus/drop.jpg');
+    }
+
+    public function test_an_edit_that_never_mentions_the_sheets_leaves_them_alone(): void
+    {
+        $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $restaurant->update(['menu_sheets' => ['catalog/menus/page-1.jpg']]);
+
+        $this->asAdmin()
+            ->patchJson("/api/v1/admin/restaurants/{$restaurant->id}", ['name_ar' => 'سندوتش عمر'])
+            ->assertOk();
+
+        $this->assertSame(['catalog/menus/page-1.jpg'], $restaurant->fresh()->menu_sheets);
+    }
+
     public function test_a_file_that_is_neither_an_image_nor_a_pdf_is_refused_by_name(): void
     {
         $restaurant = $this->makeRestaurant('الركن العربي');

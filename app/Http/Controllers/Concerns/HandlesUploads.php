@@ -95,6 +95,17 @@ trait HandlesUploads
      * in the upload, which is the only ordering a person who dragged in
      * «menu-front.jpg, menu.pdf, menu-back.jpg» would expect.
      *
+     * **An upload adds; it does not replace.** Unlike every other helper here,
+     * this one is a gallery an operator builds over time — a menu is
+     * photographed a sheet at a time, and a second visit that silently deleted
+     * the first visit's pages would be the same defect `remove_logo` was added
+     * to fix. What survives is named explicitly by `keep_<field>[]`, a list of
+     * the already-stored URLs the form still shows; anything stored and not in
+     * that list is deleted from disk. Omit the list entirely and everything is
+     * kept, so a client that knows nothing about it can still append.
+     *
+     * `remove_<field>` still empties the gallery outright and wins over both.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -105,10 +116,38 @@ trait HandlesUploads
         string $folder,
         ?Model $existing = null,
     ): array {
-        unset($data['remove_'.$field]);
+        unset($data['remove_'.$field], $data['keep_'.$field]);
+
+        $stored = array_values(array_filter(
+            (array) ($existing?->getAttribute($field) ?? []),
+            is_string(...),
+        ));
+
+        $removing = $this->wantsRemoval($request, $field);
+        $names = $request->has('keep_'.$field);
+
+        // Nothing said about this field at all — leave the column alone. Writing
+        // `$data[$field] = $stored` instead would be harmless today and a data
+        // loss the day a caller passes no `$existing`.
+        if (! $request->hasFile($field) && ! $names && ! $removing) {
+            return $data;
+        }
+
+        $kept = match (true) {
+            $removing => [],
+            $names => array_values(array_intersect($stored, array_map(
+                strval(...),
+                array_filter((array) $request->input('keep_'.$field), is_scalar(...)),
+            ))),
+            default => $stored,
+        };
+
+        foreach (array_diff($stored, $kept) as $dropped) {
+            FileUploader::deletePublic($dropped);
+        }
 
         if ($request->hasFile($field)) {
-            $urls = [];
+            $urls = $kept;
 
             foreach ($request->file($field) as $file) {
                 $isPdf = strtolower((string) $file->getClientOriginalExtension()) === 'pdf'
@@ -136,12 +175,7 @@ trait HandlesUploads
             return $data;
         }
 
-        if ($this->wantsRemoval($request, $field)) {
-            foreach ((array) ($existing?->getAttribute($field) ?? []) as $url) {
-                FileUploader::deletePublic(is_string($url) ? $url : null);
-            }
-            $data[$field] = [];
-        }
+        $data[$field] = $kept;
 
         return $data;
     }

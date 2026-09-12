@@ -75,6 +75,11 @@ class StoreRestaurantRequest extends FormRequest
             'menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
             'menu_sheets.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'remove_menu_sheets' => ['nullable', 'boolean'],
+            // Which already-stored pages the form still shows. An upload adds to
+            // the gallery rather than replacing it, so removing one page has to
+            // be said out loud — see `HandlesUploads::withPublicSheets()`.
+            'keep_menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'keep_menu_sheets.*' => ['string', 'max:2048'],
         ];
     }
 }

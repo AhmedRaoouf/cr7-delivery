@@ -101,16 +101,44 @@ class GamasaAreaSuggestionTest extends TestCase
         $this->assertNull(ZoneLocator::suggestFor(31.4800, 31.5400));
     }
 
-    public function test_the_area_nobody_could_place_is_left_unplaced(): void
+    public function test_the_sixteenth_area_is_on_the_map_now(): void
     {
-        // There is no Total station in Gamasa in any source — the nearest is Ras
-        // El Bar, ‪27.8‬ km away — so «بنزينة توتال» has no centre and no radius
-        // and is never suggested. It stays on the list for the customer who
-        // knows what the name means locally. Guessing it is how the wrong pin
-        // gets written, which is the whole defect this file exists for.
+        // «بنزينة توتال» was the one area left unplaced on 2026-09-12, because
+        // it is in **no** map: Overpass finds two fuel stations in the whole
+        // Gamasa bbox and neither is this, and Nominatim, Photon and Wikimapia
+        // have nothing at the point. Waze's local editors name it, satellite
+        // imagery shows the forecourt and canopy, and Nominatim's reverse
+        // lookup puts the coordinates in جمصة rather than in Damietta.
+        //
+        // It sits ‪2.9‬ km east of town on the coastal road, so the radius is
+        // tight: the nearest area's edge, «داخلي جمصة», is ‪0.65‬ km beyond it,
+        // and an over-wide circle here would swallow a neighbour rather than
+        // merely blur its own answer.
         $total = ZoneLocator::allSelectable()->firstWhere('name_en', 'Total Station');
 
-        $this->assertNotNull($total, 'it must still be selectable — only unplaced');
-        $this->assertNull($total->radius_km);
+        $this->assertNotNull($total);
+        $this->assertEqualsWithDelta(31.436248, (float) $total->center_lat, 0.000001);
+        $this->assertEqualsWithDelta(31.566958, (float) $total->center_lng, 0.000001);
+        $this->assertEqualsWithDelta(0.6, (float) $total->radius_km, 0.001);
+    }
+
+    public function test_a_pin_at_the_petrol_station_is_offered_it(): void
+    {
+        $suggested = ZoneLocator::suggestFor(31.436248, 31.566958);
+
+        $this->assertNotNull($suggested);
+        $this->assertStringContainsString('توتال', (string) $suggested->name_ar);
+    }
+
+    public function test_the_petrol_station_does_not_reach_into_the_town(): void
+    {
+        // The kerb outside «داخلي جمصة»'s own centre. A radius chosen to be
+        // generous rather than to be right is how one area starts answering for
+        // another — «عمارات مبارك» at ‪600‬ m swallowed «جمصة البلد»'s centre
+        // once already, and the rule that came out of it holds here too.
+        $suggested = ZoneLocator::suggestFor(31.4375, 31.5433);
+
+        $this->assertNotNull($suggested);
+        $this->assertStringNotContainsString('توتال', (string) $suggested->name_ar);
     }
 }

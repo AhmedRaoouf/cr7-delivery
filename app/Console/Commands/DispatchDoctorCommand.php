@@ -67,7 +67,16 @@ class DispatchDoctorCommand extends Command
             $this->line(sprintf('  %-42s %s', $key, $settings[$key] ?? '(not set)'));
         }
 
-        $attempts = $order->driverAttempts()->pluck('result', 'driver_id');
+        // `->value`, because `result` is an `OrderDriverAttemptResult` and a table
+        // cell has to be a string. Cast where it is read, not in the model: the
+        // enum is what every other caller wants.
+        $attempts = $order->driverAttempts()
+            ->get(['driver_id', 'result'])
+            ->mapWithKeys(fn ($attempt) => [
+                $attempt->driver_id => $attempt->result instanceof \BackedEnum
+                    ? $attempt->result->value
+                    : (string) $attempt->result,
+            ]);
         $rows = [];
 
         foreach (Driver::query()->with(['user:id,name', 'assignedZones:id'])->get() as $driver) {

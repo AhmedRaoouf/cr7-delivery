@@ -28,7 +28,9 @@ class CustomerRegistrationTest extends TestCase
         parent::setUp();
         // The operator's test code (D-106), so the test types what a tester types.
         $this->otpTestMode('123456');
-        $this->withHeader('X-App', 'app');
+        // Symfony's test request says `Accept-Language: en-us` unless told otherwise,
+        // and the sentences asserted below have English entries in `lang/en.json`.
+        $this->withHeaders(['X-App' => 'app', 'Accept-Language' => 'ar']);
     }
 
     private function verifyForRegistration(string $phone = '01011122233'): string

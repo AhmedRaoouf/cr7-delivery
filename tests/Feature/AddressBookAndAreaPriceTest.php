@@ -60,7 +60,7 @@ class AddressBookAndAreaPriceTest extends TestCase
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors([
-            'title', 'street', 'zone_id', 'latitude', 'longitude', 'contact_phone',
+            'title', 'zone_id', 'latitude', 'longitude', 'contact_phone',
         ]);
 
         // `city_id` is deliberately **not** on that list any more. The app has no
@@ -69,7 +69,11 @@ class AddressBookAndAreaPriceTest extends TestCase
         // always have done, since every area belongs to exactly one city.
         // Demanding it back would be asking the customer to fix a field no screen
         // shows them.
-        $response->assertJsonMissingValidationErrors(['city_id']);
+        //
+        // Nor is `street`, since D-111: an address may be saved without one (the
+        // first-launch address usually has none) and checkout names it instead —
+        // `AddressCompletenessCheckoutTest`.
+        $response->assertJsonMissingValidationErrors(['city_id', 'street']);
 
         $errors = $response->json('errors');
 
@@ -77,7 +81,6 @@ class AddressBookAndAreaPriceTest extends TestCase
         // required.» is what the customer used to be shown, in a grey toast,
         // with nothing marked on the form.
         $this->assertSame('اختر المنطقة — سعر التوصيل يتحدد على أساسها.', $errors['zone_id'][0]);
-        $this->assertSame('اكتب اسم الشارع.', $errors['street'][0]);
         $this->assertSame('اكتب اسمًا لهذا العنوان.', $errors['title'][0]);
         $this->assertStringContainsString('رقم هاتف مصري صحيح', $errors['contact_phone'][0]);
         $this->assertSame('حدد موقع العنوان على الخريطة.', $errors['latitude'][0]);
@@ -85,6 +88,10 @@ class AddressBookAndAreaPriceTest extends TestCase
 
     public function test_a_blank_phone_is_no_phone_and_a_pasted_one_is_normalised(): void
     {
+        // The normalisation is the point here, not D-112's proof by SMS — which has its
+        // own test, `AddressPhoneVerificationTest`.
+        Settings::set('addresses.alternate_phone_requires_otp', false, 'addresses');
+
         $this->postJson('/api/v1/addresses', $this->payload(['contact_phone' => '   ']))
             ->assertCreated();
 

@@ -81,6 +81,15 @@ class User extends Authenticatable
         return $this->hasMany(UserAddress::class);
     }
 
+    /**
+     * D-112 — the numbers this account has proven it holds, by SMS, to put on an address.
+     * A number once verified is the account's to reuse.
+     */
+    public function verifiedPhones(): HasMany
+    {
+        return $this->hasMany(UserVerifiedPhone::class);
+    }
+
     public function deviceTokens(): HasMany
     {
         return $this->hasMany(DeviceToken::class);

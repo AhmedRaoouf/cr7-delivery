@@ -95,6 +95,7 @@ class CheckoutPricer
         $promo = null;
         $discountAmount = 0.0;
         $promoModel = null;
+        $promoFreeDelivery = false;
 
         if ($promoCode) {
             [$promoModel, $promoValid, $promoReason] = $this->resolvePromo($promoCode, $user, $address, $subtotal, $byRestaurant->keys()->all());
@@ -102,6 +103,7 @@ class CheckoutPricer
             if ($promoModel && $promoValid) {
                 if ($promoModel->type->value === 'free_delivery') {
                     $deliveryFee = 0.0;
+                    $promoFreeDelivery = true;
                 } else {
                     $discountAmount = $promoModel->type->value === 'percent'
                         ? round($subtotal * ((float) $promoModel->value / 100), 2)
@@ -157,6 +159,21 @@ class CheckoutPricer
             $blockers[] = ['code' => 'cart_empty', 'message' => 'السلة فارغة'];
         }
 
+        // D-111 — an address may be saved incomplete (the first-launch address usually
+        // has no street) and may not be ordered to. Said here, with the missing fields
+        // named, so the customer is told what to add before the order is taken rather
+        // than the captain finding out at the door.
+        $missing = AddressCompleteness::missing($address);
+
+        if ($missing !== []) {
+            $blockers[] = [
+                'code' => 'address_incomplete',
+                'message' => AddressCompleteness::sentence($missing),
+                'address_id' => $address->id,
+                'missing_fields' => $missing,
+            ];
+        }
+
         // D-109 — a method the operator switched off is refused by name. The request
         // rules still accept all three values: the app that sent a stale one is told
         // *why*, in the customer's words, instead of being told the field is invalid.
@@ -194,6 +211,16 @@ class CheckoutPricer
             'delivery_pricing_rule_id' => $pricingRule?->id,
             'free_delivery_applied' => $freeDeliveryApplied,
             'first_order_free_applied' => $firstOrderFree,
+            // D-105 — why the fee is zero, so a zero never reads as a defect: the
+            // account's first order, the area's threshold, or a free-delivery code.
+            // The first order wins when several are true — it is the one the
+            // captain's card and the customer's summary name.
+            'free_delivery_reason' => match (true) {
+                $firstOrderFree => 'first_order',
+                $freeDeliveryApplied => 'threshold',
+                $promoFreeDelivery => 'promo',
+                default => null,
+            },
             'subtotal' => $subtotal,
             'discount_amount' => $discountAmount,
             'promo' => $promo,

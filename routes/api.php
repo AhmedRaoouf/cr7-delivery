@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
+use App\Http\Controllers\Api\Customer\AddressPhoneController;
 use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\CheckoutController;
 use App\Http\Controllers\Api\Customer\ComplaintController as CustomerComplaintController;
@@ -191,6 +192,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'type:customer'])->group(function () {
         Route::get('/addresses', [AddressController::class, 'index']);
         Route::post('/addresses', [AddressController::class, 'store']);
+        // D-112 — proving a second number for an address. Declared before the
+        // `{address}` routes; they could not match `phone` anyway (ids are numeric).
+        Route::post('/addresses/phone/send-code', [AddressPhoneController::class, 'sendCode'])->middleware('throttle:otp-send');
+        Route::post('/addresses/phone/verify', [AddressPhoneController::class, 'verify']);
         Route::patch('/addresses/{address}', [AddressController::class, 'update']);
         Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
         Route::post('/addresses/{address}/default', [AddressController::class, 'makeDefault']);

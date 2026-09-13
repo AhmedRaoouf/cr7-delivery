@@ -30,7 +30,8 @@ class UpdateAddressRequest extends FormRequest
             // the app has no city step any more (operator ruling 2026-09-12).
             'city_id' => ['sometimes', 'required', 'exists:cities,id'],
             'zone_id' => ['sometimes', 'required', 'exists:service_zones,id'],
-            'street' => ['sometimes', 'required', 'string', 'max:255'],
+            // D-111 — may be cleared; completeness is checkout's question, not the form's.
+            'street' => ['sometimes', 'nullable', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:255'],
             'apartment' => ['nullable', 'string', 'max:255'],

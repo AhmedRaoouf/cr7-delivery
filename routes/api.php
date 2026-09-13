@@ -161,7 +161,8 @@ Route::prefix('v1')->group(function () {
          */
 
         // driver / restaurant / admin — Admin-created accounts, **phone** + password
-        // (FR-AUTH-04). X-App decides the expected users.type (doc 12 §1.1).
+        // (FR-AUTH-04), or an admin's email (D-107). X-App decides the expected
+        // users.type (doc 12 §1.1).
         Route::post('/login', [PasswordAuthController::class, 'login']);
 
         Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
@@ -172,6 +173,8 @@ Route::prefix('v1')->group(function () {
             Route::patch('/me', [AuthController::class, 'updateMe']);
             Route::get('/me/notification-settings', [AuthController::class, 'notificationSettings']);
             Route::patch('/me/notification-settings', [AuthController::class, 'updateNotificationSettings']);
+            // D-107 — the SMS code an admin's password change needs. Real SMS, always.
+            Route::post('/password/change/send-code', [AuthController::class, 'sendPasswordChangeCode'])->middleware('throttle:otp-send');
             Route::post('/password/change', [AuthController::class, 'changePassword']);
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);

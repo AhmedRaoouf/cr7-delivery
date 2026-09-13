@@ -57,13 +57,34 @@ final class PhoneNumber
     }
 
     /**
-     * Operator ruling 2026-09-11: «شيل تسجيل الدخول بالايميل». A `login` is a phone and
-     * nothing else, so this only normalises — an email arrives here as its digits, which
-     * is nothing, and `LoginRequest` refuses it before any lookup runs.
+     * A `login` is a phone — or, since D-107, an admin's email.
+     *
+     * Operator ruling 2026-09-11 removed the email sign-in for everybody; doc 62 brought it
+     * back for the one account type whose operator asked for it: «هو المفروض الادمن اصلا
+     * بيبقا بايميل وباسوورد». An email is trimmed and lower-cased, so ` Admin@CR7.com ` and
+     * `admin@cr7.com` are one login; everything else is normalised as a phone. Who may be
+     * reached by an email is `User::scopeWhereLogin`'s decision, not this one's.
      */
     public static function normaliseLogin(string $login): string
     {
-        return self::normalise($login);
+        return self::isEmail($login) ? mb_strtolower(trim($login)) : self::normalise($login);
+    }
+
+    /**
+     * D-107 — «أرسلنا الرمز إلى ‪010•••••99‬». Enough for an admin to recognise their own
+     * phone after signing in with an email; not enough for anyone else to dial it. The
+     * first three digits name the network, the last two are what a person remembers, and
+     * the run between them is always five dots, so the mask says nothing about length.
+     */
+    public static function mask(string $phone): string
+    {
+        $digits = self::normalise($phone);
+
+        if (strlen($digits) <= 5) {
+            return '•••••';
+        }
+
+        return substr($digits, 0, 3).'•••••'.substr($digits, -2);
     }
 
     /** True when the normalised form is a real Egyptian mobile. */

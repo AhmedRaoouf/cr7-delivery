@@ -64,11 +64,12 @@ class LoginPhoneNormalisationTest extends TestCase
     }
 
     /**
-     * D-78, operator 2026-09-11: «شيل تسجيل الدخول بالايميل». An email is refused by the
-     * request, with the field named — not by the lookup as «بيانات الدخول غير صحيحة»,
-     * which reads like a wrong password and sends the owner looking for the wrong thing.
+     * D-78, operator 2026-09-11: «شيل تسجيل الدخول بالايميل» — and D-107 brought the email
+     * back for admins only. A place's email is still no way into the place's dashboard:
+     * it is refused like a wrong password, because the lookup reaches admins and nobody
+     * else (`AdminEmailSignInTest` has the admin's half).
      */
-    public function test_an_email_is_no_longer_a_login(): void
+    public function test_an_email_is_no_login_for_a_place(): void
     {
         User::factory()->create([
             'email' => 'owner@cr7-delivery.com',
@@ -81,6 +82,15 @@ class LoginPhoneNormalisationTest extends TestCase
         $this->withHeaders(['X-App' => 'restaurant'])
             ->postJson('/api/v1/auth/login', [
                 'login' => ' owner@cr7-delivery.com ',
+                'password' => 'Cr7Delivery#2026',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'invalid_credentials');
+
+        // Neither a phone nor an email is still refused by the field, with the field named.
+        $this->withHeaders(['X-App' => 'restaurant', 'Accept-Language' => 'ar'])
+            ->postJson('/api/v1/auth/login', [
+                'login' => '12-ab',
                 'password' => 'Cr7Delivery#2026',
             ])
             ->assertStatus(422)

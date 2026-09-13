@@ -18,10 +18,19 @@ use Illuminate\Support\Facades\Hash;
  *
  * It prints the new password. That is the point of it, so run it where the output is not
  * being recorded, and never paste the result into a chat or a ticket.
+ *
+ * D-107 — it is also the admin's door while the SMS gateway is down. An admin changes a
+ * password only with an SMS code, the forced first change included, so a reset that sets
+ * `must_change_password` would drop the admin on a screen they cannot finish.
+ * `--no-change-required` leaves the flag off; the admin changes the password by SMS once
+ * the gateway delivers. An admin is found by email as well as by phone.
  */
 class ResetPasswordCommand extends Command
 {
-    protected $signature = 'cr7:reset-password {login : phone or email} {--password= : use this instead of the configured first password}';
+    protected $signature = 'cr7:reset-password
+        {login : phone, or an admin\'s email}
+        {--password= : use this instead of the configured first password}
+        {--no-change-required : do not force a change at first sign-in — for an admin while SMS cannot be delivered}';
 
     protected $description = 'Reset one account password to the configured first password and print it';
 
@@ -41,8 +50,9 @@ class ResetPasswordCommand extends Command
 
         $user->forceFill([
             'password' => Hash::make($password),
-            // The holder must replace it on first use — this password has been on a screen.
-            'must_change_password' => true,
+            // The holder must replace it on first use — this password has been on a screen —
+            // unless the replacing is what cannot be done yet (D-107, see above).
+            'must_change_password' => ! $this->option('no-change-required'),
         ])->save();
 
         $this->info("{$user->name} · {$user->type->value} · {$user->phone}");

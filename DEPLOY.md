@@ -43,16 +43,10 @@ MAPBOX_STYLE_LIGHT=mapbox/streets-v12
 MAPBOX_STYLE_DARK=mapbox/dark-v11
 
 # --- verification codes -----------------------------------------------------
-# These two move TOGETHER. See the warning in §6.
-#   log      + true   staging: everyone signs in with OTP_STATIC_CODE
-#   sms_misr + false  live:    real code, real SMS
-# `log` + `false` is the broken pair — the code is random and written only to
-# storage/logs, so /auth/otp/send answers 200 and nobody can sign in at all.
+# Only the gateway lives here. Whether codes are real is `otp.mode` on ADM-46
+# (doc 62, D-106) — see §6. OTP_STATIC_MODE / _CODE / _ORDER_CODE and
+# OTP_ECHO_IN_RESPONSE are deleted; a line left over for them does nothing.
 OTP_CHANNEL=log
-OTP_STATIC_MODE=true
-OTP_STATIC_CODE=123456
-OTP_STATIC_ORDER_CODE=1234
-OTP_ECHO_IN_RESPONSE=true
 ```
 
 `APP_URL` has to be right **before** step 3: `CatalogSeeder` writes absolute image
@@ -122,15 +116,32 @@ token is served from `/config` rather than compiled into the binary.
 
 ## 6. ⚠️ Verification codes — read before launch
 
-While `OTP_STATIC_MODE=true`:
+Since doc 62 (D-106) the switch is on `ADM-46`, «التحقق والرسائل», not in `.env`:
 
-- **every** phone number signs in with `123456`;
-- every pickup and delivery code is `1234`;
-- `POST /auth/otp/send` returns the code in its own response, and the app prints
-  it on the OTP screen as «وضع التجربة».
+| Setting | |
+|---|---|
+| `otp.mode` | `sms` (default) — a random code through `OTP_CHANNEL` · `test` — the operator's `otp.test_code`, **no SMS sent** |
+| `auth.register_requires_otp` | off → sign-up is phone + name + password, no code |
+| `otp.ttl_minutes` · `otp.resend_seconds` · `otp.max_attempts` · `otp.max_per_hour` | the clocks and caps |
 
-That is correct for a staging server with no SMS gateway — the alternative is an
-app nobody can log into. **It is a full account takeover on a public server.**
+While `otp.mode = test`:
+
+- every customer, captain and place code is the test code (`123456` by default);
+- `POST /auth/otp/send` returns it in its own response, and the app prints it on
+  the OTP screen as «وضع التجربة».
+
+**An admin's codes are never the test code** (D-107): an admin's reset and every
+password change go through `OTP_CHANNEL` with a random code whatever the mode
+says. Pickup and delivery codes are random, always (D-108) — there is no `1234`.
+
+⚠️ **Right after deploying doc 62**, a server that ran with `OTP_STATIC_MODE=true`
+is on `otp.mode = sms` — the catalogue default — and with the log still bound
+nobody receives a code. Set `otp.mode = test` on `ADM-46` (or switch the
+sign-up code off) the same minute, until the gateway delivers.
+
+Test mode is correct for a staging server with no SMS gateway — the alternative is
+an app nobody can sign up on. **It is a full account takeover of every non-admin
+account on a public server.**
 
 The SMS channel is built and bound: `SmsMisrChannel`, selected by
 `OTP_CHANNEL=sms_misr`. **As of 2026-09-13 the gateway is proven on this server
@@ -183,19 +194,20 @@ points (`cr7:sms-doctor` prints the balance):
 1. `SMS_MISR_SENDER=<approved token>` and `SMS_MISR_ENVIRONMENT=1`.
 2. `php artisan config:cache`, then `php artisan cr7:sms-doctor <your phone>` —
    and check that the message **arrived**, not only that it returned `1901`.
-3. `OTP_CHANNEL=sms_misr` **and** `OTP_STATIC_MODE=false` together, then
-   `php artisan config:cache`.
-4. Sign in on the app with a real phone and a real code.
+3. `OTP_CHANNEL=sms_misr`, then `php artisan config:cache`.
+4. On `ADM-46`, `otp.mode = sms` (and `auth.register_requires_otp` on).
+5. Sign up on the app with a real phone and a real code.
 
-Steps 3's two switches move together. `sms_misr` with static mode still on
-sends a real SMS carrying the public code `123456`. Static mode off with
-`log` still bound means nobody can sign in at all.
+Steps 3 and 4 move together. Test mode with `sms_misr` bound sends nothing for
+customers — only admins' codes go out. `otp.mode = sms` with `log` still bound
+means nobody receives a code at all, and every such send logs a warning.
 
 Nothing else changes: the app already hides the «وضع التجربة» note the moment
 the server stops publishing a code, and stops prefilling the field.
 
-While static mode is on, the app boots a warning into the log on every request
-cycle in production. That line is the reminder — do not filter it out.
+While `OTP_CHANNEL` is not `sms_misr` in production, the app boots a warning into
+the log: no SMS leaves, and an admin cannot change a password by SMS —
+`php artisan cr7:reset-password <email or phone> --no-change-required` is the door.
 
 ---
 
@@ -223,7 +235,8 @@ curl -s -X POST $BASE/auth/otp/send -H 'Content-Type: application/json' \
      -d '{"phone":"01000000123"}' | jq .data.static_otp
 ```
 
-Expected: `mapbox` · `5` · `"123456"` · `3` · an Arabic street name · `"123456"`.
+Expected: `mapbox` · `5` · `"123456"` · `3` · an Arabic street name · `"123456"` —
+the two codes only while `otp.mode = test`; `null` in `sms` mode.
 
 An empty `restaurants` array means step 3 has not run.
 A `null` under `maps.provider = osm` means the token is missing or `config:cache`

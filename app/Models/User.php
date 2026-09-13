@@ -186,10 +186,19 @@ class User extends Authenticatable
      */
     public function scopeWhereLogin(Builder $query, string $login): void
     {
-        // Phone only, since 2026-09-11. The email branch is gone with the email sign-in
-        // it served: an account is reached by the number that receives its codes, and a
-        // second identifier is a second way in to keep in step for no benefit anybody
-        // asked for.
+        // D-107 — an email reaches an **admin** and nobody else. The email sign-in went for
+        // every account on 2026-09-11 and came back in doc 62 for the panel only, so a
+        // captain's or a place's email on the row is still not a way in: the lookup below
+        // cannot find one. Compared lower-cased on both sides, whatever the column's
+        // collation happens to be on a given server.
+        if (PhoneNumber::isEmail($login)) {
+            $query->where('type', UserType::Admin->value)
+                ->whereNotNull('email')
+                ->whereRaw('LOWER(email) = ?', [PhoneNumber::normaliseLogin($login)]);
+
+            return;
+        }
+
         $query->where('phone', PhoneNumber::normaliseLogin($login));
     }
 }

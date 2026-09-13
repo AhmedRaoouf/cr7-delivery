@@ -16,6 +16,17 @@ class ChangePasswordRequest extends FormRequest
         return [
             'current_password' => ['required', 'string'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // D-107 — required for an admin, and checked by `ChangePasswordAction`, which
+            // knows who is asking; ignored for everyone else.
+            'code' => ['nullable', 'digits:6'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'code.digits' => 'رمز التحقق ‪6‬ أرقام',
         ];
     }
 }

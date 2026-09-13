@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Customer;
 
+use App\Support\BasketLimit;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AddCartItemRequest extends FormRequest
@@ -15,10 +16,19 @@ class AddCartItemRequest extends FormRequest
     {
         return [
             'product_id' => ['required', 'exists:products,id'],
-            'quantity' => ['nullable', 'integer', 'min:1', 'max:50'],
+            // D-114 — `cart.max_qty_per_line` on the panel; it was a hard-coded 50.
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:'.BasketLimit::maxQuantityPerLine()],
             'note' => ['nullable', 'string', 'max:255'],
             'option_ids' => ['nullable', 'array'],
             'option_ids.*' => ['integer', 'exists:product_options,id'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'quantity.max' => BasketLimit::quantitySentence(),
         ];
     }
 }

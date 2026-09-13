@@ -159,6 +159,19 @@ class CheckoutPricer
             $blockers[] = ['code' => 'cart_empty', 'message' => 'السلة فارغة'];
         }
 
+        // D-114 — a basket filled before the operator lowered the limit is not trimmed
+        // behind the customer's back: it is refused by name, and the basket screen asks
+        // them to remove a place.
+        $maxRestaurants = BasketLimit::maxRestaurants();
+
+        if ($restaurantCount > $maxRestaurants) {
+            $blockers[] = [
+                'code' => 'too_many_restaurants',
+                'message' => BasketLimit::sentence($maxRestaurants),
+                'max' => $maxRestaurants,
+            ];
+        }
+
         // D-111 — an address may be saved incomplete (the first-launch address usually
         // has no street) and may not be ordered to. Said here, with the missing fields
         // named, so the customer is told what to add before the order is taken rather

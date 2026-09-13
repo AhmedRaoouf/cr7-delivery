@@ -157,6 +157,17 @@ class CheckoutPricer
             $blockers[] = ['code' => 'cart_empty', 'message' => 'السلة فارغة'];
         }
 
+        // D-109 — a method the operator switched off is refused by name. The request
+        // rules still accept all three values: the app that sent a stale one is told
+        // *why*, in the customer's words, instead of being told the field is invalid.
+        if (! PaymentMethods::isEnabled($paymentMethod)) {
+            $blockers[] = [
+                'code' => 'payment_method_disabled',
+                'message' => PaymentMethods::disabledMessage(),
+                'payment_method' => $paymentMethod,
+            ];
+        }
+
         if ($paymentMethod !== 'cash' && $user->cash_only_until && $user->cash_only_until->isFuture()) {
             $blockers[] = ['code' => 'cash_only_restricted', 'message' => 'حسابك مقيّد بالدفع نقدًا فقط حاليًا'];
         }
@@ -192,11 +203,12 @@ class CheckoutPricer
             'separate_deliveries_warning' => $restaurantCount > 1,
             'eta_minutes_min' => $groups->min('eta_minutes_min'),
             'eta_minutes_max' => $groups->max('eta_minutes_max'),
-            'payment_methods' => [
-                ['value' => 'cash', 'label' => 'الدفع عند الاستلام', 'enabled' => true],
-                ['value' => 'vodafone_cash', 'label' => 'فودافون كاش', 'enabled' => true],
-                ['value' => 'instapay', 'label' => 'إنستا باي', 'enabled' => true],
-            ],
+            // D-109 — the switched-on methods only, each with its own destination.
+            // `enabled` stays on every row for the clients that filtered on it.
+            'payment_methods' => array_map(
+                static fn (array $method) => $method + ['enabled' => true],
+                PaymentMethods::enabled(),
+            ),
             'blockers' => $blockers,
         ];
     }

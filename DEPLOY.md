@@ -132,11 +132,64 @@ While `OTP_STATIC_MODE=true`:
 That is correct for a staging server with no SMS gateway — the alternative is an
 app nobody can log into. **It is a full account takeover on a public server.**
 
-To turn it off, bind a real channel and flip one flag:
+The SMS channel is built and bound: `SmsMisrChannel`, selected by
+`OTP_CHANNEL=sms_misr`. **As of 2026-09-13 the gateway is proven on this server
+and sign-in does not use it yet** — a test-environment send to the operator's
+phone came back `1901`, SMSID `186639970`.
 
-1. Write an `App\Services\Otp\OtpChannel` implementation for the SMS provider.
-2. Bind it in `AppServiceProvider::register()` in place of `LogOtpChannel`.
-3. `OTP_STATIC_MODE=false`, then `php artisan config:cache`.
+### 6.1 Prove the gateway without moving a customer
+
+`cr7:sms-doctor` sends through `SmsMisrChannel` directly, never through the bound
+channel, so everything below runs while customers still sign in as before.
+
+```bash
+php artisan cr7:sms-doctor                        # reads only; the balance lookup is free
+php artisan cr7:sms-doctor 010XXXXXXXX            # one message; asks first
+php artisan cr7:sms-doctor 010XXXXXXXX --sender=… # try another sender token for one run
+```
+
+Every fault on this path is silent — SMS Misr answers **HTTP 200 on failure**
+with the fault in the body's `code`, and `POST /auth/otp/send` answers 200
+either way — so do not skip it. The codes that matter:
+
+| code | meaning | fix |
+|---|---|---|
+| `1901` | accepted (`/api/SMS/`) | — |
+| `6000` | accepted (`/api/OTP/`) | — |
+| `1903` | username or password wrong | re-copy from the SMS Misr console |
+| `1904` | sender not approved | wait for approval, or use the test token at `ENVIRONMENT=2` |
+| `1906` | out of points | buy a package |
+
+### 6.2 `.env`
+
+```
+SMS_MISR_USERNAME=…
+SMS_MISR_PASSWORD=…
+SMS_MISR_SENDER=…          # the TEST token at ENVIRONMENT=2, the approved one at 1
+SMS_MISR_ENVIRONMENT=2     # 2 = test, 1 = live
+SMS_MISR_LANGUAGE=2        # an ENCODING: 1 is GSM-7 and cannot carry Arabic
+```
+
+SMS Misr's console prints these as `SMSMISR_USERNAME` — one word. Both spellings
+are read, and an **empty** `SMS_MISR_*` line no longer hides a filled
+`SMSMISR_*` one (Laravel reads `KEY=` as an empty string, not an absent key).
+Run `php artisan config:cache` after every edit; the doctor reads the cache.
+
+### 6.3 Going live — all in one sitting
+
+Only once the production sender token is approved **and** the account holds
+points (`cr7:sms-doctor` prints the balance):
+
+1. `SMS_MISR_SENDER=<approved token>` and `SMS_MISR_ENVIRONMENT=1`.
+2. `php artisan config:cache`, then `php artisan cr7:sms-doctor <your phone>` —
+   and check that the message **arrived**, not only that it returned `1901`.
+3. `OTP_CHANNEL=sms_misr` **and** `OTP_STATIC_MODE=false` together, then
+   `php artisan config:cache`.
+4. Sign in on the app with a real phone and a real code.
+
+Steps 3's two switches move together. `sms_misr` with static mode still on
+sends a real SMS carrying the public code `123456`. Static mode off with
+`log` still bound means nobody can sign in at all.
 
 Nothing else changes: the app already hides the «وضع التجربة» note the moment
 the server stops publishing a code, and stops prefilling the field.

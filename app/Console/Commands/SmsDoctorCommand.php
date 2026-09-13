@@ -11,88 +11,64 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Is the SMS gateway actually able to send, and is sign-in wired to it?
+ * Can SMS Misr send for us, and is sign-in using it yet?
  *
- * Every fault in this path is silent by construction. SMS Misr answers HTTP 200
- * with the error in the body, `POST /auth/otp/send` answers 200 either way, and
- * the customer's only signal is an SMS that never arrives. Running this before
- * flipping `OTP_STATIC_MODE=false` is the difference between finding out here
- * and finding out from a customer who cannot sign in.
+ * Those are two separate questions and this answers them separately. Every
+ * fault on this path is silent — SMS Misr answers HTTP 200 with the error in
+ * the body, and `POST /auth/otp/send` answers 200 whatever happens underneath —
+ * so the gateway has to be proven on its own before sign-in is pointed at it.
  *
- * With no argument it only reads — config, binding and the static-mode pairing.
- * Given a phone number it sends one real message, which costs points; it asks
- * first, and `--force` skips the question for a scripted run.
+ * That is why a test send always goes through `SmsMisrChannel` directly, never
+ * through whatever `OtpChannel` is bound. The gateway can be exercised on a live
+ * server while customers still sign in exactly as before; flipping
+ * `OTP_CHANNEL` is the last step, not a precondition for testing.
+ *
+ * With no argument it only reads, plus the balance lookup, which spends nothing.
+ * Given a phone number it sends one message. `--sender` tries a different sender
+ * token for that one run — SMS Misr issues a test token and a production token
+ * separately, and the only way to learn which one an environment accepts is to
+ * try it.
  */
 class SmsDoctorCommand extends Command
 {
     protected $signature = 'cr7:sms-doctor
-        {phone? : send one real verification message to this number}
+        {phone? : send one verification message to this number}
+        {--sender= : use this sender token for this run instead of SMS_MISR_SENDER}
         {--force : send without asking}';
 
-    protected $description = 'Check the SMS gateway configuration, and optionally send one test message';
+    protected $description = 'Check the SMS Misr gateway, and optionally send one test message';
 
     public function handle(): int
     {
+        if (filled($this->option('sender'))) {
+            config(['services.sms_misr.sender' => (string) $this->option('sender')]);
+        }
+
         $this->settings();
 
-        $ok = $this->verdict();
+        $ready = $this->gatewayVerdict();
 
         $this->balance();
+
+        $this->signInStatus();
 
         $phone = $this->argument('phone');
 
         if ($phone === null) {
             $this->newLine();
-            $this->line('pass a phone number to send one real message: php artisan cr7:sms-doctor 01012345678');
+            $this->line('to send one message: php artisan cr7:sms-doctor 01012345678');
 
-            return $ok ? self::SUCCESS : self::FAILURE;
+            return $ready ? self::SUCCESS : self::FAILURE;
+        }
+
+        if (! $ready) {
+            $this->newLine();
+            $this->error('not sending — fix the gateway faults above first');
+
+            return self::FAILURE;
         }
 
         return $this->send((string) $phone);
-    }
-
-    /**
-     * `GET /api/Balance/` is the only call that proves a username and password
-     * without an approved Sender ID and without spending anything. With `Active
-     * Sender IDs: 0` on the account it is the whole pre-flight: credentials that
-     * fail here will fail every send, and there is otherwise no way to tell that
-     * apart from a Sender ID that has not been approved yet.
-     */
-    private function balance(): void
-    {
-        $sms = config('services.sms_misr');
-
-        if (blank($sms['username'] ?? null) || blank($sms['password'] ?? null)) {
-            return;
-        }
-
-        $this->newLine();
-        $this->info('balance');
-
-        try {
-            $response = Http::timeout(20)->get((string) $sms['balance_url'], [
-                'environment' => (string) $sms['environment'],
-                'username' => (string) $sms['username'],
-                'password' => (string) $sms['password'],
-            ]);
-        } catch (\Throwable $e) {
-            $this->error('could not reach SMS Misr: '.$e->getMessage());
-
-            return;
-        }
-
-        $body = is_array($response->json()) ? $response->json() : [];
-        $code = (string) ($body['code'] ?? '');
-
-        // 1903 here means the credentials are wrong, and it means the same thing
-        // on every send — worth naming rather than printing a bare number.
-        if ($code === '1903') {
-            $this->error('✗ 1903 — SMS Misr rejected the username or password');
-
-            return;
-        }
-
-        $this->line($response->body());
     }
 
     private function settings(): void
@@ -100,31 +76,24 @@ class SmsDoctorCommand extends Command
         $sms = config('services.sms_misr');
         $otpMode = ($sms['mode'] ?? 'sms') === 'otp';
 
-        $this->info('configuration');
+        $this->info('SMS Misr');
         $this->table(['key', 'value'], [
-            ['OTP_CHANNEL', config('services.otp_channel')],
-            ['bound channel', $this->channel()],
-            ['OTP_STATIC_MODE', Otp::isStatic() ? 'true' : 'false'],
             ['mode', $sms['mode'] ?? 'sms'],
             ['endpoint', $otpMode ? ($sms['otp_url'] ?? '') : ($sms['url'] ?? '')],
-            ['environment', ($sms['environment'] ?? '').($sms['environment'] === '1' ? '  (live)' : '  (test)')],
+            ['environment', ($sms['environment'] ?? '').((string) ($sms['environment'] ?? '') === '1' ? '  (live)' : '  (test)')],
             ['language', ($sms['language'] ?? '').'  '.$this->languageName((string) ($sms['language'] ?? ''))],
-            ['username', $this->present($sms['username'] ?? null)],
-            ['password', $this->present($sms['password'] ?? null)],
-            ['sender', $sms['sender'] ?: '— MISSING —'],
-            ['template', $otpMode ? ($sms['template'] ?: '— MISSING —') : 'n/a in sms mode'],
+            ['username', $this->masked($sms['username'] ?? null)],
+            ['password', $this->masked($sms['password'] ?? null)],
+            ['sender', $this->masked($sms['sender'] ?? null).($this->option('sender') ? '  (from --sender)' : '')],
+            ['template', $otpMode ? $this->masked($sms['template'] ?? null) : 'n/a in sms mode'],
         ]);
     }
 
-    /** Report every fault at once — a list of one is how a second one gets missed. */
-    private function verdict(): bool
+    /** Only what stops SMS Misr itself from accepting a message. */
+    private function gatewayVerdict(): bool
     {
         $sms = config('services.sms_misr');
         $faults = [];
-
-        if (config('services.otp_channel') !== 'sms_misr') {
-            $faults[] = 'OTP_CHANNEL is not sms_misr, so nothing here is used — codes go to storage/logs.';
-        }
 
         foreach (['username', 'password', 'sender'] as $key) {
             if (blank($sms[$key] ?? null)) {
@@ -140,26 +109,79 @@ class SmsDoctorCommand extends Command
             $faults[] = 'SMS_MISR_LANGUAGE=1 is English/GSM-7 and cannot carry an Arabic letter. Use 2, or 3 for mixed text.';
         }
 
-        // The two pairings that look like a working server and are not.
-        if (Otp::isStatic() && app()->environment('production')) {
-            $faults[] = 'OTP_STATIC_MODE=true in production — every phone signs in with the same code.';
-        }
-
-        if (! Otp::isStatic() && $this->channel() === LogOtpChannel::class) {
-            $faults[] = 'Static mode is off and the channel is the log — nobody can sign in at all.';
-        }
-
-        $this->newLine();
-
         foreach ($faults as $fault) {
             $this->error('✗ '.$fault);
         }
 
         if ($faults === []) {
-            $this->info('✓ configuration is complete');
+            $this->info('✓ gateway configuration is complete');
         }
 
         return $faults === [];
+    }
+
+    /**
+     * `GET /api/Balance/` is the only call that proves a username and password
+     * without an approved sender and without spending anything.
+     */
+    private function balance(): void
+    {
+        $sms = config('services.sms_misr');
+
+        if (blank($sms['username'] ?? null) || blank($sms['password'] ?? null)) {
+            return;
+        }
+
+        $this->newLine();
+        $this->info('balance lookup');
+
+        try {
+            $response = Http::timeout(20)->get((string) $sms['balance_url'], [
+                'environment' => (string) $sms['environment'],
+                'username' => (string) $sms['username'],
+                'password' => (string) $sms['password'],
+            ]);
+        } catch (\Throwable $e) {
+            $this->error('could not reach SMS Misr: '.$e->getMessage());
+
+            return;
+        }
+
+        $body = is_array($response->json()) ? $response->json() : [];
+
+        if ((string) ($body['code'] ?? '') === '1903') {
+            $this->error('✗ 1903 — SMS Misr rejected the username or password');
+
+            return;
+        }
+
+        $this->line('HTTP '.$response->status().'  '.$response->body());
+    }
+
+    /** Whether customers are using the gateway yet. Informational — never a fault here. */
+    private function signInStatus(): void
+    {
+        $bound = app(OtpChannel::class)::class;
+
+        $this->newLine();
+        $this->info('sign-in');
+        $this->table(['key', 'value'], [
+            ['OTP_CHANNEL', (string) config('services.otp_channel')],
+            ['bound channel', class_basename($bound)],
+            ['OTP_STATIC_MODE', Otp::isStatic() ? 'true' : 'false'],
+        ]);
+
+        if ($bound === LogOtpChannel::class && Otp::isStatic()) {
+            $this->line('customers still sign in with the static code — SMS Misr is not in their path yet');
+        }
+
+        if (Otp::isStatic() && app()->environment('production')) {
+            $this->warn('! OTP_STATIC_MODE=true in production — every phone signs in with the same code');
+        }
+
+        if (! Otp::isStatic() && $bound === LogOtpChannel::class) {
+            $this->error('✗ static mode is off and the channel is the log — NOBODY CAN SIGN IN');
+        }
     }
 
     private function send(string $phone): int
@@ -168,11 +190,10 @@ class SmsDoctorCommand extends Command
 
         $this->newLine();
         $this->warn(sprintf(
-            'About to send one %s message to %s via %s.%s',
-            $live ? 'LIVE' : 'test',
+            'About to send one %s message to %s through SMS Misr.%s',
+            $live ? 'LIVE' : 'test-environment',
             $phone,
-            $this->channel() === SmsMisrChannel::class ? 'SMS Misr' : 'the log channel',
-            $live ? ' This spends points from the account balance.' : '',
+            $live ? ' This spends points.' : '',
         ));
 
         if (! $this->option('force') && ! $this->confirm('Send it?', false)) {
@@ -181,33 +202,25 @@ class SmsDoctorCommand extends Command
             return self::SUCCESS;
         }
 
-        // A fixed, obviously-not-real code: the log keeps this line, and a real
-        // one sitting in a log file is a credential.
-        $code = '000000';
-
+        // Fixed and obviously not real: the log keeps this, and a real code in a
+        // log file is a credential.
         try {
-            app(OtpChannel::class)->send($phone, $code);
+            (new SmsMisrChannel)->send($phone, '000000');
         } catch (\Throwable $e) {
-            $this->error('send failed: '.$e->getMessage());
-            $this->line('the gateway\'s own code and its meaning are in storage/logs/laravel.log under sms_misr.send_failed');
+            $this->error('✗ send failed: '.$e->getMessage());
+            $this->line('SMS Misr\'s code and its meaning: storage/logs/laravel.log, look for sms_misr.send_failed');
 
             return self::FAILURE;
         }
 
-        $this->info('✓ the gateway accepted it');
+        $this->info('✓ SMS Misr accepted it (1901)');
         $this->line($live
-            ? 'The phone should have it. If it does not arrive, the send succeeded and delivery did not — that is an SMS Misr routing question.'
-            : 'environment=2 is test: SMS Misr validated the request and did NOT deliver it. Set SMS_MISR_ENVIRONMENT=1 for a real send.');
+            ? 'Check the phone. Accepted but not received is a delivery question for SMS Misr, not a fault here.'
+            : 'Test environment: SMS Misr validated the request. Whether it is also delivered depends on the account — check the phone.');
 
-        Log::info('sms_misr.doctor', ['phone' => $phone]);
+        Log::info('sms_misr.doctor', ['phone' => $phone, 'environment' => $live ? 'live' : 'test']);
 
         return self::SUCCESS;
-    }
-
-    /** @return class-string */
-    private function channel(): string
-    {
-        return app(OtpChannel::class)::class;
     }
 
     private function languageName(string $value): string
@@ -220,8 +233,13 @@ class SmsDoctorCommand extends Command
         };
     }
 
-    private function present(?string $value): string
+    /** A token is a credential. Enough to tell two apart, never enough to use one. */
+    private function masked(?string $value): string
     {
-        return blank($value) ? '— MISSING —' : 'set ('.strlen($value).' chars)';
+        if (blank($value)) {
+            return '— MISSING —';
+        }
+
+        return substr($value, 0, 6).'…  ('.strlen($value).' chars)';
     }
 }

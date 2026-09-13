@@ -81,16 +81,20 @@ return [
 
         // 1 = live (real message, real points), 2 = test (validated, not delivered,
         // paid from the separate test balance). Stays 2 until a Sender ID is approved.
-        'environment' => env('SMS_MISR_ENVIRONMENT', '2'),
+        'environment' => env('SMS_MISR_ENVIRONMENT', env('SMSMISR_ENVIRONMENT', '2')),
 
         // NOT a locale — an encoding. 1 = English/GSM-7, which cannot carry an
         // Arabic letter; 2 = Arabic; 3 = Unicode. Try 3 if the Arabic arrives as
         // question marks, because the copy below mixes Arabic with a Latin brand.
         'language' => env('SMS_MISR_LANGUAGE', '2'),
 
-        'username' => env('SMS_MISR_USERNAME'),
-        'password' => env('SMS_MISR_PASSWORD'),
-        'sender' => env('SMS_MISR_SENDER'),
+        // SMS Misr's own console hands these out as `SMSMISR_USERNAME` and so on —
+        // no underscore between SMS and MISR. Pasted verbatim under our spelling
+        // alone, every one of them read as null and the gateway answered 1902
+        // with nothing in the log to say why. Ours wins; theirs is accepted.
+        'username' => env('SMS_MISR_USERNAME', env('SMSMISR_USERNAME')),
+        'password' => env('SMS_MISR_PASSWORD', env('SMSMISR_PASSWORD')),
+        'sender' => env('SMS_MISR_SENDER', env('SMSMISR_SENDER')),
 
         // `:code` is the only placeholder. Arabic bills at 70 characters per
         // segment against English's 160, so keep it to one segment.

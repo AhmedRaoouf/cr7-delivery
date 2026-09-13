@@ -12,7 +12,10 @@ use Tests\TestCase;
  */
 class SmsDoctorTest extends TestCase
 {
-    private const SMSMISR_KEYS = ['SMSMISR_USERNAME', 'SMSMISR_PASSWORD', 'SMSMISR_SENDER', 'SMSMISR_ENVIRONMENT'];
+    private const SMSMISR_KEYS = [
+        'SMSMISR_USERNAME', 'SMSMISR_PASSWORD', 'SMSMISR_SENDER', 'SMSMISR_ENVIRONMENT',
+        'SMS_MISR_USERNAME', 'SMS_MISR_SENDER',
+    ];
 
     protected function setUp(): void
     {
@@ -66,6 +69,30 @@ class SmsDoctorTest extends TestCase
         $this->assertSame('35a8f47-console', $services['sms_misr']['password']);
         $this->assertSame('3e234c3-console', $services['sms_misr']['sender']);
         $this->assertSame('2', $services['sms_misr']['environment']);
+    }
+
+    /**
+     * The production .env has had `SMS_MISR_USERNAME=` with nothing after it since
+     * the first deploy. Laravel reads that as an empty string, not an absent key,
+     * so env()'s default argument never fires and SMS Misr's block appended below
+     * it would have been ignored. Measured on the server before this was written.
+     */
+    public function test_an_empty_line_under_our_spelling_does_not_hide_theirs(): void
+    {
+        foreach ([
+            'SMS_MISR_USERNAME' => '',
+            'SMS_MISR_SENDER' => '',
+            'SMSMISR_USERNAME' => '76b25d67-console',
+            'SMSMISR_SENDER' => '3e234c3-console',
+        ] as $key => $value) {
+            putenv("{$key}={$value}");
+            $_ENV[$key] = $_SERVER[$key] = $value;
+        }
+
+        $services = require base_path('config/services.php');
+
+        $this->assertSame('76b25d67-console', $services['sms_misr']['username']);
+        $this->assertSame('3e234c3-console', $services['sms_misr']['sender']);
     }
 
     /**

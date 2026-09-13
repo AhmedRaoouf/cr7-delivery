@@ -81,7 +81,7 @@ return [
 
         // 1 = live (real message, real points), 2 = test (validated, not delivered,
         // paid from the separate test balance). Stays 2 until a Sender ID is approved.
-        'environment' => env('SMS_MISR_ENVIRONMENT', env('SMSMISR_ENVIRONMENT', '2')),
+        'environment' => env('SMS_MISR_ENVIRONMENT') ?: env('SMSMISR_ENVIRONMENT') ?: '2',
 
         // NOT a locale — an encoding. 1 = English/GSM-7, which cannot carry an
         // Arabic letter; 2 = Arabic; 3 = Unicode. Try 3 if the Arabic arrives as
@@ -92,9 +92,15 @@ return [
         // no underscore between SMS and MISR. Pasted verbatim under our spelling
         // alone, every one of them read as null and the gateway answered 1902
         // with nothing in the log to say why. Ours wins; theirs is accepted.
-        'username' => env('SMS_MISR_USERNAME', env('SMSMISR_USERNAME')),
-        'password' => env('SMS_MISR_PASSWORD', env('SMSMISR_PASSWORD')),
-        'sender' => env('SMS_MISR_SENDER', env('SMSMISR_SENDER')),
+        //
+        // `?:`, not env()'s default argument. A line reading `SMS_MISR_USERNAME=`
+        // is an empty STRING to Laravel, not an absent key, so the default never
+        // fires — and the production .env has carried exactly those three empty
+        // lines since the first deploy. Appending SMS Misr's block beneath them
+        // would have changed nothing.
+        'username' => env('SMS_MISR_USERNAME') ?: env('SMSMISR_USERNAME'),
+        'password' => env('SMS_MISR_PASSWORD') ?: env('SMSMISR_PASSWORD'),
+        'sender' => env('SMS_MISR_SENDER') ?: env('SMSMISR_SENDER'),
 
         // `:code` is the only placeholder. Arabic bills at 70 characters per
         // segment against English's 160, so keep it to one segment.

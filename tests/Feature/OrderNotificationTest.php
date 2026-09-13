@@ -48,9 +48,10 @@ class OrderNotificationTest extends TestCase
         // The Arabic body names the order, and the number is isolated: an
         // unisolated «CR7-260904-1258» beside Arabic punctuation renders with its
         // segments reordered.
+        // Once per basket (doc 62 §9), so it names the basket's number.
         $row = $this->notificationFor($customer, 'order.placed');
         $this->assertStringContainsString(
-            Isolate::ltr($order->order_number),
+            Isolate::ltr($order->orderGroup->group_number),
             $row->payload['body_ar'],
         );
     }

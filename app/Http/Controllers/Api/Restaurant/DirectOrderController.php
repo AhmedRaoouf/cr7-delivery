@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\CreateDirectOrderRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
+use App\Support\OrderParties;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,10 +22,17 @@ class DirectOrderController extends Controller
         $validated = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
+            // D-102 — the customer's area, from `GET /areas`. The fee is its price.
+            'zone_id' => ['nullable', 'integer'],
         ]);
 
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $quote = $action->execute($restaurant, $validated['latitude'], $validated['longitude']);
+        $quote = $action->execute(
+            $restaurant,
+            (float) $validated['latitude'],
+            (float) $validated['longitude'],
+            isset($validated['zone_id']) ? (int) $validated['zone_id'] : null,
+        );
 
         return ApiResponse::success($quote);
     }
@@ -46,9 +54,9 @@ class DirectOrderController extends Controller
             'declared_order_value' => (float) $order->declared_order_value,
             'delivery_fee' => (float) $order->delivery_fee_share,
             'total' => (float) $order->total,
-            'cash_to_collect' => $order->food_payment->value === 'collect_by_driver'
-                ? round((float) $order->declared_order_value + (float) $order->delivery_fee_share, 2)
-                : (float) $order->delivery_fee_share,
+            // One rule for the door total, the same one the captain's card reads.
+            'cash_to_collect' => $order->cashToCollect(),
+            'paid_at_pickup' => $order->placePaidAtPickup(),
             'pickup_otp' => $order->getRawOriginal('pickup_otp'),
             'delivery_otp' => null,
         ], 'تم إنشاء الطلب المباشر بنجاح', status: 201);
@@ -60,13 +68,17 @@ class DirectOrderController extends Controller
 
         $orders = $restaurant->orders()
             ->where('origin', 'restaurant_direct')
+            ->with(OrderParties::relations())
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
             ->when($request->date('filter.date_from'), fn ($q, $d) => $q->whereDate('business_date', '>=', $d))
             ->when($request->date('filter.date_to'), fn ($q, $d) => $q->whereDate('business_date', '<=', $d))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($orders->items(), meta: [
+        return ApiResponse::success(array_map(
+            fn (Order $o) => OrderParties::present($o->revealPickupOtp(), 'restaurant'),
+            $orders->items(),
+        ), meta: [
             'current_page' => $orders->currentPage(),
             'per_page' => $orders->perPage(),
             'total' => $orders->total(),
@@ -78,7 +90,9 @@ class DirectOrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        return ApiResponse::success($order->load(['driver.user', 'statusHistory'])->revealPickupOtp());
+        $order->load(['statusHistory', ...OrderParties::relations()]);
+
+        return ApiResponse::success(OrderParties::present($order->revealPickupOtp(), 'restaurant'));
     }
 
     public function ready(Request $request, Order $order, MarkOrderReadyAction $action): JsonResponse

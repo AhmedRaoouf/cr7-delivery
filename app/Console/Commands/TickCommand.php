@@ -13,6 +13,8 @@ use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\DispatchService;
 use App\Support\ErrandDispatcher;
+use App\Support\OrderDeadlines;
+use App\Support\SettingsCatalog;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -106,9 +108,16 @@ class TickCommand extends Command
         ErrandDispatcher $errands,
         ReleaseScheduledOrdersAction $scheduled,
     ): void {
+        // D-100 — rings two and three for a place that has not answered.
+        $this->sweep('rings', fn () => OrderDeadlines::ringAgain());
         $this->sweep('prep timers', fn () => $this->expirePrepTimers($markReady));
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
+        // doc 62 §9 — the customer's two deadlines, checked until now only when the
+        // customer pressed a button, so an ignored basket sat on the board for ever.
+        $this->sweep('confirmations', fn () => OrderDeadlines::expireConfirmations());
+        $this->sweep('payment reminders', fn () => OrderDeadlines::remindPayments());
+        $this->sweep('payments', fn () => OrderDeadlines::expirePayments());
         // 2026-09-08 — «لو ما حدش قبل في أول دقيقة ابعت لناس تانية… وهكذا». Offers no
         // longer expire, so widening the search is on a clock of its own rather than
         // riding on the back of a dead round.
@@ -212,7 +221,7 @@ class TickCommand extends Command
      */
     private function expireAcceptWindows(): int
     {
-        $minutes = (int) (Setting::query()->where('key', 'restaurant.accept_timeout_minutes')->value('value') ?? 5);
+        $minutes = SettingsCatalog::int('restaurant.accept_timeout_minutes');
 
         $orders = Order::query()
             ->where('status', OrderStatus::Pending)

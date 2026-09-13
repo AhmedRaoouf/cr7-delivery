@@ -17,12 +17,12 @@ use App\Http\Resources\Customer\OrderGroupDetailResource;
 use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
 use App\Models\Product;
-use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\RatingState;
+use App\Support\SettingsCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -91,6 +91,10 @@ class OrderController extends Controller
                     'name' => $order->restaurant->{"name_{$locale}"},
                     'latitude' => (float) $order->restaurant->latitude,
                     'longitude' => (float) $order->restaurant->longitude,
+                    // D-101 — a number to dial and an address, not only a pin.
+                    'phone' => $order->restaurant->phone,
+                    'address' => $order->restaurant->address,
+                    'logo' => $order->restaurant->logo,
                 ],
                 'status' => $order->status,
                 'status_label' => $order->status->label(),
@@ -102,6 +106,9 @@ class OrderController extends Controller
                     'phone' => $order->driver->user->phone,
                     'rating_avg' => (float) $order->driver->rating_avg,
                     'vehicle_type' => $order->driver->vehicle_type,
+                    'vehicle_label' => $order->driver->vehicle_type?->labelAr(),
+                    'vehicle_plate' => $order->driver->vehicle_plate,
+                    'avatar' => $order->driver->user->avatar,
                     'latitude' => $order->driver->hasFix() ? (float) $order->driver->current_lat : null,
                     'longitude' => $order->driver->hasFix() ? (float) $order->driver->current_lng : null,
                     'location_updated_at' => $order->driver->location_updated_at,
@@ -185,7 +192,7 @@ class OrderController extends Controller
             throw new ApiException('order_not_confirmed', 'لا يوجد كود تسليم نشط لهذا الطلب حاليًا', 422);
         }
 
-        $maxResends = (int) (Setting::query()->where('key', 'order.delivery_otp_resend_max')->value('value') ?? 3);
+        $maxResends = SettingsCatalog::int('order.delivery_otp_resend_max');
 
         if ($order->delivery_otp_resends >= $maxResends) {
             throw new ApiException('delivery_otp_resend_limit', 'تم تجاوز الحد الأقصى لإعادة إرسال كود التسليم', 422);

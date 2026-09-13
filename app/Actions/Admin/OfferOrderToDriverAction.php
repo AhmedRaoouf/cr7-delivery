@@ -10,8 +10,8 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
-use App\Support\DriverEarningCalculator;
 use App\Support\Notifications\NotificationDispatcher;
+use App\Support\Notifications\OfferContext;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -84,7 +84,8 @@ class OfferOrderToDriverAction
             $order->driverAttempts()->create([
                 'driver_id' => $driver->id,
                 'round' => $order->dispatch_round + 1,
-                'distance_km' => null,
+                // The offer card reads this; an assignment is still a distance away.
+                'distance_km' => OfferContext::toPlaceKm($order, $driver),
                 'result' => 'sent',
                 'reason_code' => $reasonCode,
                 'assigned_by' => $admin->id,
@@ -151,8 +152,7 @@ class OfferOrderToDriverAction
                 [
                     'admin' => $admin->name,
                     'order_number' => $order->order_number,
-                    'restaurant' => $order->restaurant?->name_ar,
-                    'earning' => number_format(DriverEarningCalculator::calculate($order, $driver), 2).' ج.م',
+                    'summary' => OfferContext::for($order, $driver)['summary'],
                 ],
                 'cr7://offer/'.$order->id,
                 $order->id,

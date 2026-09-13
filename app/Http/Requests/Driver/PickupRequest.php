@@ -13,6 +13,8 @@ class PickupRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['otp' => ['required', 'digits:4']];
+        // D-108 — required by the action when the order's own snapshot says so; an order
+        // placed with the pickup code switched off takes no code at all.
+        return ['otp' => ['nullable', 'digits:4']];
     }
 }

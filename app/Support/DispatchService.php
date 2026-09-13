@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Support\Notifications\NotificationDispatcher;
+use App\Support\Notifications\OfferContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -261,19 +262,12 @@ class DispatchService
     private function ring(Order $order, array $candidate): void
     {
         try {
+            $offer = OfferContext::for($order, $candidate['driver'], $candidate['distance_km']);
+
             app(NotificationDispatcher::class)->send(
                 $candidate['driver']->user,
                 'offer.new',
-                [
-                    'restaurant' => $order->restaurant?->name_ar,
-                    'distance' => $candidate['distance_km'] === null
-                        ? '—'
-                        : number_format($candidate['distance_km'], 1),
-                    'earning' => number_format(
-                        DriverEarningCalculator::calculate($order, $candidate['driver']),
-                        2,
-                    ).' ج.م',
-                ],
+                ['summary' => $offer['summary']],
                 'cr7://offer/'.$order->id,
                 $order->id,
                 ['order_id' => (string) $order->id, 'kind' => 'offer'],
@@ -581,7 +575,9 @@ class DispatchService
             ]);
             $this->syncGroupRollup($order);
 
-            $this->wake($order, ['driver' => $driver, 'distance_km' => null], $round);
+            // The distance the row above stores is the distance the push says. It was
+            // `null` here, so every order handed to a captain coming on shift read «—».
+            $this->wake($order, ['driver' => $driver, 'distance_km' => OfferContext::toPlaceKm($order, $driver)], $round);
             $offered++;
         }
 

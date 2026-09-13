@@ -50,6 +50,12 @@ class OrderNotifications
             return;
         }
 
+        // D-100 — any move out of `pending` is an answer, or the end of waiting for one:
+        // the ring stops on every phone the place has, including the one nobody touched.
+        if ($previousStatus === OrderStatus::Pending->value) {
+            app(RingService::class)->stop($order);
+        }
+
         match ($status) {
             OrderStatus::RestaurantTimeout => $this->restaurantTimeout($order),
             OrderStatus::AwaitingCustomerConfirmation => $this->awaitingConfirmation($order),
@@ -80,10 +86,6 @@ class OrderNotifications
             return;
         }
 
-        $this->toCustomer($order, 'order.placed', [
-            'order_number' => $order->order_number,
-        ]);
-
         /*
          * 🔴 Two defects in one line, both invisible in production.
          *
@@ -100,18 +102,62 @@ class OrderNotifications
          * its own food is `subtotal − commission`, which is what its settlement pays it.
          */
         DB::afterCommit(function () use ($order): void {
-            $fresh = $order->fresh(['items']);
+            $fresh = $order->fresh(['items', 'orderGroup.orders.restaurant', 'restaurant.owner']);
 
             if ($fresh === null) {
                 return;
             }
 
-            $this->toRestaurant($fresh, 'order.new', [
-                'order_number' => $fresh->order_number,
-                'items' => $fresh->items_count,
-                'total' => $this->money($fresh->restaurant_amount),
-            ]);
+            // Once per basket (doc 62 §9): the first sub-order speaks for the group, after
+            // the commit, when every sibling exists to be named.
+            if ((int) $fresh->group_sequence === 1) {
+                $this->toCustomer($fresh, 'order.placed', [
+                    'order_number' => $fresh->orderGroup?->group_number ?? $fresh->order_number,
+                    'places' => $this->placesSentence($fresh),
+                ]);
+            }
+
+            $ringing = RingService::enabled();
+
+            // The feed carries the order once. When the place's phone is going to ring,
+            // the ring **is** the push, so the row is written without one.
+            $row = $this->dispatcher->send(
+                $fresh->restaurant?->owner,
+                'order.new',
+                [
+                    'order_number' => $fresh->order_number,
+                    'items' => $fresh->items_count,
+                    'total' => $this->money($fresh->restaurant_amount),
+                ],
+                '/orders/'.$fresh->id,
+                $fresh->id,
+                ['order_id' => (string) $fresh->id],
+                push: ! $ringing,
+            );
+
+            if ($ringing) {
+                app(RingService::class)->ring($fresh, 1, $row?->id);
+            }
         });
+    }
+
+    /**
+     * «كنج بروست» or «كنج بروست وسعد الدمياطي» — the places a basket is waiting on.
+     *
+     * @return array{ar: string, en: string}
+     */
+    private function placesSentence(Order $order): array
+    {
+        $names = $order->orderGroup?->orders->pluck('restaurant')->filter()->unique('id') ?? collect();
+
+        if ($names->isEmpty()) {
+            return ['ar' => 'المكان', 'en' => 'the place'];
+        }
+
+        return [
+            'ar' => $names->pluck('name_ar')->join('، ', ' و'),
+            'en' => $names->map(fn ($r) => $r->name_en ?: $r->name_ar)->join(', ', ' and '),
+        ];
     }
 
     /**
@@ -129,6 +175,9 @@ class OrderNotifications
         $this->toRestaurant($order, 'order.timeout_restaurant', [
             'order_number' => $order->order_number,
         ]);
+
+        // doc 11 §4 `alert.restaurant_timeout` — listed, and sent by nothing.
+        OperatorAlerts::restaurantTimeout($order);
     }
 
     /**
@@ -291,6 +340,29 @@ class OrderNotifications
 
     private function cancelled(Order $order): void
     {
+        /*
+         * doc 62 §9 — the two deadlines the clock now enforces say what happened, and say
+         * it to the customer once per basket: the basket is what they failed to confirm or
+         * pay for, not each kitchen in it.
+         */
+        $expired = match ($order->cancellation_reason_code) {
+            'customer_did_not_confirm' => ['order.confirm_expired', 'order.confirm_expired_restaurant'],
+            'payment_not_received' => ['payment.expired', 'payment.expired_restaurant'],
+            default => null,
+        };
+
+        if ($expired !== null) {
+            if ($this->isLastLiveInGroup($order)) {
+                $this->toCustomer($order, $expired[0], [
+                    'order_number' => $order->orderGroup?->group_number ?? $order->order_number,
+                ]);
+            }
+
+            $this->toRestaurant($order, $expired[1], ['order_number' => $order->order_number]);
+
+            return;
+        }
+
         $this->toCustomer($order, 'order.cancelled', ['order_number' => $order->order_number]);
         $this->toRestaurant($order, 'order.cancelled_restaurant', ['order_number' => $order->order_number]);
     }
@@ -298,6 +370,10 @@ class OrderNotifications
     private function issue(Order $order): void
     {
         $this->toCustomer($order, 'order.issue');
+
+        // doc 11 §4 `alert.delivery_issue` — a captain at a door with a problem is the
+        // office's to solve, and the office was never told.
+        OperatorAlerts::deliveryIssue($order);
     }
 
     private function driverChanged(Order $order): void

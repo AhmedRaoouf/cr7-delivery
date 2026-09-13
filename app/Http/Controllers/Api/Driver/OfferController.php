@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Driver;
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
-use App\Support\DriverEarningCalculator;
+use App\Support\Notifications\OfferContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,7 +37,7 @@ class OfferController extends Controller
             ->whereHas('order', fn ($q) => $q
                 ->whereNull('driver_id')
                 ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
-            ->with(['order.restaurant', 'assignedBy:id,name'])
+            ->with(['order.restaurant', 'order.serviceZone', 'assignedBy:id,name'])
             ->get()
             ->map(fn ($attempt) => $this->formatOffer($attempt));
 
@@ -52,7 +52,7 @@ class OfferController extends Controller
             ->where('order_id', $orderId)
             ->where('result', 'sent')
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->with(['order.restaurant', 'assignedBy:id,name'])
+            ->with(['order.restaurant', 'order.serviceZone', 'assignedBy:id,name'])
             ->firstOrFail();
 
         return ApiResponse::success($this->formatOffer($attempt));
@@ -62,6 +62,10 @@ class OfferController extends Controller
     {
         $order = $attempt->order;
         $driver = $attempt->driver;
+        // doc 62 §9 — the distance from where the captain is **now**, when he has a fix;
+        // the stored one is where he was when the offer went out.
+        $offer = OfferContext::for($order, $driver, OfferContext::toPlaceKm($order, $driver) ?? ($attempt->distance_km === null ? null : (float) $attempt->distance_km));
+        $reason = OfferContext::reason($order->free_delivery_reason);
 
         return [
             'order_id' => $order->id,
@@ -78,12 +82,29 @@ class OfferController extends Controller
                 'distance_km' => $attempt->distance_km === null ? null : (float) $attempt->distance_km,
             ],
             'customer_area' => $order->delivery_address_text,
+            // D-101 / doc 62 §2.3 — an offer is not yet anybody's order, so it carries
+            // the area and the address and not the customer's name or number; those
+            // arrive with the acceptance.
+            'area' => $order->serviceZone?->name_ar,
             'delivery_distance_km' => (float) $order->distance_km,
+            'distance_to_place_km' => $offer['to_place_km'],
+            'trip_km' => $offer['trip_km'],
             'items_count' => $order->items()->sum('quantity'),
             'order_total' => (float) $order->total,
             'payment_method' => $order->payment_method,
+            'origin' => $order->origin?->value,
+            'food_payment' => $order->food_payment?->value,
+            'delivery_fee' => round((float) $order->delivery_fee_share, 2),
+            'food_total' => $order->isDirect() ? round((float) $order->declared_order_value, 2) : round((float) $order->subtotal, 2),
             'cash_to_collect' => $order->cashToCollect(),
-            'your_earning' => DriverEarningCalculator::calculate($order, $driver),
+            'paid_at_pickup' => $order->placePaidAtPickup(),
+            'your_earning' => $offer['earning'],
+            // Why the fee is waived — so a zero is a sentence, not a defect (D-105).
+            'free_delivery_reason' => $order->free_delivery_reason,
+            'free_delivery_label' => $reason['ar'] ?? null,
+            'pickup_code_required' => (bool) ($order->pickup_code_required ?? true),
+            'delivery_code_required' => (bool) ($order->delivery_code_required ?? true),
+            'summary' => $offer['summary']['ar'],
             'round' => $attempt->round,
             // Both null on every offer written since 2026-09-08. The app reads that as
             // «no countdown» and shows the offer until it is answered.

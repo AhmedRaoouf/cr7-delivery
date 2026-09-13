@@ -205,16 +205,23 @@ class DeliveryCommissionAndLedgerTest extends TestCase
 
         $driver->refresh();
 
-        $this->assertSame(21.25, (float) $driver->wallet_balance);
+        // D-103 — the captain paid the place its 100 at the counter, so the platform owes
+        // him that back beside his 21.25; he holds the whole 125 the customer paid. The
+        // net is the platform's 15 % of the 25 fee and nothing else.
+        $this->assertSame(121.25, (float) $driver->wallet_balance);
         $this->assertSame(125.0, (float) $driver->cash_in_hand);
+        $this->assertSame(3.75, DriverLedger::balances($driver)['net_due_to_platform']);
 
+        $advance = $driver->transactions()->where('type', 'place_advance')->sole();
         $earning = $driver->transactions()->where('type', 'order_earning')->sole();
         $cash = $driver->transactions()->where('type', 'cash_collected')->sole();
 
         // The regression this test exists for: the cash row used to carry the wallet's
         // number, so the captain's history showed a wallet balance it had never held.
-        $this->assertSame(21.25, (float) $earning->balance_after);
+        $this->assertSame(100.0, (float) $advance->amount);
+        $this->assertSame(121.25, (float) $earning->balance_after);
         $this->assertSame(125.0, (float) $cash->balance_after);
+        $this->assertSame('wallet', DriverLedger::meterOf($advance->type));
         $this->assertSame('wallet', DriverLedger::meterOf($earning->type));
         $this->assertSame('cash', DriverLedger::meterOf($cash->type));
     }
@@ -313,9 +320,10 @@ class DeliveryCommissionAndLedgerTest extends TestCase
         $response = $this->asAdmin()->getJson('/api/v1/admin/finance/drivers')->assertOk();
 
         $this->assertSame(125.0, (float) $response->json('meta.totals.cash_in_hand'));
-        $this->assertSame(42.5, (float) $response->json('meta.totals.wallet_balance'));
-        // 125 held − 42.50 owed. One captain owes the office, the other is owed.
-        $this->assertSame(82.5, (float) $response->json('meta.totals.net_due_to_platform'));
+        // 121.25 (the cash captain: his share plus the 100 he paid the place) + 21.25.
+        $this->assertSame(142.5, (float) $response->json('meta.totals.wallet_balance'));
+        // One captain owes the office 3.75, the other is owed 21.25.
+        $this->assertSame(-17.5, (float) $response->json('meta.totals.net_due_to_platform'));
         $this->assertSame(15.0, (float) $response->json('meta.commission_rate'));
     }
 
@@ -329,9 +337,9 @@ class DeliveryCommissionAndLedgerTest extends TestCase
         $response = $this->asAdmin()->getJson("/api/v1/admin/drivers/{$driver->id}/ledger")->assertOk();
 
         $meters = collect($response->json('data'))->pluck('meter')->sort()->values()->all();
-        $this->assertSame(['cash', 'wallet'], $meters);
+        $this->assertSame(['cash', 'wallet', 'wallet'], $meters);
         $this->assertSame(125.0, (float) $response->json('meta.balances.cash_in_hand'));
-        $this->assertSame(103.75, (float) $response->json('meta.balances.net_due_to_platform'));
+        $this->assertSame(3.75, (float) $response->json('meta.balances.net_due_to_platform'));
         $this->assertSame(3.75, (float) $response->json('meta.lifetime.platform_margin'));
     }
 }

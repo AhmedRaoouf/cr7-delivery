@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DriverTransaction extends Model
 {
-    protected $fillable = ['driver_id', 'order_id', 'type', 'amount', 'balance_after', 'note', 'created_by'];
+    protected $fillable = [
+        'driver_id', 'order_id', 'settlement_id', 'errand_request_id', 'type', 'amount', 'balance_after', 'note', 'created_by',
+    ];
 
     protected function casts(): array
     {
@@ -25,6 +27,16 @@ class DriverTransaction extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function settlement(): BelongsTo
+    {
+        return $this->belongsTo(Settlement::class);
+    }
+
+    public function errandRequest(): BelongsTo
+    {
+        return $this->belongsTo(ErrandRequest::class);
     }
 
     public function createdBy(): BelongsTo

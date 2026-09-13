@@ -239,7 +239,7 @@ class ErrandLifecycleAction
         ]);
         $errand->record(ErrandStatus::Delivered, $driver->user, 'driver');
 
-        DriverLedger::recordErrand($driver, $errand->reference, $driverEarning, $fee);
+        DriverLedger::recordErrand($driver, $errand->reference, $driverEarning, $fee, $errand->id);
 
         $this->notifications->send($errand->customer, 'errand.delivered_customer', [],
             deepLink: 'cr7://errands/'.$errand->id);

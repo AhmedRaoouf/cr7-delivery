@@ -7,8 +7,10 @@ use App\Actions\Admin\ForceStatusAction;
 use App\Actions\Admin\OfferOrderToDriverAction;
 use App\Actions\Admin\ReassignDriverAction;
 use App\Actions\Admin\UnassignDriverAction;
+use App\Actions\Driver\PickupOrderAction;
 use App\Actions\Restaurant\ExtendPrepTimeAction;
 use App\Enums\OrderStatus;
+use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
@@ -19,6 +21,7 @@ use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
 use App\Support\Notifications\NotificationDispatcher;
+use App\Support\Notifications\RingService;
 use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -175,17 +178,31 @@ class OrderController extends Controller
             throw new ApiException('invalid_transition', 'لا يمكن فرض الاستلام في هذه المرحلة', 422);
         }
 
-        $from = $order->status;
-        $order->update(['status' => OrderStatus::PickedUp, 'picked_up_at' => now(), 'delivery_otp' => Otp::orderCode()]);
+        // The same completion the captain's own pickup runs: the delivery code (when the
+        // order has one) and the pickup advance the captain paid the place (D-103).
+        if ($order->driver !== null) {
+            $picked = PickupOrderAction::complete($order->driver, $order, OrderStatusActorType::Admin, $request->user()->id);
+            $picked->statusHistory()->latest('id')->first()?->update([
+                'reason_code' => 'force_pickup',
+                'meta' => ['message' => 'تدخّلت الإدارة'],
+            ]);
+        } else {
+            $from = $order->status;
+            $order->update([
+                'status' => OrderStatus::PickedUp,
+                'picked_up_at' => now(),
+                'delivery_otp' => $order->isDirect() || ! (bool) ($order->delivery_code_required ?? true) ? null : Otp::orderCode(),
+            ]);
 
-        $order->statusHistory()->create([
-            'from_status' => $from->value,
-            'to_status' => OrderStatus::PickedUp->value,
-            'actor_type' => 'admin',
-            'actor_id' => $request->user()->id,
-            'reason_code' => 'force_pickup',
-            'meta' => ['message' => 'تدخّلت الإدارة'],
-        ]);
+            $order->statusHistory()->create([
+                'from_status' => $from->value,
+                'to_status' => OrderStatus::PickedUp->value,
+                'actor_type' => 'admin',
+                'actor_id' => $request->user()->id,
+                'reason_code' => 'force_pickup',
+                'meta' => ['message' => 'تدخّلت الإدارة'],
+            ]);
+        }
 
         AuditLogger::record($request->user(), 'orders.force_pickup', $order);
 
@@ -229,6 +246,16 @@ class OrderController extends Controller
          * time, with the figures it is owed (D-77).
          */
         $fresh = $order->fresh(['items', 'restaurant.owner']);
+
+        // D-100 — with the ring on, the operator's nudge is one more ring on the place's
+        // phone, the same one it missed; the schedule is left as it was.
+        if (RingService::enabled() && $fresh->status === OrderStatus::Pending) {
+            app(RingService::class)->ring($fresh, max(1, (int) $fresh->ring_attempts), reschedule: false);
+
+            AuditLogger::record($request->user(), 'orders.renotify_restaurant', $fresh);
+
+            return ApiResponse::success($fresh, 'تم إعادة تنبيه المطعم');
+        }
 
         app(NotificationDispatcher::class)->send(
             $fresh->restaurant?->owner,

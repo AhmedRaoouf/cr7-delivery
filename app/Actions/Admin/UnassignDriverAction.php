@@ -48,6 +48,10 @@ class UnassignDriverAction
                 'status' => $nextStatus,
                 'pickup_otp' => Otp::orderCode(),
                 'pickup_otp_attempts' => 0,
+                // doc 62 §4.6 — the removed captain's numbers leave with him; the next
+                // captain's are written when he accepts.
+                'driver_earning' => 0,
+                'platform_delivery_margin' => 0,
                 // Whichever way it goes, this order is now waiting for a captain again —
                 // and the two-minute escalation has to be able to speak a second time.
                 // Without a requeue it sits on `ready` with nobody searching, which is

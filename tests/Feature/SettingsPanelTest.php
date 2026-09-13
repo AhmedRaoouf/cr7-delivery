@@ -6,11 +6,13 @@ use App\Enums\AdminScopeType;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\DeliveryCommission;
+use App\Support\Settings;
 use App\Support\SettingsCatalog;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -126,18 +128,18 @@ class SettingsPanelTest extends TestCase
         $this->assertSame('الشارع', $required['options'][0]['label_ar']);
     }
 
-    public function test_every_catalogue_key_with_a_default_has_a_row_after_the_migration(): void
+    public function test_a_key_with_no_row_reads_its_default_and_is_created_on_first_save(): void
     {
-        // A key with no default — a wallet number, a support line — is the operator's to
-        // write; `PATCH` creates its row on first save.
-        $missing = collect(SettingsCatalog::fields())
-            ->reject(fn (array $field) => $field['default'] === null)
-            ->keys()
-            ->reject(fn (string $key) => Setting::query()->where('key', $key)->exists())
-            ->values()
-            ->all();
+        Setting::query()->where('key', 'ring.gap_seconds')->delete();
+        Settings::forget('ring.gap_seconds');
 
-        $this->assertSame([], $missing);
+        $this->assertSame(60, SettingsCatalog::int('ring.gap_seconds'));
+
+        $this->asAdmin()
+            ->patchJson('/api/v1/admin/settings', ['settings' => ['ring.gap_seconds' => 90]])
+            ->assertOk();
+
+        $this->assertSame(90, Setting::query()->where('key', 'ring.gap_seconds')->value('value'));
     }
 
     public function test_a_multi_choice_is_stored_in_the_catalogues_order(): void
@@ -159,7 +161,7 @@ class SettingsPanelTest extends TestCase
             'services.sms_misr.environment' => '2',
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['code' => '6000', 'balance' => 12.5])]);
+        Http::fake(['*' => Http::response(['code' => '6000', 'balance' => 12.5])]);
 
         $this->asAdmin()->getJson('/api/v1/admin/settings/sms-status')
             ->assertOk()

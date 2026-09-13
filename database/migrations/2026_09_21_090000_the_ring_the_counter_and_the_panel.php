@@ -1,6 +1,5 @@
 <?php
 
-use App\Support\SettingsCatalog;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
@@ -19,8 +18,10 @@ use Illuminate\Support\Facades\Schema;
  *   what changed hands, closing.
  * - `otp_codes.purpose`: `address_phone` and `password_change` (D-106, D-112).
  * - `user_verified_phones`: the numbers an account has proven it holds (D-112).
- * - `settings`: every key the catalogue declares and the table lacks, at its default —
- *   `PATCH /admin/settings` used to skip a key with no row, in silence (D-113).
+ * - No `settings` rows are inserted: a catalogue key with no row reads its declared
+ *   default through `SettingsCatalog::get`, and `PATCH /admin/settings` now creates the
+ *   row on first save instead of skipping it in silence (D-113). Inserting them here
+ *   would also collide with every seeder and test that writes its own.
  * - `cart.max_restaurants` 3 → 2 where it still holds the seeded 3 (D-114).
  */
 return new class extends Migration
@@ -81,27 +82,6 @@ return new class extends Migration
 
             $table->unique(['user_id', 'phone']);
         });
-
-        foreach (SettingsCatalog::fields() as $key => $field) {
-            // A key with no default is a number only the operator can know — a wallet, a
-            // support line. Its row is the seeders' to write, with the operator's value.
-            if ($field['default'] === null) {
-                continue;
-            }
-
-            $exists = DB::table('settings')->where('key', $key)->exists();
-
-            if (! $exists) {
-                DB::table('settings')->insert([
-                    'key' => $key,
-                    'value' => json_encode($field['default']),
-                    'group' => $field['group'],
-                    'is_public' => (bool) ($field['public'] ?? false),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        }
 
         // D-114 — «مطعمين بس». Only over the seeded 3: a number the operator typed stays.
         // Read and compared in PHP: `value` is a JSON column, and MySQL compares a JSON

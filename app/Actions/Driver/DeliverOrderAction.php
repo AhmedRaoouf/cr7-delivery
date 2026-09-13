@@ -9,10 +9,16 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Support\DispatchService;
 use App\Support\DriverLedger;
+use App\Support\Notifications\OperatorAlerts;
 use App\Support\RollupStatus;
+use App\Support\SettingsCatalog;
 use Illuminate\Support\Facades\DB;
 
-/** doc 05 §8.2 — the customer's delivery code is the only path to `delivered`, except an origin=restaurant_direct order (D-49), which has none. */
+/**
+ * doc 05 §8.2 — the customer's delivery code is the only path to `delivered`, except an
+ * origin=restaurant_direct order (D-49), which has none, and — doc 62 D-108 — an order
+ * placed while the operator had the delivery code switched off.
+ */
 class DeliverOrderAction
 {
     public function __construct(private readonly DispatchService $dispatch) {}
@@ -25,10 +31,15 @@ class DeliverOrderAction
             throw new ApiException('invalid_transition', 'لا يمكن تسليم الطلب في هذه المرحلة', 422);
         }
 
-        $isDirect = $order->origin->value === 'restaurant_direct';
+        // D-49 — a direct order has no delivery code; D-108 — nor has an order placed with
+        // the delivery code switched off. The snapshot on the order decides, not today's
+        // switch.
+        $codeRequired = ! $order->isDirect() && (bool) ($order->delivery_code_required ?? true);
 
-        if (! $isDirect) {
-            if ($order->delivery_otp_attempts >= 5) {
+        if ($codeRequired) {
+            $limit = SettingsCatalog::int('order.otp_max_attempts');
+
+            if ($order->delivery_otp_attempts >= $limit) {
                 throw new ApiException('delivery_otp_locked', 'تم قفل إدخال الكود، برجاء التواصل مع الدعم', 423);
             }
 
@@ -39,11 +50,33 @@ class DeliverOrderAction
             if ($order->getRawOriginal('delivery_otp') !== $otp) {
                 $order->increment('delivery_otp_attempts');
 
-                throw new ApiException('invalid_delivery_otp', 'كود التسليم غير صحيح', 422, meta: ['attempts_left' => 5 - $order->delivery_otp_attempts]);
+                if ($order->delivery_otp_attempts >= $limit) {
+                    OperatorAlerts::codeLocked($order, 'delivery');
+                }
+
+                throw new ApiException('invalid_delivery_otp', 'كود التسليم غير صحيح', 422, meta: ['attempts_left' => max(0, $limit - $order->delivery_otp_attempts)]);
             }
         }
 
-        $delivered = DB::transaction(function () use ($driver, $order, $collectedAmount) {
+        $delivered = self::complete($driver, $order, $collectedAmount, OrderStatusActorType::Driver, $driver->user_id);
+
+        // Outside the transaction on purpose: writing offer rows for other
+        // orders inside this one would hold locks across them, and a captain who
+        // has just handed over a bag should hear about the next job in the same
+        // second — «مفيش طلب يبقى من غير كابتن وبأسرع ما يمكن».
+        $this->dispatch->offerBacklogTo($driver);
+
+        return $delivered;
+    }
+
+    /**
+     * Everything `delivered` owes the ledger — shared with the office's forced
+     * `delivered`, which used to write the status and nothing else: no earning, no cash
+     * row, and a captain who had carried the food was paid for it by nobody.
+     */
+    public static function complete(Driver $driver, Order $order, ?float $collectedAmount, OrderStatusActorType $actor, ?int $actorId): Order
+    {
+        return DB::transaction(function () use ($driver, $order, $collectedAmount, $actor, $actorId) {
             $from = $order->status;
 
             $order->update(['status' => OrderStatus::Delivered, 'delivered_at' => now()]);
@@ -51,16 +84,18 @@ class DeliverOrderAction
             $order->statusHistory()->create([
                 'from_status' => $from->value,
                 'to_status' => OrderStatus::Delivered->value,
-                'actor_type' => OrderStatusActorType::Driver,
-                'actor_id' => $driver->user_id,
+                'actor_type' => $actor,
+                'actor_id' => $actorId,
             ]);
 
             $driver->update(['is_available' => true, 'active_order_id' => null, 'completed_orders' => $driver->completed_orders + 1]);
 
+            // D-103 — a pickup that was forced, or that predates the advance, still owes
+            // the captain the food money he handed the place. Idempotent.
+            DriverLedger::recordPlaceAdvance($driver, $order);
+
             // D-71 — two meters, never one. `wallet_balance` is the captain's own money;
-            // `cash_in_hand` is the platform's money they are carrying. The old code wrote
-            // the cash row's `balance_after` from the wallet, so a cash trip logged a
-            // wallet figure the wallet had never held.
+            // `cash_in_hand` is the platform's money they are carrying.
             DriverLedger::recordEarning($driver, $order);
 
             if ($order->payment_method->value === 'cash') {
@@ -80,13 +115,5 @@ class DeliverOrderAction
 
             return $order->fresh();
         });
-
-        // Outside the transaction on purpose: writing offer rows for other
-        // orders inside this one would hold locks across them, and a captain who
-        // has just handed over a bag should hear about the next job in the same
-        // second — «مفيش طلب يبقى من غير كابتن وبأسرع ما يمكن».
-        $this->dispatch->offerBacklogTo($driver);
-
-        return $delivered;
     }
 }

@@ -67,7 +67,7 @@ class FcmClient
     }
 
     /**
-     * @param  array<int, array{token: string, title: string, body: string, data?: array<string, string>, channel?: string}>  $messages
+     * @param  array<int, array{token: string, title: string, body: string, data?: array<string, string>, channel?: string, kind?: string, platform?: string, ttl?: int}>  $messages
      * @return array<int, array{ok: bool, error: ?string, unregistered: bool}>
      */
     public function send(array $messages): array
@@ -120,6 +120,10 @@ class FcmClient
      */
     private function envelope(array $message): array
     {
+        if (in_array($message['kind'] ?? null, ['ring', 'ring_stop'], true)) {
+            return $this->ringEnvelope($message);
+        }
+
         $isUrgent = ($message['channel'] ?? 'default') === 'offers';
         $tag = $message['data']['order_id'] ?? $message['data']['errand_id'] ?? null;
 
@@ -187,6 +191,63 @@ class FcmClient
                     'apns-push-type' => 'alert',
                 ],
                 'payload' => ['aps' => $aps],
+            ],
+        ];
+    }
+
+    /**
+     * D-100 — the place's phone rings like a call.
+     *
+     * On Android the ring is **data-only**. A `notification` block is drawn by the system
+     * when the app is not in front — once, on the channel's sound — and nothing of ours
+     * runs; a ring has to loop its sound until it is cancelled, time itself out, use the
+     * call category and later be cancelled by a second message, and only the app's own
+     * background handler can post a notification that does all four. `firebase_messaging`
+     * wakes that handler for a high-priority data message even when the process is dead.
+     *
+     * iOS cannot be trusted to run code for a background data message, so there the ring
+     * is an alert whose sound is a ‪30‬-second `ring.caf` — Apple's own ceiling for a
+     * notification sound — at the time-sensitive level. It cannot be cancelled early,
+     * which is why `ring_stop` is never sent to an iOS token.
+     *
+     * The TTL keeps a ring from arriving minutes late: a phone that was off for ten
+     * minutes should not start ringing for an order the next ring has already replaced.
+     *
+     * @param  array{token: string, title: string, body: string, data?: array<string, string>, kind: string, platform?: string, ttl?: int}  $message
+     * @return array<string, mixed>
+     */
+    private function ringEnvelope(array $message): array
+    {
+        $data = array_map(fn ($value) => (string) $value, $message['data'] ?? []);
+        $ttl = max(10, (int) ($message['ttl'] ?? 60));
+
+        if (($message['platform'] ?? 'android') === 'ios') {
+            return [
+                'token' => $message['token'],
+                'notification' => ['title' => $message['title'], 'body' => $message['body']],
+                'data' => $data,
+                'apns' => [
+                    'headers' => [
+                        'apns-priority' => '10',
+                        'apns-push-type' => 'alert',
+                        'apns-expiration' => (string) (time() + $ttl),
+                        'apns-collapse-id' => 'ring-'.($data['order_id'] ?? ''),
+                    ],
+                    'payload' => ['aps' => [
+                        'sound' => 'ring.caf',
+                        'interruption-level' => 'time-sensitive',
+                        'thread-id' => 'ring',
+                    ]],
+                ],
+            ];
+        }
+
+        return [
+            'token' => $message['token'],
+            'data' => $data,
+            'android' => [
+                'priority' => 'HIGH',
+                'ttl' => $ttl.'s',
             ],
         ];
     }

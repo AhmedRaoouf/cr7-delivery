@@ -21,12 +21,17 @@ class OrderGroupController extends Controller
         $subtotal = round((float) $surviving->sum('subtotal'), 2);
         $discountAmount = round((float) $surviving->sum('discount_share'), 2);
         $deliveryFee = round((float) $surviving->sum('delivery_fee_share'), 2);
-        $total = round($subtotal - $discountAmount + $deliveryFee, 2);
+        $platformFee = round((float) $surviving->sum('platform_fee_share'), 2);
+        // doc 62 §4.6 — the service fee and a carried late-cancellation fee are part of
+        // what the customer owes. Recalculating without them handed every recalculated
+        // basket a total smaller than the one the captain was told to collect.
+        $total = round($subtotal - $discountAmount + $deliveryFee + $platformFee + (float) $orderGroup->outstanding_fees, 2);
 
         $orderGroup->update([
             'subtotal' => $subtotal,
             'discount_amount' => $discountAmount,
             'delivery_fee' => $deliveryFee,
+            'platform_fee' => $platformFee,
             'total' => $total,
             'restaurant_count' => $surviving->count(),
             'rollup_status' => RollupStatus::compute($orders->pluck('status')),

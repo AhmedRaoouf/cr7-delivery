@@ -120,15 +120,34 @@ class DriverFinanceController extends Controller
         ]);
     }
 
+    /** `GET /admin/drivers/{driver}/unsettled` — doc 62 §4.3, the same document the captain reads. */
+    public function unsettled(Request $request, Driver $driver): JsonResponse
+    {
+        $this->ensureInScope($request, $driver);
+
+        return ApiResponse::success(DriverLedger::unsettled($driver) + [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->user->name,
+                'phone' => $driver->user->phone,
+            ],
+        ]);
+    }
+
     /**
      * `POST /admin/drivers/{driver}/settle` — the office received cash, and/or paid the
-     * captain. Both optional, at least one required, applied together.
+     * captain, and writes the statement both of them can open afterwards.
+     *
+     * `mode: full` is «تمت التسوية»: everything the captain carries comes in, everything
+     * he is owed goes out, and only the difference physically changes hands. `partial`
+     * records the two figures typed; what is left opens the next statement.
      */
     public function settle(Request $request, Driver $driver): JsonResponse
     {
         $this->ensureInScope($request, $driver);
 
         $validated = $request->validate([
+            'mode' => ['nullable', 'in:full,partial'],
             'cash_received' => ['nullable', 'numeric', 'min:0'],
             'paid_to_driver' => ['nullable', 'numeric', 'min:0'],
             'method' => ['nullable', 'in:cash,vodafone_cash,instapay'],
@@ -136,8 +155,29 @@ class DriverFinanceController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $full = ($validated['mode'] ?? 'partial') === 'full';
         $cashReceived = (float) ($validated['cash_received'] ?? 0);
         $paidToDriver = (float) ($validated['paid_to_driver'] ?? 0);
+
+        if ($full) {
+            if ((float) $driver->cash_in_hand <= 0 && (float) $driver->wallet_balance <= 0
+                && $driver->transactions()->whereNull('settlement_id')->doesntExist()) {
+                throw new ApiException('nothing_to_settle', 'لا توجد مبالغ معلّقة على هذا الكابتن', 422);
+            }
+
+            $result = DriverLedger::settle(
+                $driver,
+                $request->user(),
+                0,
+                0,
+                $validated['method'] ?? null,
+                $validated['reference'] ?? null,
+                $validated['note'] ?? null,
+                full: true,
+            );
+
+            return ApiResponse::success($result, 'تمت تسوية حساب الكابتن', status: 201);
+        }
 
         if ($cashReceived <= 0 && $paidToDriver <= 0) {
             throw new ApiException('nothing_to_settle', 'أدخل مبلغًا واحدًا على الأقل', 422);

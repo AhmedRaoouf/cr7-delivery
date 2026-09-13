@@ -21,6 +21,8 @@ class CreateDirectOrderRequest extends FormRequest
             'delivery_address_text' => ['required', 'string', 'max:500'],
             'delivery_latitude' => ['required', 'numeric', 'between:-90,90'],
             'delivery_longitude' => ['required', 'numeric', 'between:-180,180'],
+            // D-102 — the customer's area; its price is the fee.
+            'zone_id' => ['nullable', 'integer'],
             'restaurant_order_ref' => ['required', 'string', 'max:32'],
             'declared_items_text' => ['nullable', 'string', 'max:1000'],
             'declared_order_value' => ['nullable', 'numeric', 'min:0'],

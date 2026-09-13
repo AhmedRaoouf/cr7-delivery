@@ -25,9 +25,10 @@ class NotificationCopy
      */
     private const TABLE = [
         // ---------------------------------------------------------- customer
+        // Once per basket (doc 62 §9): a two-place order used to say it twice.
         'order.placed' => [
-            'ar' => ['تم استلام طلبك', 'طلبك {order_number} بانتظار موافقة المطعم'],
-            'en' => ['Order placed', 'Your order {order_number} is waiting for the restaurant'],
+            'ar' => ['تم استلام طلبك', 'طلبك {order_number} بانتظار موافقة {places}'],
+            'en' => ['Order placed', 'Your order {order_number} is waiting for {places}'],
         ],
         'order.confirm_required' => [
             'ar' => ['ردّت كل المطاعم — يرجى تأكيد طلبك', 'راجع الطلب والإجمالي ({amount}) وأكّده ليبدأ التحضير'],
@@ -139,9 +140,14 @@ class NotificationCopy
         ],
 
         // ------------------------------------------------------------ driver
+        // doc 62 §9 — the whole sentence, built per locale by `OfferContext`: the place
+        // and the customer's area, how far the place is from the captain, how long the
+        // trip is, and the earning — with why it is zero when it is. The old copy read
+        // «‪0.00‬ ج.م» on every free first order with nothing to say why, and «—» for
+        // the distance on every offer handed to a captain coming on shift.
         'offer.new' => [
-            'ar' => ['🚨 طلب جديد قريب منك', '{restaurant} · {distance} كم · أرباحك {earning}'],
-            'en' => ['🚨 New order near you', '{restaurant} · {distance} km · you earn {earning}'],
+            'ar' => ['🚨 طلب جديد قريب منك', '{summary}'],
+            'en' => ['🚨 New order near you', '{summary}'],
         ],
         'order.assigned' => [
             'ar' => ['أصبح الطلب لك ✅', 'رقم الطلب في المطعم {restaurant_order_ref}'],
@@ -214,8 +220,8 @@ class NotificationCopy
         // An operator handed this order to this captain by name. It is still an offer:
         // the same accept/reject screen, and a refusal goes back to whoever sent it.
         'offer.assigned' => [
-            'ar' => ['📌 تم إسناد طلب لك', 'الطلب {order_number} من {restaurant} · أرباحك {earning} — اقبله أو ارفضه'],
-            'en' => ['📌 An order was assigned to you', 'Order {order_number} from {restaurant} · you earn {earning} — accept or decline'],
+            'ar' => ['📌 تم إسناد طلب لك', 'الطلب {order_number} · {summary} — اقبله أو ارفضه'],
+            'en' => ['📌 An order was assigned to you', 'Order {order_number} · {summary} — accept or decline'],
         ],
         'offer.assignment_declined' => [
             'ar' => ['رفض الكابتن الإسناد', 'رفض {driver} الطلب {order_number} — السبب: {reason}'],
@@ -263,6 +269,61 @@ class NotificationCopy
         ],
 
         // The escalation, doc 40 §3: nobody took it and the operator has to look.
+        // ------------------------------------------------------------- doc 62
+        // D-100 — the ring. Its feed row is `order.new`; these are the two data messages
+        // the place's phone rings and stops on. The copy rides inside the data message
+        // (Android) and as the alert (iOS).
+        'order.ring' => [
+            'ar' => ['🔔 طلب جديد {order_number}', '{items} أصناف · حساب المكان {total} · {payment}'],
+            'en' => ['🔔 New order {order_number}', '{items} items · your share {total} · {payment}'],
+        ],
+        // D-104 — the counter, from both sides.
+        'settlement.recorded' => [
+            'ar' => ['تمت تسوية حسابك', '{summary} — {balance}'],
+            'en' => ['Your account was settled', '{summary} — {balance}'],
+        ],
+        'settlement.paid' => [
+            'ar' => ['تم تحويل مستحقاتك', 'حوّلت المنصة {amount} عن الفترة {period}'],
+            'en' => ['Your payout was sent', 'The platform sent {amount} for {period}'],
+        ],
+        // The deadlines nothing used to enforce (doc 62 §9).
+        'payment.due_reminder' => [
+            'ar' => ['يتبقّى {minutes} دقائق على التحويل', 'سيُلغى الطلب {order_number} تلقائيًا إن لم يصل التحويل'],
+            'en' => ['{minutes} min left to transfer', 'Order {order_number} is cancelled automatically if the transfer does not arrive'],
+        ],
+        'payment.expired' => [
+            'ar' => ['تم إلغاء الطلب', 'لم يصلنا التحويل للطلب {order_number} في الوقت المحدد — يمكنك إعادة الطلب والدفع نقدًا'],
+            'en' => ['Order cancelled', 'The transfer for order {order_number} did not arrive in time — you can reorder and pay cash'],
+        ],
+        'payment.expired_restaurant' => [
+            'ar' => ['تم إلغاء الطلب {order_number}', 'لم يُتمّ العميل التحويل في الوقت المحدد — لا حاجة لتحضيره'],
+            'en' => ['Order {order_number} was cancelled', 'The customer did not pay in time — no need to prepare it'],
+        ],
+        'order.confirm_expired' => [
+            'ar' => ['تم إلغاء الطلب', 'لم يصلنا تأكيدك للطلب {order_number} في الوقت المحدد — يمكنك إعادة الطلب في أي وقت'],
+            'en' => ['Order cancelled', 'We did not receive your confirmation of order {order_number} in time — you can reorder any time'],
+        ],
+        'order.confirm_expired_restaurant' => [
+            'ar' => ['تم إلغاء الطلب {order_number}', 'لم يؤكّد العميل الطلب في الوقت المحدد — لا حاجة لتحضيره'],
+            'en' => ['Order {order_number} was cancelled', 'The customer did not confirm in time — no need to prepare it'],
+        ],
+        // Operator alerts doc 11 §4 listed and nothing sent.
+        'payment.proof_uploaded_admin' => [
+            'ar' => ['إيصال تحويل بانتظار المراجعة', 'الطلب {order_number} · {amount} عبر {method} — راجعه قبل انتهاء المهلة'],
+            'en' => ['A transfer receipt is waiting', 'Order {order_number} · {amount} via {method} — review it before the deadline'],
+        ],
+        'order.restaurant_timeout_admin' => [
+            'ar' => ['مكان لم يرد على طلب', 'لم يرد {restaurant} على الطلب {order_number} خلال {minutes} دقائق'],
+            'en' => ['A place has not answered', '{restaurant} has not answered order {order_number} in {minutes} min'],
+        ],
+        'order.delivery_issue_admin' => [
+            'ar' => ['مشكلة في توصيل طلب', 'أبلغ الكابتن {driver} عن مشكلة في الطلب {order_number}'],
+            'en' => ['A delivery has a problem', '{driver} reported a problem with order {order_number}'],
+        ],
+        'order.otp_locked_admin' => [
+            'ar' => ['قُفل كود طلب', 'قُفل {kind} للطلب {order_number} بعد {attempts} محاولات خاطئة — الكابتن {driver} ينتظر'],
+            'en' => ['An order code locked', 'The {kind} for order {order_number} locked after {attempts} wrong tries — {driver} is waiting'],
+        ],
         'errand.no_driver_admin' => [
             'ar' => ['مشوار بلا كابتن منذ {minutes} دقيقة', '{reference} — {pickup} ← {dropoff} · العميل يعرض {fee}'],
             'en' => ['Errand unclaimed for {minutes} min', '{reference} — {pickup} → {dropoff} · offer {fee}'],
@@ -270,7 +331,7 @@ class NotificationCopy
     ];
 
     /**
-     * @param  array<string, string|int|float|null>  $context
+     * @param  array<string, string|int|float|array{ar: string, en: string}|null>  $context
      * @return array{title: string, body: string}
      */
     public static function copy(string $type, string $locale, array $context = []): array
@@ -294,13 +355,22 @@ class NotificationCopy
         return isset(self::TABLE[$type]);
     }
 
-    /** @param array<string, string|int|float|null> $context */
+    /** @param array<string, string|int|float|array{ar: string, en: string}|null> $context */
     private static function fill(string $template, array $context, string $locale): string
     {
         $isArabic = ! str_starts_with($locale, 'en');
 
         $replacements = [];
         foreach ($context as $key => $value) {
+            // A value may be a sentence per locale — `['ar' => …, 'en' => …]` — when it has
+            // words around its numbers. Such a value arrives already isolated: wrapping a
+            // whole Arabic sentence in an LTR isolate would lay it out left to right.
+            if (is_array($value)) {
+                $replacements['{'.$key.'}'] = (string) ($value[$isArabic ? 'ar' : 'en'] ?? $value['ar'] ?? '');
+
+                continue;
+            }
+
             $replacements['{'.$key.'}'] = $isArabic
                 ? Isolate::ltrIfNumeric((string) $value)
                 : (string) $value;

@@ -27,6 +27,10 @@ class EarningsController extends Controller
             ...DriverLedger::balances($driver),
             'total_earned' => (float) $transactions->where('type', 'order_earning')->sum('amount'),
             'orders_count' => $transactions->where('type', 'order_earning')->count(),
+            // D-103 — the two other lines the balances are made of: what the captain took
+            // at doors, and what he handed places at counters out of it.
+            'cash_collected' => round((float) $transactions->where('type', 'cash_collected')->sum('amount'), 2),
+            'paid_to_places' => round((float) $transactions->where('type', 'place_advance')->sum('amount'), 2),
             // What the captain handed the office inside the window, and what the office
             // handed them. Without these the balances look like they drift on their own.
             'cash_handed_over' => round(abs((float) $transactions->where('type', 'cash_handover')->sum('amount')), 2),
@@ -69,13 +73,18 @@ class EarningsController extends Controller
             'delivery_fee' => (float) $order->delivery_fee_share,
             'platform_margin' => (float) $order->platform_delivery_margin,
             'commission_rate' => DeliveryCommission::rate(),
-            // On a cash trip the captain holds the whole customer total, not just the
-            // delivery fee — that is what the settlement nets off.
-            'cash_collected' => $order->payment_method->value === 'cash' ? (float) $order->total : 0.0,
-            // …and of that total, this much is not theirs to keep.
-            'owed_to_platform' => $order->payment_method->value === 'cash'
-                ? round((float) $order->total - (float) $order->driver_earning, 2)
-                : round(-(float) $order->driver_earning, 2),
+            // D-103 — on a cash trip the captain takes the whole door total and has
+            // already handed the place its figure at the counter; what is left of the
+            // one after the other and after his own share is the platform's.
+            'cash_collected' => round((float) $transactions->where('type', 'cash_collected')->sum('amount'), 2),
+            'paid_to_place' => round((float) $transactions->where('type', 'place_advance')->sum('amount'), 2),
+            'free_delivery_reason' => $order->free_delivery_reason,
+            'owed_to_platform' => round(
+                (float) $transactions->where('type', 'cash_collected')->sum('amount')
+                - (float) $transactions->where('type', 'place_advance')->sum('amount')
+                - (float) $transactions->where('type', 'order_earning')->sum('amount'),
+                2,
+            ),
             'transactions' => $transactions->map(fn ($t) => [
                 'id' => $t->id,
                 'type' => $t->type,
@@ -85,6 +94,17 @@ class EarningsController extends Controller
                 'created_at' => $t->created_at,
             ]),
         ]);
+    }
+
+    /**
+     * doc 62 §4.3 — «اللي عليا واللي ليا»: every row since the last settlement, grouped
+     * the way the office settles it. The same document the office's settle dialog reads.
+     */
+    public function unsettled(Request $request): JsonResponse
+    {
+        $driver = $request->user()->driver()->firstOrFail();
+
+        return ApiResponse::success(DriverLedger::unsettled($driver));
     }
 
     public function settlements(Request $request): JsonResponse

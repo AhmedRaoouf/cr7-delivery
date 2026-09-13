@@ -14,6 +14,7 @@ use App\Http\Requests\Restaurant\RejectOrderRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\BoardQueue;
+use App\Support\OrderParties;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,7 +38,7 @@ class OrderController extends Controller
         $to = $request->input('filter.date_to');
 
         $orders = $restaurant->orders()
-            ->with(['items.options', 'driver.user'])
+            ->with(['items.options', ...OrderParties::relations()])
             ->when($queue && isset(self::QUEUES[$queue]), fn ($q) => $q->whereIn('status', self::QUEUES[$queue]))
             ->when(is_string($status) && $status !== '', fn ($q) => $q->where('status', $status))
             ->when($search !== '', fn ($q) => $q->where(function ($sub) use ($search) {
@@ -55,7 +56,12 @@ class OrderController extends Controller
 
         // `RES-03` reads the code straight off the card. Order::$hidden keeps it off
         // every other payload; this is the one reader entitled to it.
-        $items = array_map(fn (Order $o) => $o->revealPickupOtp()->withRestaurantMoney(), $orders->items());
+        // D-101 — and each card carries the three parties, so the board and the detail
+        // screen read the customer and the captain from the same block.
+        $items = array_map(
+            fn (Order $o) => OrderParties::present($o->revealPickupOtp()->withRestaurantMoney(), 'restaurant'),
+            $orders->items(),
+        );
 
         return ApiResponse::success($items, meta: [
             'current_page' => $orders->currentPage(),
@@ -87,9 +93,12 @@ class OrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        $payload = $order->load(['items.options', 'driver.user', 'statusHistory'])->revealPickupOtp()->withRestaurantMoney()->toArray();
-        $payload['awaiting_customer_payment'] = $order->orderGroup->rollup_status === 'awaiting_payment';
-        $payload['payment_deadline_at'] = $order->orderGroup->payment?->deadline_at;
+        $order->load(['items.options', 'statusHistory', ...OrderParties::relations()]);
+        $group = $order->orderGroup;
+
+        $payload = OrderParties::present($order->revealPickupOtp()->withRestaurantMoney(), 'restaurant');
+        $payload['awaiting_customer_payment'] = $group->rollup_status === 'awaiting_payment';
+        $payload['payment_deadline_at'] = $group->payment?->deadline_at;
 
         return ApiResponse::success($payload);
     }

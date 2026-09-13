@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Api\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController as AdminReportExportController;
 use App\Http\Controllers\Api\Admin\RestaurantController;
+use App\Http\Controllers\Api\Admin\RestaurantFinanceController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\ScheduledOrderController as AdminScheduledOrderController;
 use App\Http\Controllers\Api\Admin\ServiceZoneController;
@@ -426,6 +427,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders/{order}', [DriverOrderController::class, 'show']);
 
         Route::get('/earnings', [DriverEarningsController::class, 'earnings']);
+        // Before `/earnings/{order}`, or the binder reads «unsettled» as an order id.
+        Route::get('/earnings/unsettled', [DriverEarningsController::class, 'unsettled']);
         Route::get('/earnings/{order}', [DriverEarningsController::class, 'earning']);
         Route::get('/settlements', [DriverEarningsController::class, 'settlements']);
         Route::get('/stats', [DriverEarningsController::class, 'stats']);
@@ -516,6 +519,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/finance/drivers', [DriverFinanceController::class, 'index']);
             Route::get('/drivers/{driver}', [DriverController::class, 'show']);
             Route::get('/drivers/{driver}/ledger', [DriverFinanceController::class, 'ledger']);
+            // doc 62 §4.3 — the rows no statement has closed, grouped the way the office
+            // settles them: cash orders beside online ones.
+            Route::get('/drivers/{driver}/unsettled', [DriverFinanceController::class, 'unsettled']);
         });
         // D-71 — the office received cash from a captain and/or paid one. Same permission
         // as a manual balance adjustment, because that is exactly what it is.
@@ -629,6 +635,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/refunds', [AdminRefundController::class, 'store'])->middleware('permission:refunds.create');
         Route::post('/refunds/{refund}/process', [AdminRefundController::class, 'process'])->middleware('permission:refunds.process');
 
+        // doc 62 §4.4 — what each place is owed and no statement has claimed yet.
+        Route::get('/finance/restaurants', [RestaurantFinanceController::class, 'index'])->middleware('permission:settlements.view');
         Route::get('/settlements', [AdminSettlementController::class, 'index'])->middleware('permission:settlements.view');
         Route::get('/settlements/{settlement}', [AdminSettlementController::class, 'show'])->middleware('permission:settlements.view');
         Route::get('/settlements/{settlement}/export', [AdminSettlementController::class, 'export'])->middleware('permission:settlements.view');

@@ -37,6 +37,11 @@ class Order extends Model
         'confirmed_at', 'preparing_at', 'prep_due_at', 'ready_at', 'dispatch_started_at',
         'driver_assigned_at', 'arrived_restaurant_at', 'waiting_started_at', 'picked_up_at',
         'arrived_customer_at', 'delivered_at', 'cancelled_at',
+        // doc 62 — the ring's schedule (D-100), the two code switches as they stood at
+        // placement (D-108), why a delivery fee was waived (D-105), the address as it
+        // was typed (D-101) and what the captain handed the place (D-103).
+        'ring_attempts', 'ring_next_at', 'pickup_code_required', 'delivery_code_required',
+        'free_delivery_reason', 'delivery_address_snapshot', 'place_paid_amount',
     ];
 
     protected $hidden = ['pickup_otp', 'delivery_otp'];
@@ -116,11 +121,48 @@ class Order extends Model
             return 0.0;
         }
 
+        // A direct order's door total is its fee, plus the food when the place asked
+        // the captain to collect it (D-48) — the one rule the offer card, the job screen
+        // and the ledger all read.
+        if ($this->origin?->value === 'restaurant_direct') {
+            $food = $this->food_payment?->value === 'collect_by_driver' ? (float) $this->declared_order_value : 0.0;
+
+            return round((float) $this->total + $food, 2);
+        }
+
         $carried = (int) $this->group_sequence === 1
             ? (float) ($this->orderGroup?->outstanding_fees ?? 0)
             : 0.0;
 
         return round((float) $this->total + $carried, 2);
+    }
+
+    /**
+     * D-103 — what the captain hands the place when he takes the bag.
+     *
+     * Operator, 2026-09-13: «الكابتن يدفع للمكان وقت الاستلام». On a cash order the
+     * captain pays the place its own figure («حساب المكان») and collects the whole cash
+     * total at the door; on a direct order whose food money the captain collects, he pays
+     * the declared food value the same way. An online order's food is the platform's to
+     * pay, in the place's statement, so the captain hands over nothing.
+     *
+     * A promo discount is the platform's, not the place's: the captain pays the place the
+     * full figure and collects the discounted total, and the difference is what the
+     * ledger records the platform owing him.
+     */
+    public function placePaidAtPickup(): float
+    {
+        if ($this->payment_method?->value !== 'cash') {
+            return 0.0;
+        }
+
+        if ($this->origin?->value === 'restaurant_direct') {
+            return $this->food_payment?->value === 'collect_by_driver'
+                ? round((float) $this->declared_order_value, 2)
+                : 0.0;
+        }
+
+        return $this->restaurant_amount;
     }
 
     protected function casts(): array
@@ -163,6 +205,11 @@ class Order extends Model
             'arrived_customer_at' => 'datetime',
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'ring_next_at' => 'datetime',
+            'pickup_code_required' => 'boolean',
+            'delivery_code_required' => 'boolean',
+            'delivery_address_snapshot' => 'array',
+            'place_paid_amount' => 'decimal:2',
         ];
     }
 

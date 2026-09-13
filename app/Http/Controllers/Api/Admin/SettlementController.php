@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Actions\Admin\GenerateSettlementAction;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Restaurant;
 use App\Models\Settlement;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Notifications\NotificationDispatcher;
 use App\Support\SettlementExporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -102,6 +104,23 @@ class SettlementController extends Controller
         ]);
 
         AuditLogger::record($request->user(), 'settlements.pay', $settlement, $validated);
+
+        // doc 62 §4.4 — the place is told its money was sent, and how much.
+        $party = $settlement->party;
+
+        if ($party instanceof Restaurant && $party->owner !== null) {
+            app(NotificationDispatcher::class)->send(
+                $party->owner,
+                'settlement.paid',
+                [
+                    'amount' => number_format((float) $settlement->net_amount, 2).' ج.م',
+                    'period' => $settlement->period_start?->format('Y-m-d').' — '.$settlement->period_end?->format('Y-m-d'),
+                ],
+                '/settlements/'.$settlement->id,
+                null,
+                ['settlement_id' => (string) $settlement->id, 'kind' => 'settlement'],
+            );
+        }
 
         return ApiResponse::success($settlement->fresh(), 'تم تسجيل الدفع بنجاح');
     }

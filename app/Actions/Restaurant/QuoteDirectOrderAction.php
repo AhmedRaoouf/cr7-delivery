@@ -3,43 +3,45 @@
 namespace App\Actions\Restaurant;
 
 use App\Exceptions\ApiException;
-use App\Models\DeliveryPricingRule;
 use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Models\Setting;
 use App\Support\Geo;
 use App\Support\ZoneLocator;
 
-/** doc 08 §6.2 — POST /restaurant/direct-orders/quote: coverage, zone, distance, fee, ETA. Never creates anything. */
+/**
+ * doc 08 §6.2 — POST /restaurant/direct-orders/quote: coverage, zone, distance, fee, ETA.
+ * Never creates anything.
+ *
+ * D-102 (2026-09-13) — «ايا كان ال delivery فين والمطعم فين تمن التوصيل بيتحسب علي مكان
+ * العميل». The fee is the price of the **customer's area**, exactly as a customer's own
+ * basket is priced. This used to match the drop pin against the zones the place itself
+ * serves — so a customer one area over matched nothing and the place was told the
+ * address was outside coverage — and then priced it by the distance from the place.
+ * Now the place picks the area from the same list a customer picks from (`zone_id`);
+ * without one, the pin is placed in the most specific priced area that contains it.
+ */
 class QuoteDirectOrderAction
 {
-    public function execute(Restaurant $restaurant, float $lat, float $lng): array
+    public function execute(Restaurant $restaurant, float $lat, float $lng, ?int $zoneId = null): array
     {
-        $servedZoneIds = $restaurant->servedZones()->pluck('service_zones.id')->push($restaurant->service_zone_id)->unique();
-
-        $zone = ServiceZone::query()->whereIn('id', $servedZoneIds)->where('is_active', true)->get()
-            ->first(fn (ServiceZone $zone) => ZoneLocator::contains($zone, $lat, $lng));
+        $zone = $zoneId !== null
+            ? ServiceZone::query()->where('is_active', true)->find($zoneId)
+            : (ZoneLocator::suggestFor($lat, $lng) ?? ZoneLocator::forPoint($lat, $lng));
 
         if (! $zone) {
-            $nearest = ServiceZone::query()->whereIn('id', $servedZoneIds)->first();
-
-            throw new ApiException('address_outside_coverage', 'هذا العنوان خارج نطاق التغطية', 422, meta: [
-                'nearest_zone' => $nearest?->only(['id', 'name_ar', 'name_en']),
-            ]);
+            throw new ApiException(
+                $zoneId !== null ? 'zone_not_found' : 'address_outside_coverage',
+                $zoneId !== null ? 'اختر منطقة العميل من القائمة' : 'حدّد منطقة العميل من القائمة — هذا الموقع خارج المناطق المسعّرة',
+                422,
+                errors: ['zone_id' => [$zoneId !== null ? 'اختر منطقة العميل من القائمة' : 'حدّد منطقة العميل']],
+            );
         }
 
         $distanceKm = Geo::haversineKm((float) $restaurant->latitude, (float) $restaurant->longitude, $lat, $lng);
 
-        $rule = DeliveryPricingRule::query()
-            ->where('city_id', $restaurant->city_id)
-            ->where('is_active', true)
-            ->where(fn ($q) => $q->whereNull('service_zone_id')->orWhere('service_zone_id', $zone->id))
-            ->where('min_distance_km', '<=', $distanceKm)
-            ->where('max_distance_km', '>=', $distanceKm)
-            ->orderByDesc('service_zone_id')
-            ->first();
-
-        $fee = (float) ($rule->fee ?? $zone->delivery_fee ?? 0);
+        // The area's price, and nothing else — no distance band, no place location.
+        $fee = round((float) ($zone->delivery_fee ?? 0), 2);
 
         // D-64 — a direct order is a delivery the platform sold, so it carries the
         // service fee too. `platform.order_fee_applies_to_direct` exempts phone orders

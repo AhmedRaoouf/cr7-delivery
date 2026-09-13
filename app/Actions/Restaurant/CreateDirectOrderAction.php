@@ -14,6 +14,7 @@ use App\Support\BusinessTime;
 use App\Support\DispatchService;
 use App\Support\OrderNumber;
 use App\Support\Otp;
+use App\Support\SettingsCatalog;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -53,7 +54,12 @@ class CreateDirectOrderAction
             throw new ApiException('duplicate_restaurant_order_ref', 'رقم الطلب مستخدم بالفعل اليوم', 422);
         }
 
-        $quote = $this->quote->execute($restaurant, (float) $data['delivery_latitude'], (float) $data['delivery_longitude']);
+        $quote = $this->quote->execute(
+            $restaurant,
+            (float) $data['delivery_latitude'],
+            (float) $data['delivery_longitude'],
+            isset($data['zone_id']) ? (int) $data['zone_id'] : null,
+        );
 
         return DB::transaction(function () use ($user, $restaurant, $data, $idempotencyKey, $quote) {
             $group = OrderGroup::create([
@@ -112,6 +118,11 @@ class CreateDirectOrderAction
                 'payment_method' => 'cash',
                 'restaurant_name_snapshot' => $restaurant->name_ar,
                 'delivery_address_text' => $data['delivery_address_text'],
+                'delivery_address_snapshot' => [
+                    'area' => $quote['service_zone_name'],
+                    'zone_id' => $quote['service_zone_id'],
+                    'street' => $data['delivery_address_text'],
+                ],
                 'delivery_contact_phone' => $data['guest_customer_phone'],
                 'delivery_latitude' => $data['delivery_latitude'],
                 'delivery_longitude' => $data['delivery_longitude'],
@@ -130,6 +141,10 @@ class CreateDirectOrderAction
                 'prep_minutes' => $data['prep_minutes'] ?? null,
                 'pickup_otp' => Otp::orderCode(),
                 'delivery_otp' => null,
+                // D-108 / D-49 — the pickup code follows the panel; a direct order never
+                // has a delivery code.
+                'pickup_code_required' => SettingsCatalog::bool('orders.pickup_code_required'),
+                'delivery_code_required' => false,
                 'delivery_instructions' => $data['delivery_instructions'] ?? null,
                 'accepted_at' => $now,
                 'confirmed_at' => $now,

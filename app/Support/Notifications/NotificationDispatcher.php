@@ -44,6 +44,9 @@ class NotificationDispatcher
         ?int $orderId = null,
         array $data = [],
         string $channel = 'default',
+        // False writes the row and sends nothing — for a notification whose push is
+        // sent another way, like the place's ring (D-100).
+        bool $push = true,
     ): ?Notification {
         if ($recipient === null) {
             return null;
@@ -82,6 +85,10 @@ class NotificationDispatcher
          * otherwise have a routing payload and no words in it. Two short
          * strings, and the app never has to guess.
          */
+        if (! $push) {
+            return $notification;
+        }
+
         $this->push(
             $recipient,
             $notification,

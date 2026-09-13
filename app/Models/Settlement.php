@@ -15,6 +15,8 @@ class Settlement extends Model
         'refunds_total', 'commission_total', 'delivery_fees_total', 'platform_delivery_margin_total', 'platform_fee_total',
         'cash_collected',
         'net_amount', 'status', 'payment_reference', 'note', 'created_by', 'paid_at',
+        // doc 62 §4.3 — a captain's statement is an account statement.
+        'opening_balance', 'cash_received', 'paid_out', 'closing_balance', 'breakdown',
     ];
 
     protected function casts(): array
@@ -33,12 +35,29 @@ class Settlement extends Model
             'cash_collected' => 'decimal:2',
             'net_amount' => 'decimal:2',
             'paid_at' => 'datetime',
+            'opening_balance' => 'decimal:2',
+            'cash_received' => 'decimal:2',
+            'paid_out' => 'decimal:2',
+            'closing_balance' => 'decimal:2',
+            'breakdown' => 'array',
         ];
     }
 
     public function items(): HasMany
     {
         return $this->hasMany(SettlementItem::class);
+    }
+
+    /** The ledger rows a captain's statement closed (doc 62 §4.3). */
+    public function driverTransactions(): HasMany
+    {
+        return $this->hasMany(DriverTransaction::class);
+    }
+
+    /** The orders a place's statement claimed (doc 62 §4.4). */
+    public function claimedOrders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'restaurant_settlement_id');
     }
 
     public function createdBy(): BelongsTo

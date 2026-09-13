@@ -14,6 +14,7 @@ use App\Support\BusinessTime;
 use App\Support\CheckoutPricer;
 use App\Support\OrderNumber;
 use App\Support\Otp;
+use App\Support\SettingsCatalog;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -56,7 +57,23 @@ class CreateOrderAction
             throw new ApiException($first['code'], $first['message'], 422, meta: ['blockers' => $quote['blockers']]);
         }
 
-        return DB::transaction(function () use ($user, $cart, $data, $idempotencyKey, $address, $quote) {
+        $addressSnapshot = [
+            'address_id' => $address->id,
+            'label' => $address->label?->value ?? $address->label,
+            'title' => $address->title,
+            'street' => $address->street,
+            'building' => $address->building,
+            'floor' => $address->floor,
+            'apartment' => $address->apartment,
+            'landmark' => $address->landmark,
+            'area' => $address->serviceZone?->name_ar,
+            'area_en' => $address->serviceZone?->name_en,
+            'city' => $address->city?->name_ar,
+            'zone_id' => $address->service_zone_id,
+            'city_id' => $address->city_id,
+        ];
+
+        return DB::transaction(function () use ($user, $cart, $data, $idempotencyKey, $address, $quote, $addressSnapshot) {
             $group = OrderGroup::create([
                 'group_number' => OrderNumber::pending($idempotencyKey),
                 'idempotency_key' => $idempotencyKey,
@@ -155,6 +172,15 @@ class CreateOrderAction
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
                     'pickup_otp' => Otp::orderCode(),
+                    // D-108 — the two switches as they stand now. A switch flipped on
+                    // `ADM-46` mid-shift must not strand an order already on the road.
+                    'pickup_code_required' => SettingsCatalog::bool('orders.pickup_code_required'),
+                    'delivery_code_required' => SettingsCatalog::bool('orders.delivery_code_required'),
+                    // D-105 — why the fee is zero, when it is, so every screen can say it.
+                    'free_delivery_reason' => $quote['free_delivery_reason'] ?? ($quote['first_order_free_applied'] ? 'first_order' : ($quote['free_delivery_applied'] ? 'threshold' : null)),
+                    // D-101 — the address as it was typed, not the live row the customer
+                    // may edit or delete before the captain arrives.
+                    'delivery_address_snapshot' => $addressSnapshot,
                     'business_date' => BusinessTime::date(),
                     'customer_note' => $data['customer_note'] ?? null,
                     'delivery_instructions' => $data['delivery_instructions'] ?? null,

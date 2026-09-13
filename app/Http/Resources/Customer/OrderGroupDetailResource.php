@@ -4,6 +4,7 @@ namespace App\Http\Resources\Customer;
 
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
+use App\Support\OrderParties;
 use App\Support\RatingState;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -64,7 +65,18 @@ class OrderGroupDetailResource extends JsonResource
                     'id' => $order->restaurant->id,
                     'name' => $order->restaurant->{"name_{$locale}"},
                     'phone' => $order->restaurant->phone,
+                    // D-101 — where the food is and how to reach the place.
+                    'whatsapp' => $order->restaurant->whatsapp,
+                    'address' => $order->restaurant->address,
+                    'latitude' => $order->restaurant->latitude === null ? null : (float) $order->restaurant->latitude,
+                    'longitude' => $order->restaurant->longitude === null ? null : (float) $order->restaurant->longitude,
+                    'logo' => $order->restaurant->logo,
                 ],
+                // D-101 — the same three blocks every party reads, trimmed to the customer.
+                'place' => OrderParties::place($order),
+                'captain' => OrderParties::captain($order->driver),
+                'money' => OrderParties::money($order, 'customer'),
+                'delivery_code_required' => ! $order->isDirect() && (bool) ($order->delivery_code_required ?? true),
                 'status' => $order->status,
                 'status_label' => $order->status->label(),
                 'subtotal' => (float) $order->subtotal,
@@ -92,6 +104,9 @@ class OrderGroupDetailResource extends JsonResource
                         : null,
                     'rating_avg' => (float) $order->driver->rating_avg,
                     'vehicle_type' => $order->driver->vehicle_type,
+                    'vehicle_label' => $order->driver->vehicle_type?->labelAr(),
+                    'vehicle_plate' => $order->driver->vehicle_plate,
+                    'avatar' => $order->driver->user->avatar,
                 ] : null,
                 'items' => $order->items->map(fn ($item) => [
                     'id' => $item->id,

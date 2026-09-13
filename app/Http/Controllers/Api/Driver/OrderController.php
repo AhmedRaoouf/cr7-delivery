@@ -17,6 +17,7 @@ use App\Http\Requests\Driver\PickupRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\OrderParties;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,9 +50,11 @@ class OrderController extends Controller
             return ApiResponse::success(null);
         }
 
-        $order = Order::with(['restaurant', 'items.options', 'orderGroup.address'])->find($driver->active_order_id);
+        $order = Order::query()->find($driver->active_order_id);
 
-        return ApiResponse::success($order);
+        // D-101 — the customer's name, number and address in parts, the place's number
+        // and pin, and what to pay and collect, in the blocks every party reads.
+        return ApiResponse::success($order === null ? null : OrderParties::presentForCaptain($order));
     }
 
     public function arrivedRestaurant(Request $request, Order $order): JsonResponse
@@ -71,7 +74,7 @@ class OrderController extends Controller
     public function pickup(PickupRequest $request, Order $order, PickupOrderAction $action): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
-        $order = $action->execute($driver, $order, $request->string('otp')->value());
+        $order = $action->execute($driver, $order, $request->string('otp')->value() ?: null);
 
         return ApiResponse::success($order);
     }
@@ -143,7 +146,7 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         abort_unless($order->driver_id === $driver->id, 404);
 
-        return ApiResponse::success($order->load(['restaurant', 'items.options', 'orderGroup.address']));
+        return ApiResponse::success(OrderParties::presentForCaptain($order));
     }
 
     /**

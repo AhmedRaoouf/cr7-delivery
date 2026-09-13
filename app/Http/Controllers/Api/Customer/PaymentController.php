@@ -11,6 +11,7 @@ use App\Models\PaymentProof;
 use App\Models\Setting;
 use App\Support\ApiResponse;
 use App\Support\FileUploader;
+use App\Support\Notifications\OperatorAlerts;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -90,6 +91,14 @@ class PaymentController extends Controller
 
             return $proof;
         });
+
+        // doc 11 §4 `alert.payment_review` — a receipt on a fifteen-minute clock waited for
+        // somebody to open the payments tab. The operators in scope are told now.
+        $first = $orderGroup->orders()->with('restaurant')->orderBy('group_sequence')->first();
+
+        if ($first !== null) {
+            OperatorAlerts::paymentProofUploaded($first, (float) $payment->amount, (string) $payment->method->value);
+        }
 
         return ApiResponse::success(
             PaymentProofResource::forCustomer([$proof], $orderGroup->id)[0],

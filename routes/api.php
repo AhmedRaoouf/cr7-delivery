@@ -737,6 +737,10 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('permission:settings.view')->group(function () {
             Route::get('/settings', [AdminSettingController::class, 'index']);
+            // D-113 — the declared panel both clients render. Before `/settings/{…}`
+            // could ever exist, and it does not.
+            Route::get('/settings/schema', [AdminSettingController::class, 'schema']);
+            Route::get('/settings/sms-status', [AdminSettingController::class, 'smsStatus']);
         });
         Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware('permission:settings.manage');
 

@@ -88,7 +88,8 @@ class SettingsSeeder extends Seeder
             'order.min_value_default' => [50.00, 'order'],
             'order.renotify_limit' => [1, 'order'],
 
-            'cart.max_restaurants' => [3, 'cart'],
+            // D-114 — «مطعمين بس»; the admin moves it on `ADM-46`.
+            'cart.max_restaurants' => [2, 'cart'],
             'cart.max_qty_per_line' => [10, 'cart'],
 
             'delivery.extra_stop_fee' => [10.00, 'delivery'],

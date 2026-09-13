@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OtpPurpose;
 use App\Models\Order;
 use App\Models\StoreCategory;
 use App\Services\Maps\ChainGeocoder;
@@ -11,9 +12,11 @@ use App\Services\Maps\NullGeocoder;
 use App\Services\Maps\OsmGeocoder;
 use App\Support\MapStyles;
 use App\Support\Otp;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\FakesOtpChannel;
 use Tests\TestCase;
 
 /**
@@ -22,6 +25,7 @@ use Tests\TestCase;
  */
 class MapsAndOtpTest extends TestCase
 {
+    use FakesOtpChannel;
     use RefreshDatabase;
 
     // ------------------------------------------------------------ map styles
@@ -415,64 +419,64 @@ class MapsAndOtpTest extends TestCase
     }
 
     // ------------------------------------------------------------------- OTP
+    //
+    // D-106 — the staging code is the panel's `otp.mode = test` now, not
+    // `OTP_STATIC_MODE`. The thorough cases — whether the gateway was called, admin
+    // protection, the clocks and the caps — are `OtpModeTest`; these keep the staging
+    // story: a code somebody can sign in with, and no fixed code on the road.
 
-    public function test_static_mode_pins_both_code_lengths(): void
+    public function test_test_mode_pins_the_account_code_and_never_the_order_code(): void
     {
-        config(['otp.static' => true, 'otp.static_code' => '123456', 'otp.static_order_code' => '1234']);
+        $this->otpTestMode('123456');
 
-        $this->assertSame('123456', Otp::authCode());
-        $this->assertSame('1234', Otp::orderCode());
-    }
-
-    public function test_a_misconfigured_code_is_padded_to_the_length_the_validator_demands(): void
-    {
-        // `digits:6` would reject a 2-digit code on the way back in, locking
-        // everyone out of an account nobody could report as broken.
-        config(['otp.static' => true, 'otp.static_code' => '12', 'otp.static_order_code' => 'ab7']);
-
-        $this->assertSame('000012', Otp::authCode());
-        $this->assertSame('0007', Otp::orderCode());
-    }
-
-    public function test_switching_static_mode_off_restores_random_codes(): void
-    {
-        config(['otp.static' => false]);
-
-        $this->assertMatchesRegularExpression('/^\d{6}$/', Otp::authCode());
+        $this->assertSame('123456', Otp::authCode(OtpPurpose::Login));
         $this->assertMatchesRegularExpression('/^\d{4}$/', Otp::orderCode());
-        $this->assertNull(Otp::echoable());
     }
 
-    public function test_a_random_code_is_never_echoed_back_to_its_own_requester(): void
+    public function test_a_malformed_test_code_reads_as_the_catalogue_default(): void
     {
-        // Echoing a random code hands the account to whoever asked for it, so
-        // the echo is tied to the code being static — not to the flag alone.
-        config(['otp.static' => false, 'otp.echo_in_response' => true]);
+        // Written by hand past the panel: the catalogue refuses it on read, so the code
+        // is the declared default rather than something `digits:6` refuses on the way
+        // back in, which would lock everyone out.
+        Settings::set('otp.mode', 'test', 'otp');
+        Settings::set('otp.test_code', '12', 'otp');
 
-        $this->assertNull(Otp::echoable());
+        $this->assertSame('123456', Otp::authCode(OtpPurpose::Login));
     }
 
-    public function test_send_otp_hands_back_the_staging_code(): void
+    public function test_sms_mode_restores_random_codes(): void
     {
-        config(['otp.static' => true, 'otp.echo_in_response' => true, 'otp.static_code' => '123456']);
+        $this->otpSmsMode();
+
+        $this->assertMatchesRegularExpression('/^\d{6}$/', Otp::authCode(OtpPurpose::Login));
+        $this->assertMatchesRegularExpression('/^\d{4}$/', Otp::orderCode());
+        $this->assertNull(Otp::echoable(OtpPurpose::Login));
+    }
+
+    public function test_send_otp_hands_back_the_test_code(): void
+    {
+        $this->fakeOtpChannel();
+        $this->otpTestMode('123456');
 
         $this->postJson('/api/v1/auth/otp/send', ['phone' => '01000000123'])
             ->assertOk()
             ->assertJsonPath('data.static_otp', '123456');
     }
 
-    public function test_send_otp_says_nothing_once_a_real_gateway_is_bound(): void
+    public function test_send_otp_says_nothing_once_the_panel_says_sms(): void
     {
-        config(['otp.static' => false]);
+        $this->fakeOtpChannel();
+        $this->otpSmsMode();
 
         $this->postJson('/api/v1/auth/otp/send', ['phone' => '01000000124'])
             ->assertOk()
-            ->assertJsonMissingPath('data.static_otp');
+            ->assertJsonPath('data.static_otp', null);
     }
 
-    public function test_the_staging_code_actually_signs_a_customer_in(): void
+    public function test_the_test_code_actually_signs_a_customer_in(): void
     {
-        config(['otp.static' => true, 'otp.static_code' => '123456']);
+        $this->fakeOtpChannel();
+        $this->otpTestMode('123456');
 
         $this->postJson('/api/v1/auth/otp/send', ['phone' => '01000000125'])->assertOk();
 
@@ -481,9 +485,13 @@ class MapsAndOtpTest extends TestCase
             ->assertJsonStructure(['data' => ['user', 'token']]);
     }
 
-    public function test_an_order_placed_in_static_mode_carries_the_fixed_pickup_code(): void
+    /**
+     * D-108 — `OTP_STATIC_ORDER_CODE` made every pickup code on the road `1234`. An order
+     * placed in test mode carries a random one like any other.
+     */
+    public function test_an_order_placed_in_test_mode_carries_a_random_pickup_code(): void
     {
-        config(['otp.static' => true, 'otp.static_order_code' => '1234']);
+        $this->otpTestMode('123456');
         $this->seedLocation();
 
         $restaurant = $this->makeRestaurant('سندوتش عمر');
@@ -497,9 +505,9 @@ class MapsAndOtpTest extends TestCase
             ->postJson('/api/v1/orders', [
                 'address_id' => $address->id,
                 'payment_method' => 'cash',
-            ], ['Idempotency-Key' => 'static-otp-test'])
+            ], ['Idempotency-Key' => 'random-otp-test'])
             ->assertCreated();
 
-        $this->assertSame('1234', Order::query()->firstOrFail()->getRawOriginal('pickup_otp'));
+        $this->assertMatchesRegularExpression('/^\d{4}$/', (string) Order::query()->firstOrFail()->getRawOriginal('pickup_otp'));
     }
 }

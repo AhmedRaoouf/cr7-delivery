@@ -24,6 +24,7 @@ use App\Models\SettlementItem;
 use App\Models\User;
 use App\Models\UserAddress;
 use App\Support\DeliveryCommission;
+use App\Support\Otp;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -453,9 +454,12 @@ class DemoDataSeeder extends Seeder
             'commission_amount' => round($subtotal * $commissionRate / 100, 2),
             'driver_earning' => $driver === null ? 0 : $driverEarning,
             'platform_delivery_margin' => $driver === null ? 0 : DeliveryCommission::platformShare($deliveryFee),
-            'pickup_otp' => '1234',
+            // D-108 — random, like every code the platform mints. The literal `1234`
+            // these used to carry was the one fixed code left once `OTP_STATIC_ORDER_CODE`
+            // went, and a demo order is still an order a captain can close.
+            'pickup_otp' => Otp::orderCode(),
             // doc 05 §8 — the customer's code only exists once the food is in the bag.
-            'delivery_otp' => $this->hasPassed($status, OrderStatus::PickedUp) ? '1234' : null,
+            'delivery_otp' => $this->hasPassed($status, OrderStatus::PickedUp) ? Otp::orderCode() : null,
             'restaurant_order_ref' => $this->hasPassed($status, OrderStatus::Preparing)
                 ? $this->posNumber($restaurant->id, $placedAt->toDateString())
                 : null,
@@ -574,7 +578,7 @@ class DemoDataSeeder extends Seeder
             'commission_amount' => 0,
             'driver_earning' => DeliveryCommission::driverShare($deliveryFee),
             'platform_delivery_margin' => DeliveryCommission::platformShare($deliveryFee),
-            'pickup_otp' => '1234',
+            'pickup_otp' => Otp::orderCode(),
             'delivery_otp' => null,
             'business_date' => $placedAt->toDateString(),
             'dispatch_round' => 1,

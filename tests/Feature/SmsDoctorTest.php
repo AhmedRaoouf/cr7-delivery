@@ -23,7 +23,6 @@ class SmsDoctorTest extends TestCase
 
         config([
             'services.otp_channel' => 'log',
-            'otp.static' => true,
             'services.sms_misr.mode' => 'sms',
             'services.sms_misr.url' => 'https://smsmisr.com/api/SMS/',
             'services.sms_misr.balance_url' => 'https://smsmisr.com/api/Balance/',

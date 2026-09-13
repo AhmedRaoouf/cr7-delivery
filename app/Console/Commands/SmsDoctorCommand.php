@@ -6,6 +6,7 @@ use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\Otp;
+use App\Support\SettingsCatalog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\Log;
  * That is why a test send always goes through `SmsMisrChannel` directly, never
  * through whatever `OtpChannel` is bound. The gateway can be exercised on a live
  * server while customers still sign in exactly as before; flipping
- * `OTP_CHANNEL` is the last step, not a precondition for testing.
+ * `OTP_CHANNEL` and then `otp.mode` on `ADM-46` are the last steps, not a
+ * precondition for testing.
  *
  * With no argument it only reads, plus the balance lookup, which spends nothing.
  * Given a phone number it sends one message. `--sender` tries a different sender
@@ -163,29 +165,41 @@ class SmsDoctorCommand extends Command
         $this->line('HTTP '.$response->status().'  '.$response->body());
     }
 
-    /** Whether customers are using the gateway yet. Informational — never a fault here. */
+    /**
+     * Whether codes are using the gateway yet. Informational — never a fault here.
+     *
+     * D-106 — the mode is the panel's now (`otp.mode` on `ADM-46`), so this reads the
+     * setting the running app reads rather than an `.env` switch that no longer exists.
+     */
     private function signInStatus(): void
     {
         $bound = app(OtpChannel::class)::class;
+        $test = Otp::testMode();
 
         $this->newLine();
-        $this->info('sign-in');
+        $this->info('verification codes');
         $this->table(['key', 'value'], [
             ['OTP_CHANNEL', (string) config('services.otp_channel')],
             ['bound channel', class_basename($bound)],
-            ['OTP_STATIC_MODE', Otp::isStatic() ? 'true' : 'false'],
+            ['otp.mode (ADM-46)', $test ? Otp::MODE_TEST : Otp::MODE_SMS],
+            ['auth.register_requires_otp', SettingsCatalog::bool('auth.register_requires_otp') ? 'true' : 'false'],
         ]);
 
-        if ($bound === LogOtpChannel::class && Otp::isStatic()) {
-            $this->line('customers still sign in with the static code — SMS Misr is not in their path yet');
+        if ($test) {
+            $this->line('customers, captains and places get the test code and no SMS — SMS Misr is not in their path yet');
+            $this->line('admin password codes still go by SMS through the bound channel (D-107)');
         }
 
-        if (Otp::isStatic() && app()->environment('production')) {
-            $this->warn('! OTP_STATIC_MODE=true in production — every phone signs in with the same code');
+        if ($test && app()->environment('production')) {
+            $this->warn('! otp.mode=test in production — anyone who knows the test code can sign up or reset any non-admin password');
         }
 
-        if (! Otp::isStatic() && $bound === LogOtpChannel::class) {
-            $this->error('✗ static mode is off and the channel is the log — NOBODY CAN SIGN IN');
+        if (! $test && $bound === LogOtpChannel::class) {
+            $this->error('✗ otp.mode=sms and the channel is the log — NOBODY RECEIVES A CODE');
+        }
+
+        if ($bound === LogOtpChannel::class) {
+            $this->line('with the log bound, an admin cannot change a password by SMS — cr7:reset-password is the door');
         }
     }
 

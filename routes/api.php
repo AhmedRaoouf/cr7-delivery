@@ -143,7 +143,8 @@ Route::prefix('v1')->group(function () {
     // §3 Auth
     Route::prefix('auth')->group(function () {
         // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
-        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp']);
+        // `otp-send` — D-106's per-IP ceiling, shared by every route that sends an SMS.
+        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:otp-send');
         Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp']);
         // «إنشاء حساب» — the second half of registration: the token `otp/verify` handed
         // back, plus a name and a password. Throttled per IP because it is the one
@@ -163,7 +164,7 @@ Route::prefix('v1')->group(function () {
         // (FR-AUTH-04). X-App decides the expected users.type (doc 12 §1.1).
         Route::post('/login', [PasswordAuthController::class, 'login']);
 
-        Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+        Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
         Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
         Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {

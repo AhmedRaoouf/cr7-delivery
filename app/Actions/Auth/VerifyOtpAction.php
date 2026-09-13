@@ -5,10 +5,9 @@ namespace App\Actions\Auth;
 use App\Enums\OtpPurpose;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
-use App\Models\OtpCode;
 use App\Models\User;
+use App\Support\OtpVerifier;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -28,6 +27,9 @@ use Illuminate\Support\Str;
  * The alternative, holding the password until the code came back and posting both at
  * once, means the password travels beside an unverified phone number and a typo in the
  * code costs the customer the whole form.
+ *
+ * The code is checked by {@see OtpVerifier} **before** the transaction below opens, so a
+ * wrong code keeps costing an attempt — inside the transaction, the rollback undid it.
  */
 class VerifyOtpAction
 {
@@ -37,54 +39,22 @@ class VerifyOtpAction
     /** @return array{user: User, token: string, is_new_user: bool}|array{registration_token: string, phone: string, expires_at: string} */
     public function execute(string $phone, string $code, OtpPurpose $purpose): array
     {
-        return DB::transaction(function () use ($phone, $code, $purpose) {
-            $otp = OtpCode::query()
-                ->where('phone', $phone)
-                ->where('purpose', $purpose)
-                ->whereNull('consumed_at')
-                ->latest('id')
-                ->lockForUpdate()
-                ->first();
+        $otp = OtpVerifier::consume($phone, $purpose, $code);
 
-            if (! $otp) {
-                throw new ApiException('otp_invalid', 'رمز التحقق غير صحيح', 422);
-            }
-
-            if ($otp->expires_at->isPast()) {
-                throw new ApiException('otp_expired', 'انتهت صلاحية رمز التحقق', 422);
-            }
-
-            if ($otp->attempts >= 5) {
-                throw new ApiException('otp_attempts_exceeded', 'تم تجاوز عدد المحاولات المسموح بها', 423);
-            }
-
-            if (! Hash::check($code, $otp->code_hash)) {
-                $otp->increment('attempts');
-
-                throw new ApiException('otp_invalid', 'رمز التحقق غير صحيح', 422, meta: ['attempts_left' => 5 - $otp->attempts]);
-            }
-
+        return DB::transaction(function () use ($phone, $purpose, $otp) {
             // Registration stops here. Nothing is created, no session is issued — the
             // caller gets a token to bring back with a password.
             if ($purpose === OtpPurpose::Register) {
-                $existing = User::query()->where('phone', $phone)->first();
-
-                if ($existing !== null) {
-                    throw new ApiException(
-                        'phone_taken',
-                        "هذا الرقم مسجل بالفعل ك{$existing->type->label()} — سجّل الدخول بكلمة المرور",
-                        409,
-                        meta: ['account_type' => $existing->type->value],
-                    );
+                if (User::query()->where('phone', $phone)->exists()) {
+                    throw RegisterCustomerAction::phoneTaken();
                 }
 
                 $token = Str::random(64);
 
-                $otp->update([
-                    'consumed_at' => now(),
+                $otp->forceFill([
                     'follow_up_token' => $token,
                     'follow_up_expires_at' => now()->addMinutes(self::REGISTRATION_TOKEN_MINUTES),
-                ]);
+                ])->save();
 
                 return [
                     'registration_token' => $token,
@@ -92,8 +62,6 @@ class VerifyOtpAction
                     'expires_at' => $otp->follow_up_expires_at->toIso8601String(),
                 ];
             }
-
-            $otp->update(['consumed_at' => now()]);
 
             $user = User::query()->firstOrCreate(
                 ['phone' => $phone],

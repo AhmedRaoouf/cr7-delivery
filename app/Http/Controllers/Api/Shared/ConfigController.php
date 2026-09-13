@@ -73,11 +73,11 @@ class ConfigController extends Controller
             // into the app so rotating the token is a server edit, not a store
             // release.
             'maps' => MapStyles::payload(),
-            // Only ever non-null while `OTP_STATIC_MODE` is on, and then it is
-            // already public. The app prints it as «كود التجربة» so nobody has
+            // Only ever non-null while `otp.mode = test` on ADM-46, and then it
+            // is already public. The app prints it as «كود التجربة» so nobody has
             // to go read the server log to sign in.
             'auth' => [
-                'static_otp' => Otp::echoable(),
+                'static_otp' => Otp::publishedTestCode(),
             ],
             // Realtime. The Pusher *key* is a public identifier — it is meant to sit
             // in every client — while the secret never leaves the server. Published

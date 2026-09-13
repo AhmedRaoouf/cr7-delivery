@@ -35,9 +35,12 @@ use App\Services\Maps\Router;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
-use App\Support\Otp;
+use App\Support\ApiResponse;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Telescope\Telescope;
@@ -211,22 +214,33 @@ class AppServiceProvider extends ServiceProvider
             $model::observe(AuditableObserver::class);
         }
 
-        // Static OTP is correct on a staging server with no SMS gateway and is
-        // a full account takeover on a public one. Say so on every boot rather
-        // than letting it ride into production unnoticed.
-        if (Otp::isStatic() && $this->app->environment('production')) {
-            Log::warning('[OTP] STATIC MODE IS ON IN PRODUCTION — every phone signs in with the same code. Set OTP_STATIC_MODE=false.');
-        }
+        /*
+         * D-106 — a per-IP ceiling on every route that sends an SMS, beside the per-phone
+         * one in `SendOtpAction`. A gateway that costs money per message is a gateway
+         * somebody can spend: the per-phone cap alone lets one caller walk a list of
+         * numbers at five messages each. One bucket for all of them — `otp/send`,
+         * `password/forgot`, `password/change/send-code` and `addresses/phone/send-code`
+         * — so a caller cannot get twenty from each.
+         *
+         * The static-mode warnings that used to sit here are gone with `OTP_STATIC_MODE`.
+         * `otp.mode` is a setting, and reading the database on every boot would also run
+         * during `migrate` on a database that has no settings table yet; the same two
+         * warnings are logged by `SendOtpAction` on the send they concern.
+         */
+        RateLimiter::for('otp-send', fn (Request $request) => Limit::perHour(20)
+            ->by((string) $request->ip())
+            ->response(fn (Request $request, array $headers) => ApiResponse::error(
+                'otp_send_rate_limited',
+                'محاولات كثيرة جدًا، حاول لاحقًا',
+                429,
+                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 3600)],
+            )->withHeaders($headers)));
 
-        // And the other way round, which is the failure that looks like a
-        // working server: static mode off while `LogOtpChannel` is still the
-        // binding means every code is random and lands in storage/logs and
-        // nowhere else. `POST /auth/otp/send` answers 200, the customer waits
-        // for an SMS that was never sent, and nobody can sign in at all. Both
-        // halves have to move together — bind a real channel, then flip the
-        // switch.
-        if (! Otp::isStatic() && $this->app->make(OtpChannel::class) instanceof LogOtpChannel) {
-            Log::warning('[OTP] NOBODY CAN SIGN IN — static mode is off and the only OTP channel is the log. Bind a real SMS channel, or set OTP_STATIC_MODE=true while testing.');
+        // What cannot work at all with the log as the channel, whatever the panel says:
+        // an admin's reset code and every password-change code are real SMS by rule
+        // (D-107). Config only — no database at boot.
+        if ($this->app->environment('production') && config('services.otp_channel') !== 'sms_misr') {
+            Log::warning('[OTP] OTP_CHANNEL is the log in production — no SMS leaves this server, and an admin cannot change a password by SMS. Use `php artisan cr7:reset-password` until SMS Misr is bound.');
         }
     }
 }

@@ -166,6 +166,9 @@ class SmsDoctorTest extends TestCase
         $this->artisan('cr7:sms-doctor')->assertSuccessful();
 
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/api/SMS/'));
-        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/api/Balance/'));
+        // POST, not the GET SMS Misr's page advertises — production answered 405 to GET.
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/api/Balance/')
+            && $r->method() === 'POST'
+            && $r['username'] === 'user-uuid');
     }
 }

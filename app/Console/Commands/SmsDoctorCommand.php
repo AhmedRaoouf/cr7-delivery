@@ -121,8 +121,13 @@ class SmsDoctorCommand extends Command
     }
 
     /**
-     * `GET /api/Balance/` is the only call that proves a username and password
+     * `/api/Balance/` is the only call that proves a username and password
      * without an approved sender and without spending anything.
+     *
+     * POST, form-encoded, like the other two endpoints. SMS Misr's own page
+     * labels it `GET /api/Balance/`, and on 2026-09-13 the production server's
+     * GET came back `405 — The requested resource does not support http method
+     * 'GET'`.
      */
     private function balance(): void
     {
@@ -136,7 +141,7 @@ class SmsDoctorCommand extends Command
         $this->info('balance lookup');
 
         try {
-            $response = Http::timeout(20)->get((string) $sms['balance_url'], [
+            $response = Http::asForm()->timeout(20)->post((string) $sms['balance_url'], [
                 'environment' => (string) $sms['environment'],
                 'username' => (string) $sms['username'],
                 'password' => (string) $sms['password'],

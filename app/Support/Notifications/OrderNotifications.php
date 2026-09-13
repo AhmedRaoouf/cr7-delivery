@@ -221,9 +221,24 @@ class OrderNotifications
     /** The kitchen is not always looking at the board, and the handover starts now. */
     private function driverAtRestaurant(Order $order): void
     {
+        $driver = (string) ($order->driver?->user?->name ?? '');
+        $pay = $order->placePaidAtPickup();
+        $withCode = (bool) ($order->pickup_code_required ?? true);
+
+        $ar = 'سلّمه للكابتن '.$driver.($withCode ? ' بعد كود الاستلام' : '');
+        $en = 'hand it to '.($driver !== '' ? $driver : 'the captain').($withCode ? ' after the pickup code' : '');
+
+        if ($pay > 0) {
+            $ar .= ' — سيدفع لك ‪'.number_format($pay, 2).'‬ ج.م';
+            $en .= ' — they will pay you '.number_format($pay, 2).' EGP';
+        } elseif (! $order->isDirect() && $order->payment_method?->value !== 'cash') {
+            $ar .= ' — الطلب مدفوع إلكترونيًا';
+            $en .= ' — the order is paid online';
+        }
+
         $this->toRestaurant($order, 'order.driver_at_restaurant', [
             'order_number' => $order->order_number,
-            'driver' => $order->driver?->user?->name,
+            'handover' => ['ar' => $ar, 'en' => $en],
         ]);
     }
 
@@ -294,14 +309,62 @@ class OrderNotifications
 
     private function driverAssigned(Order $order): void
     {
+        $vehicle = trim(implode(' · ', array_filter([
+            $order->driver?->vehicle_type?->labelAr(),
+            $order->driver?->vehicle_plate,
+        ])));
+
         $this->toCustomer($order, 'order.driver_assigned', [
             'driver' => $order->driver?->user?->name,
             'restaurant' => $this->restaurantName($order),
+            'vehicle' => $vehicle === '' ? null : ['ar' => '— '.$vehicle, 'en' => '— '.$vehicle],
         ]);
 
-        $this->toDriver($order, 'order.assigned', [
-            'restaurant_order_ref' => $order->restaurant_order_ref,
+        $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
+
+        $phone = $order->driver?->user?->phone;
+        $captain = trim(implode(' · ', array_filter([$vehicle, $phone === null ? null : '‪'.$phone.'‬'])));
+
+        $this->toRestaurant($order, 'order.driver_assigned_restaurant', [
+            'driver' => $order->driver?->user?->name,
+            'order_number' => $order->order_number,
+            'captain' => ['ar' => $captain, 'en' => str_replace(['‪', '‬'], '', $captain)],
         ]);
+    }
+
+    /**
+     * The captain's first look at the job: where, the counter's number, what he pays
+     * there and what he collects at the door — each segment only when it has something
+     * to say.
+     *
+     * @return array{ar: string, en: string}
+     */
+    private function assignmentDetails(Order $order): array
+    {
+        $place = (string) ($order->restaurant?->name_ar ?? $order->restaurant_name_snapshot ?? '');
+        $area = $order->serviceZone?->name_ar;
+        $ar = [$area ? $place.' ← '.$area : $place];
+        $en = [$area ? ($order->restaurant?->name_en ?: $place).' → '.($order->serviceZone?->name_en ?: $area) : ($order->restaurant?->name_en ?: $place)];
+
+        if (filled($order->restaurant_order_ref)) {
+            $ar[] = 'رقمه في المكان ‪'.$order->restaurant_order_ref.'‬';
+            $en[] = 'place ref '.$order->restaurant_order_ref;
+        }
+
+        if (($pay = $order->placePaidAtPickup()) > 0) {
+            $ar[] = 'تدفع للمكان ‪'.number_format($pay, 2).'‬ ج.م';
+            $en[] = 'pay the place '.number_format($pay, 2).' EGP';
+        }
+
+        if (($collect = $order->cashToCollect()) > 0) {
+            $ar[] = 'تحصّل من العميل ‪'.number_format($collect, 2).'‬ ج.م';
+            $en[] = 'collect '.number_format($collect, 2).' EGP';
+        } else {
+            $ar[] = 'مدفوع مسبقًا';
+            $en[] = 'prepaid';
+        }
+
+        return ['ar' => implode(' · ', array_filter($ar)), 'en' => implode(' · ', array_filter($en))];
     }
 
     private function pickedUp(Order $order): void
@@ -399,9 +462,7 @@ class OrderNotifications
         }
 
         if ($order->driver_id !== null && $previous !== null) {
-            $this->toDriver($order, 'order.assigned', [
-                'restaurant_order_ref' => $order->restaurant_order_ref,
-            ]);
+            $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
         }
     }
 

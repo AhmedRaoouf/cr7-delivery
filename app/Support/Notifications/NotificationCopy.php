@@ -53,9 +53,10 @@ class NotificationCopy
             'ar' => ['طلبك جاهز ✅', 'انتهى {restaurant} من تحضير طلبك'],
             'en' => ['Your order is ready ✅', '{restaurant} has finished preparing it'],
         ],
+        // doc 62 §9 — how to recognise the captain at the door, not only a name.
         'order.driver_assigned' => [
-            'ar' => ['الكابتن {driver} في الطريق 🛵', 'سيستلم طلبك من {restaurant}'],
-            'en' => ['{driver} is on the way 🛵', 'Picking up your order from {restaurant}'],
+            'ar' => ['الكابتن {driver} في الطريق 🛵', 'سيستلم طلبك من {restaurant} {vehicle}'],
+            'en' => ['{driver} is on the way 🛵', 'Picking up your order from {restaurant} {vehicle}'],
         ],
         'order.picked_up' => [
             'ar' => ['استلم الكابتن طلبك — كود التسليم {delivery_otp}', 'أعطِ الكود {delivery_otp} للكابتن عند الاستلام'],
@@ -126,9 +127,16 @@ class NotificationCopy
         ],
         // The board already draws «وصل الكابتن إلى المطعم». Nothing told a kitchen
         // that was not looking at the board.
+        // doc 11 §3 listed it and nothing sent it: the place learns who is coming, and how
+        // to reach him, the moment a captain takes the order (D-101).
+        'order.driver_assigned_restaurant' => [
+            'ar' => ['الكابتن {driver} في الطريق للاستلام', 'الطلب {order_number} · {captain}'],
+            'en' => ['{driver} is coming to pick up', 'Order {order_number} · {captain}'],
+        ],
+        // D-103 — on a cash order the place is also told what the captain is about to pay.
         'order.driver_at_restaurant' => [
-            'ar' => ['🛵 وصل الكابتن للاستلام', 'الطلب {order_number} — سلّمه للكابتن {driver} بعد كود الاستلام'],
-            'en' => ['🛵 The captain has arrived', 'Order {order_number} — hand it to {driver} after the pickup code'],
+            'ar' => ['🛵 وصل الكابتن للاستلام', 'الطلب {order_number} — {handover}'],
+            'en' => ['🛵 The captain has arrived', 'Order {order_number} — {handover}'],
         ],
         'order.delivered_restaurant' => [
             'ar' => ['تم تسليم الطلب {order_number} ✅', 'اكتمل الطلب وسيظهر في تسوياتك'],
@@ -149,9 +157,10 @@ class NotificationCopy
             'ar' => ['🚨 طلب جديد قريب منك', '{summary}'],
             'en' => ['🚨 New order near you', '{summary}'],
         ],
+        // doc 62 §9 — where to go, what to pay there, what to collect at the door.
         'order.assigned' => [
-            'ar' => ['أصبح الطلب لك ✅', 'رقم الطلب في المطعم {restaurant_order_ref}'],
-            'en' => ['Order is yours ✅', 'Restaurant order number {restaurant_order_ref}'],
+            'ar' => ['أصبح الطلب لك ✅', '{details}'],
+            'en' => ['Order is yours ✅', '{details}'],
         ],
         'order.ready_for_pickup' => [
             'ar' => ['الطلب جاهز للاستلام', 'رقمه في المطعم {restaurant_order_ref}'],

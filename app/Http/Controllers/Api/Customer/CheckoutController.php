@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\CheckoutQuoteRequest;
-use App\Models\UserAddress;
 use App\Support\ApiResponse;
+use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use Illuminate\Http\JsonResponse;
 
@@ -15,7 +15,7 @@ class CheckoutController extends Controller
     public function quote(CheckoutQuoteRequest $request, CheckoutPricer $pricer): JsonResponse
     {
         $user = $request->user();
-        $address = UserAddress::query()->where('user_id', $user->id)->findOrFail($request->integer('address_id'));
+        $address = CheckoutAddress::find($user, $request->input('address_id'));
         $cart = $user->cart()->firstOrCreate([]);
 
         $quote = $pricer->price($user, $cart, $address, $request->string('promo_code')->value() ?: null, $request->string('payment_method')->value());

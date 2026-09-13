@@ -11,6 +11,7 @@ use App\Models\OrderGroup;
 use App\Models\User;
 use App\Models\UserAddress;
 use App\Support\BusinessTime;
+use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use App\Support\OrderNumber;
 use App\Support\Otp;
@@ -45,10 +46,7 @@ class CreateOrderAction
 
         // D-83 — the two names ride into the snapshot, so the relations are
         // loaded with the row rather than lazily inside the transaction.
-        $address = UserAddress::query()
-            ->where('user_id', $user->id)
-            ->with(['city', 'serviceZone'])
-            ->findOrFail($data['address_id']);
+        $address = CheckoutAddress::find($user, $data['address_id'], ['city', 'serviceZone']);
 
         $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
 

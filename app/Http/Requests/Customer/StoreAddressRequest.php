@@ -40,11 +40,12 @@ class StoreAddressRequest extends FormRequest
             // The app has no city step any more (operator ruling 2026-09-12).
             'city_id' => ['nullable', 'exists:cities,id'],
             'zone_id' => ['required', 'exists:service_zones,id'],
-            // D-83 — the street is the whole of most Gamasa addresses, and an
-            // order whose destination is an empty string is a delivery nobody
-            // can make. The app has required it since `CUS-24` was built; the
-            // server did not, so any other client could save one.
-            'street' => ['required', 'string', 'max:255'],
+            // D-111 — no longer required to *save*. The first-launch address
+            // (D-110) is a pin and an area, usually without a street, and refusing
+            // it would lose the pin the customer did give. Whether an address may be
+            // *ordered to* without one is `addresses.required_fields`, and checkout
+            // says so by name (`address_incomplete`) before it takes the order.
+            'street' => ['nullable', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:255'],
             'apartment' => ['nullable', 'string', 'max:255'],

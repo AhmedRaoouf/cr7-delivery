@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
 use App\Http\Controllers\Api\Customer\AddressController;
+use App\Http\Controllers\Api\Customer\AddressPhoneController;
 use App\Http\Controllers\Api\Customer\CartController;
 use App\Http\Controllers\Api\Customer\CheckoutController;
 use App\Http\Controllers\Api\Customer\ComplaintController as CustomerComplaintController;
@@ -144,7 +145,8 @@ Route::prefix('v1')->group(function () {
     // §3 Auth
     Route::prefix('auth')->group(function () {
         // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
-        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp']);
+        // `otp-send` — D-106's per-IP ceiling, shared by every route that sends an SMS.
+        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:otp-send');
         Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp']);
         // «إنشاء حساب» — the second half of registration: the token `otp/verify` handed
         // back, plus a name and a password. Throttled per IP because it is the one
@@ -161,10 +163,11 @@ Route::prefix('v1')->group(function () {
          */
 
         // driver / restaurant / admin — Admin-created accounts, **phone** + password
-        // (FR-AUTH-04). X-App decides the expected users.type (doc 12 §1.1).
+        // (FR-AUTH-04), or an admin's email (D-107). X-App decides the expected
+        // users.type (doc 12 §1.1).
         Route::post('/login', [PasswordAuthController::class, 'login']);
 
-        Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+        Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
         Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
         Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {
@@ -172,6 +175,8 @@ Route::prefix('v1')->group(function () {
             Route::patch('/me', [AuthController::class, 'updateMe']);
             Route::get('/me/notification-settings', [AuthController::class, 'notificationSettings']);
             Route::patch('/me/notification-settings', [AuthController::class, 'updateNotificationSettings']);
+            // D-107 — the SMS code an admin's password change needs. Real SMS, always.
+            Route::post('/password/change/send-code', [AuthController::class, 'sendPasswordChangeCode'])->middleware('throttle:otp-send');
             Route::post('/password/change', [AuthController::class, 'changePassword']);
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);
@@ -188,6 +193,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'type:customer'])->group(function () {
         Route::get('/addresses', [AddressController::class, 'index']);
         Route::post('/addresses', [AddressController::class, 'store']);
+        // D-112 — proving a second number for an address. Declared before the
+        // `{address}` routes; they could not match `phone` anyway (ids are numeric).
+        Route::post('/addresses/phone/send-code', [AddressPhoneController::class, 'sendCode'])->middleware('throttle:otp-send');
+        Route::post('/addresses/phone/verify', [AddressPhoneController::class, 'verify']);
         Route::patch('/addresses/{address}', [AddressController::class, 'update']);
         Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
         Route::post('/addresses/{address}/default', [AddressController::class, 'makeDefault']);

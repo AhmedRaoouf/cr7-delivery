@@ -5,8 +5,8 @@ namespace App\Actions\Customer;
 use App\Exceptions\ApiException;
 use App\Models\ScheduledOrder;
 use App\Models\User;
-use App\Models\UserAddress;
 use App\Support\BusinessTime;
+use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -61,7 +61,7 @@ class ScheduleOrderAction
             throw new ApiException('cart_empty', 'السلة فارغة', 422);
         }
 
-        $address = UserAddress::query()->where('user_id', $user->id)->findOrFail($data['address_id']);
+        $address = CheckoutAddress::find($user, $data['address_id']);
 
         $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
 

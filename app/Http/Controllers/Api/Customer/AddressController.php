@@ -7,6 +7,7 @@ use App\Http\Requests\Customer\StoreAddressRequest;
 use App\Http\Requests\Customer\UpdateAddressRequest;
 use App\Http\Resources\Customer\AddressResource;
 use App\Models\UserAddress;
+use App\Support\AddressContactPhone;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class AddressController extends Controller
 
     public function store(StoreAddressRequest $request): JsonResponse
     {
-        $data = $this->mapZone($request->validated());
+        $data = $this->withContactPhone($request, $this->mapZone($request->validated()));
 
         $address = DB::transaction(function () use ($request, $data) {
             $address = $request->user()->addresses()->create($data);
@@ -43,7 +44,7 @@ class AddressController extends Controller
     {
         $this->ensureOwned($request, $address);
 
-        $data = $this->mapZone($request->validated());
+        $data = $this->withContactPhone($request, $this->mapZone($request->validated()));
 
         DB::transaction(function () use ($request, $address, $data) {
             $address->update($data);
@@ -53,11 +54,33 @@ class AddressController extends Controller
         return ApiResponse::success($this->resource($address), 'تم تحديث العنوان بنجاح');
     }
 
+    /**
+     * Deleting the default hands the default on.
+     *
+     * `users.default_address_id` kept pointing at the soft-deleted row, so the basket
+     * priced the next order off an address the customer had just thrown away, and the
+     * app opened checkout on it. It now falls to the most recently added address that
+     * is left — or to nothing, when none is.
+     */
     public function destroy(Request $request, UserAddress $address): JsonResponse
     {
         $this->ensureOwned($request, $address);
 
-        $address->delete();
+        DB::transaction(function () use ($request, $address) {
+            $user = $request->user();
+            $wasDefault = $address->is_default || (int) $user->default_address_id === (int) $address->id;
+
+            $address->forceFill(['is_default' => false])->save();
+            $address->delete();
+
+            if (! $wasDefault) {
+                return;
+            }
+
+            $next = $user->addresses()->latest('id')->first();
+            $next?->forceFill(['is_default' => true])->save();
+            $user->forceFill(['default_address_id' => $next?->id])->save();
+        });
 
         return ApiResponse::success(message: 'تم حذف العنوان بنجاح');
     }
@@ -82,6 +105,19 @@ class AddressController extends Controller
     private function resource(UserAddress $address): AddressResource
     {
         return new AddressResource($address->fresh()->load(['city', 'serviceZone', 'user']));
+    }
+
+    /**
+     * D-112 — the account's number is stored as null; another number only once the panel
+     * allows it and, if it asks, the account has proven it by SMS.
+     */
+    private function withContactPhone(Request $request, array $data): array
+    {
+        if (array_key_exists('contact_phone', $data)) {
+            $data['contact_phone'] = AddressContactPhone::resolve($request->user(), $data['contact_phone']);
+        }
+
+        return $data;
     }
 
     private function mapZone(array $data): array

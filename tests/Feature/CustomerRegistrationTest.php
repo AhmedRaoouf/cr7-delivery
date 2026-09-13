@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Enums\UserType;
 use App\Models\Driver;
 use App\Models\User;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\FakesOtpChannel;
 use Tests\TestCase;
 
 /**
@@ -18,14 +20,17 @@ use Tests\TestCase;
  */
 class CustomerRegistrationTest extends TestCase
 {
+    use FakesOtpChannel;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
-        // The staging code, so the test types what a tester types.
-        config(['otp.static' => true, 'otp.static_code' => '123456']);
-        $this->withHeader('X-App', 'app');
+        // The operator's test code (D-106), so the test types what a tester types.
+        $this->otpTestMode('123456');
+        // Symfony's test request says `Accept-Language: en-us` unless told otherwise,
+        // and the sentences asserted below have English entries in `lang/en.json`.
+        $this->withHeaders(['X-App' => 'app', 'Accept-Language' => 'ar']);
     }
 
     private function verifyForRegistration(string $phone = '01011122233'): string
@@ -107,9 +112,90 @@ class CustomerRegistrationTest extends TestCase
         ])
             ->assertStatus(409)
             ->assertJsonPath('error', 'phone_taken')
-            ->assertJsonPath('meta.account_type', 'driver');
+            ->assertJsonPath('message', 'هذا الرقم مسجل بالفعل — سجّل الدخول بكلمة المرور')
+            // It used to name the account's type — «مسجل كحساب كابتن» and
+            // `meta.account_type: driver` — which told anyone holding a number whether
+            // it was a captain's, a place's or an admin's.
+            ->assertJsonMissingPath('meta.account_type');
 
         $this->assertSame(1, User::query()->where('phone', $captain->phone)->count());
+    }
+
+    /**
+     * D-106 — `auth.register_requires_otp` off: phone, name and password in one request,
+     * for the weeks the Sender ID is not approved and no code can be delivered.
+     */
+    public function test_with_the_code_switched_off_a_customer_signs_up_in_one_request(): void
+    {
+        $channel = $this->fakeOtpChannel();
+        Settings::set('auth.register_requires_otp', false, 'otp');
+
+        $created = $this->postJson('/api/v1/auth/register', [
+            'phone' => '+20 101 112 2233',
+            'name' => 'أحمد الشناوي',
+            'password' => 'Ahmed@123',
+        ]);
+
+        $created->assertCreated()->assertJsonPath('data.user.type', 'customer');
+        $this->assertNotEmpty($created->json('data.token'));
+
+        $user = User::query()->where('phone', '01011122233')->firstOrFail();
+        // Nothing proved the number, and the row says so.
+        $this->assertNull($user->phone_verified_at);
+        $this->assertSame([], $channel->sent);
+
+        // A number that already has an account is refused the same way as on the code path.
+        $this->postJson('/api/v1/auth/register', [
+            'phone' => '01011122233',
+            'name' => 'أحمد',
+            'password' => 'Ahmed@123',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'phone_taken')
+            ->assertJsonMissingPath('meta.account_type');
+
+        $this->assertSame(1, User::query()->where('phone', '01011122233')->count());
+    }
+
+    public function test_with_the_code_switched_on_a_sign_up_without_a_token_is_refused(): void
+    {
+        Settings::set('auth.register_requires_otp', true, 'otp');
+
+        $this->postJson('/api/v1/auth/register', [
+            'phone' => '01011122233',
+            'name' => 'أحمد',
+            'password' => 'Ahmed@123',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'otp_required')
+            ->assertJsonPath('message', 'يلزم تأكيد رقم الهاتف أولًا');
+
+        $this->assertNull(User::query()->where('phone', '01011122233')->first());
+    }
+
+    public function test_the_code_less_sign_up_still_needs_a_phone(): void
+    {
+        Settings::set('auth.register_requires_otp', false, 'otp');
+
+        $this->postJson('/api/v1/auth/register', ['name' => 'أحمد', 'password' => 'Ahmed@123'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'validation_failed')
+            ->assertJsonPath('errors.phone.0', 'أدخل رقم الهاتف');
+    }
+
+    /** A token is honoured whatever the switch says — the app verified before it moved. */
+    public function test_a_registration_token_still_works_with_the_code_switched_off(): void
+    {
+        $token = $this->verifyForRegistration();
+        Settings::set('auth.register_requires_otp', false, 'otp');
+
+        $this->postJson('/api/v1/auth/register', [
+            'registration_token' => $token,
+            'name' => 'أحمد',
+            'password' => 'Ahmed@123',
+        ])->assertCreated();
+
+        $this->assertNotNull(User::query()->where('phone', '01011122233')->value('phone_verified_at'));
     }
 
     public function test_the_otp_login_path_still_names_the_account_type_it_refuses(): void

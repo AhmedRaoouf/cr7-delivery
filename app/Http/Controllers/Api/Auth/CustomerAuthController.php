@@ -12,7 +12,6 @@ use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
-use App\Support\Otp;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -23,6 +22,9 @@ use Illuminate\Http\JsonResponse;
  * answers a session for `purpose = login`, because every account created before that day
  * has no password and OTP is the only way back in for them — and the way they get one is
  * «نسيت كلمة المرور», which is the same code down the same wire.
+ *
+ * D-106 — with `auth.register_requires_otp` off, `register` takes the phone itself and
+ * the first two requests are skipped.
  */
 class CustomerAuthController extends Controller
 {
@@ -30,17 +32,12 @@ class CustomerAuthController extends Controller
     {
         $purpose = OtpPurpose::from($request->string('purpose')->isNotEmpty() ? $request->string('purpose')->value() : 'login');
 
-        $action->execute($request->string('phone'), $purpose);
+        $sent = $action->execute($request->string('phone')->value(), $purpose);
 
-        // Non-null only while the code is a fixed staging one, in which case it
-        // is public already. `ApiResponse` drops the key when it is null, so a
-        // real deployment answers exactly what it answered before.
-        $staticOtp = Otp::echoable();
-
-        return ApiResponse::success(
-            $staticOtp === null ? null : ['static_otp' => $staticOtp],
-            'تم إرسال رمز التحقق',
-        );
+        // `static_otp` is the operator's test code while `otp.mode = test` reaches this
+        // send, and null otherwise — including every send for an admin's number (D-107).
+        // The app prints it as «وضع التجربة» and prefills the field.
+        return ApiResponse::success($sent, 'تم إرسال رمز التحقق');
     }
 
     public function verifyOtp(VerifyOtpRequest $request, VerifyOtpAction $action): JsonResponse
@@ -64,9 +61,10 @@ class CustomerAuthController extends Controller
     public function register(RegisterCustomerRequest $request, RegisterCustomerAction $action): JsonResponse
     {
         $result = $action->execute(
-            $request->string('registration_token'),
+            $request->string('registration_token')->value() ?: null,
             $request->string('name'),
             $request->string('password'),
+            $request->string('phone')->value() ?: null,
         );
 
         return ApiResponse::success([

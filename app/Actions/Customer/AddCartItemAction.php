@@ -6,8 +6,8 @@ use App\Exceptions\ApiException;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
-use App\Models\Setting;
 use App\Models\User;
+use App\Support\BasketLimit;
 use Illuminate\Support\Facades\DB;
 
 /** doc 08 §4 — POST /cart/items. */
@@ -25,10 +25,13 @@ class AddCartItemAction
             }
 
             $existingRestaurantIds = $cart->items()->distinct()->pluck('restaurant_id');
-            $maxRestaurants = (int) (Setting::query()->where('key', 'cart.max_restaurants')->value('value') ?? 3);
+            $maxRestaurants = BasketLimit::maxRestaurants();
 
+            // D-114 — the panel's number, said in words («مكانين»). The code stays
+            // `too_many_restaurants`: it is what the shipped app already switches on, and
+            // the checkout blocker for an over-full basket uses the same one.
             if (! $existingRestaurantIds->contains($product->restaurant_id) && $existingRestaurantIds->count() >= $maxRestaurants) {
-                throw new ApiException('too_many_restaurants', 'وصلت للحد الأقصى لعدد المطاعم في السلة الواحدة', 422, meta: [
+                throw new ApiException('too_many_restaurants', BasketLimit::sentence($maxRestaurants), 422, meta: [
                     'max' => $maxRestaurants,
                     'restaurants' => $existingRestaurantIds->values(),
                 ]);
@@ -68,6 +71,16 @@ class AddCartItemAction
             $existing = $this->findMergeable($cart, $product->id, $optionIds, $note);
 
             if ($existing !== null) {
+                // The request caps one add; a merge would otherwise walk past the cap one
+                // tap at a time.
+                $maxQuantity = BasketLimit::maxQuantityPerLine();
+
+                if ($existing->quantity + $quantity > $maxQuantity) {
+                    $sentence = BasketLimit::quantitySentence($maxQuantity);
+
+                    throw new ApiException('validation_failed', $sentence, 422, ['quantity' => [$sentence]]);
+                }
+
                 $existing->increment('quantity', $quantity);
 
                 return $cart->fresh();

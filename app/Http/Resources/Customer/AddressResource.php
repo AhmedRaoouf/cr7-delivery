@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Support\AddressCompleteness;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,12 +22,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * - `delivery_fee` — D-81, what delivery to this address costs, so choosing an
  *   area is visibly choosing a price;
  * - `effective_contact_phone` — D-83, who the captain will actually call once
- *   the blank field has fallen back to the account's own number.
+ *   the blank field has fallen back to the account's own number;
+ * - `is_complete` and `missing_fields` — D-111, what this address still needs
+ *   before an order can be sent to it, named in Arabic, so «عناويني» can mark
+ *   the row and the form can mark the fields before checkout refuses it;
+ * - `uses_account_phone` — D-112, whether the number is the account's own
+ *   (stored as null) rather than one the customer added and proved.
  */
 class AddressResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $missing = AddressCompleteness::missing($this->resource);
+
         return [
             'id' => $this->id,
             'label' => $this->label,
@@ -57,11 +65,15 @@ class AddressResource extends JsonResource
             // resource read by an operator would otherwise answer the
             // operator's own number as the one the captain will call.
             'effective_contact_phone' => $this->resolvedContactPhone(),
+            'uses_account_phone' => blank($this->contact_phone) || $this->contact_phone === $this->user?->phone,
             'latitude' => (float) $this->latitude,
             'longitude' => (float) $this->longitude,
             'delivery_fee' => $this->deliveryFee(),
             'formatted_address' => $this->composeText(),
             'is_default' => (bool) $this->is_default,
+            'is_complete' => $missing === [],
+            // `[{field, label, label_en}]`, in the order the form draws them.
+            'missing_fields' => $missing,
         ];
     }
 }

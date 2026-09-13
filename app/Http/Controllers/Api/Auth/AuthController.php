@@ -6,6 +6,8 @@ use App\Actions\Auth\ChangePasswordAction;
 use App\Actions\Auth\DeleteAccountAction;
 use App\Actions\Auth\ForgotPasswordAction;
 use App\Actions\Auth\ResetPasswordAction;
+use App\Actions\Auth\SendOtpAction;
+use App\Enums\OtpPurpose;
 use App\Http\Controllers\Api\Shared\DeviceController;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
@@ -17,6 +19,7 @@ use App\Http\Requests\Auth\UpdateMeRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -131,11 +134,18 @@ class AuthController extends Controller
         $user->driver?->update(['is_online' => false, 'online_since' => null]);
     }
 
+    /**
+     * The same sentence whether or not the account exists (doc 08 §1). An admin who asked
+     * by email is also told which phone to look at — see {@see ForgotPasswordAction}.
+     */
     public function forgotPassword(ForgotPasswordRequest $request, ForgotPasswordAction $action): JsonResponse
     {
-        $action->execute($request->string('login'));
+        $masked = $action->execute($request->string('login')->value());
 
-        return ApiResponse::success(message: 'إذا كان الحساب موجودًا، سيصلك رمز التحقق');
+        return ApiResponse::success(
+            $masked === null ? null : ['masked_phone' => $masked],
+            'إذا كان الحساب موجودًا، سيصلك رمز التحقق',
+        );
     }
 
     public function resetPassword(ResetPasswordRequest $request, ResetPasswordAction $action): JsonResponse
@@ -145,9 +155,32 @@ class AuthController extends Controller
         return ApiResponse::success(message: 'تم إعادة تعيين كلمة المرور بنجاح');
     }
 
+    /**
+     * D-107 — the code `password/change` asks an admin for, sent to the phone on the
+     * signed-in account. A real SMS always: `password_change` is a purpose test mode
+     * never reaches, so `static_otp` is not part of this answer.
+     */
+    public function sendPasswordChangeCode(Request $request, SendOtpAction $action): JsonResponse
+    {
+        $user = $request->user();
+
+        $sent = $action->execute($user->phone, OtpPurpose::PasswordChange, $user);
+
+        return ApiResponse::success([
+            'masked_phone' => PhoneNumber::mask($user->phone),
+            'resend_in' => $sent['resend_in'],
+            'expires_in' => $sent['expires_in'],
+        ], 'تم إرسال رمز التحقق إلى هاتفك');
+    }
+
     public function changePassword(ChangePasswordRequest $request, ChangePasswordAction $action): JsonResponse
     {
-        $action->execute($request->user(), $request->string('current_password'), $request->string('password'));
+        $action->execute(
+            $request->user(),
+            $request->string('current_password'),
+            $request->string('password'),
+            $request->string('code')->value() ?: null,
+        );
 
         return ApiResponse::success(message: 'تم تغيير كلمة المرور بنجاح');
     }

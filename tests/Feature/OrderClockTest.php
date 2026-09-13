@@ -51,7 +51,9 @@ class OrderClockTest extends TestCase
             'dispatch.retry_interval_seconds' => 90,
             'restaurant.accept_timeout_minutes' => 5,
         ] as $key => $value) {
-            Setting::query()->create(['key' => $key, 'value' => $value, 'group' => 'test']);
+            // `updateOrCreate`: a migration may already have written the catalogue's
+            // default for some of these keys (doc 62, D-113).
+            Setting::query()->updateOrCreate(['key' => $key], ['value' => $value, 'group' => 'test']);
         }
     }
 

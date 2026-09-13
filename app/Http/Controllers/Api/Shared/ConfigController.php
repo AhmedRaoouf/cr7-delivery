@@ -5,10 +5,15 @@ namespace App\Http\Controllers\Api\Shared;
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Support\AddressCompleteness;
+use App\Support\AddressContactPhone;
 use App\Support\ApiResponse;
+use App\Support\BasketLimit;
 use App\Support\FirstOrderPerk;
 use App\Support\MapStyles;
 use App\Support\Otp;
+use App\Support\PaymentMethods;
+use App\Support\SettingsCatalog;
 use Illuminate\Http\JsonResponse;
 
 /** doc 08 §2 — GET /config: app bootstrap payload. */
@@ -39,11 +44,19 @@ class ConfigController extends Controller
                 'email' => $settings->get('support.email'),
                 'hours_note' => $settings->get('support.hours_note'),
             ],
+            // D-109 — `methods` is what the picker draws: the switched-on methods
+            // only, each with its own destination. The flat keys stay for the
+            // installs that read them.
             'payment' => [
-                'vodafone_cash_number' => $settings->get('payment.vodafone_cash_number'),
-                'instapay_handle' => $settings->get('payment.instapay_handle'),
-                'transfer_deadline_minutes' => $settings->get('payment.transfer_deadline_minutes', 15),
-                'reminder_before_minutes' => $settings->get('payment.reminder_before_minutes', 5),
+                'methods' => PaymentMethods::enabled(),
+                'cash_enabled' => SettingsCatalog::bool('payment.cash_enabled'),
+                'vodafone_cash_enabled' => SettingsCatalog::bool('payment.vodafone_cash_enabled'),
+                'instapay_enabled' => SettingsCatalog::bool('payment.instapay_enabled'),
+                'vodafone_cash_number' => SettingsCatalog::get('payment.vodafone_cash_number'),
+                'vodafone_cash_number_alt' => SettingsCatalog::get('payment.vodafone_cash_number_alt'),
+                'instapay_handle' => SettingsCatalog::get('payment.instapay_handle'),
+                'transfer_deadline_minutes' => SettingsCatalog::int('payment.transfer_deadline_minutes'),
+                'reminder_before_minutes' => SettingsCatalog::int('payment.reminder_before_minutes'),
             ],
             'currency' => [
                 'code' => 'EGP',
@@ -73,11 +86,42 @@ class ConfigController extends Controller
             // into the app so rotating the token is a server edit, not a store
             // release.
             'maps' => MapStyles::payload(),
-            // Only ever non-null while `OTP_STATIC_MODE` is on, and then it is
-            // already public. The app prints it as «كود التجربة» so nobody has
-            // to go read the server log to sign in.
+            // D-106 / D-107. `static_otp` is only ever non-null while `otp.mode =
+            // test` on ADM-46, and then it is already public — the app prints it as
+            // «كود التجربة». It never applies to an admin's reset or to a password
+            // change, which are real SMS whatever the mode; the per-send `static_otp`
+            // is the one to prefill from. `register_requires_otp` false means the
+            // sign-up form posts phone + name + password with no code step.
             'auth' => [
-                'static_otp' => Otp::echoable(),
+                'static_otp' => Otp::publishedTestCode(),
+                'otp_test_mode' => Otp::testMode(),
+                'register_requires_otp' => SettingsCatalog::bool('auth.register_requires_otp'),
+                'admin_login_by_email' => true,
+            ],
+            // D-111 / D-112 — what an address must carry before it can be ordered to
+            // (the pin and the area always, so never listed), and what the phone
+            // field allows.
+            'addresses' => [
+                'required_fields' => array_map(static fn (string $field) => [
+                    'field' => $field,
+                    'label' => AddressCompleteness::LABELS_AR[$field],
+                    'label_en' => AddressCompleteness::LABELS_EN[$field],
+                ], AddressCompleteness::requiredFields()),
+                'alternate_phone_allowed' => AddressContactPhone::allowed(),
+                'alternate_phone_requires_otp' => AddressContactPhone::requiresOtp(),
+            ],
+            // D-100 — the web board rings the same schedule the phone does.
+            'ring' => [
+                'enabled' => SettingsCatalog::bool('ring.enabled'),
+                'duration_seconds' => SettingsCatalog::int('ring.duration_seconds'),
+                'gap_seconds' => SettingsCatalog::int('ring.gap_seconds'),
+                'max_attempts' => SettingsCatalog::int('ring.max_attempts'),
+            ],
+            // D-108 — off, the captain confirms pickup / delivery with one button.
+            // The switch is snapshotted onto each order; an order's own flag wins.
+            'orders' => [
+                'pickup_code_required' => SettingsCatalog::bool('orders.pickup_code_required'),
+                'delivery_code_required' => SettingsCatalog::bool('orders.delivery_code_required'),
             ],
             // Realtime. The Pusher *key* is a public identifier — it is meant to sit
             // in every client — while the secret never leaves the server. Published
@@ -91,9 +135,10 @@ class ConfigController extends Controller
                 'cluster' => config('broadcasting.connections.pusher.options.cluster'),
                 'auth_endpoint' => url('/api/v1/broadcasting/auth'),
             ],
+            // D-114 — neither client hard-codes the limit.
             'cart' => [
-                'max_restaurants' => $settings->get('cart.max_restaurants', 3),
-                'max_qty_per_line' => $settings->get('cart.max_qty_per_line', 10),
+                'max_restaurants' => BasketLimit::maxRestaurants(),
+                'max_qty_per_line' => BasketLimit::maxQuantityPerLine(),
             ],
             'order_statuses' => collect(OrderStatus::cases())->map(fn ($s) => [
                 'value' => $s->value,

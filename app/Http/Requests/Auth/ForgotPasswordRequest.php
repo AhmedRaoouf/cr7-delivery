@@ -2,35 +2,32 @@
 
 namespace App\Http\Requests\Auth;
 
-use App\Support\PhoneNumber;
+use App\Http\Requests\Concerns\ValidatesLogin;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ForgotPasswordRequest extends FormRequest
 {
+    use ValidatesLogin;
+
     public function authorize(): bool
     {
         return true;
     }
 
-    /** Phone only, since the email sign-in went (operator, 2026-09-11). */
+    /** A phone, or an admin's email (D-107) — the code goes to the phone on the row either way. */
     protected function prepareForValidation(): void
     {
-        if ($this->has('login') && is_string($this->input('login'))) {
-            $this->merge(['login' => PhoneNumber::normalise($this->input('login'))]);
-        }
+        $this->normaliseLoginField();
     }
 
     public function rules(): array
     {
-        return ['login' => ['required', 'string', 'regex:'.PhoneNumber::PATTERN]];
+        return ['login' => $this->loginRules()];
     }
 
     /** @return array<string, string> */
     public function messages(): array
     {
-        return [
-            'login.required' => 'أدخل رقم الهاتف',
-            'login.regex' => 'أدخل رقم هاتف صحيح',
-        ];
+        return $this->loginMessages();
     }
 }

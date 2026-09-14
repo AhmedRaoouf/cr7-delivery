@@ -69,6 +69,10 @@ final class SettingsCatalog
                         'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP',
                         'label_ar' => 'رسوم الإلغاء بعد بدء التحضير', 'label_en' => 'Fee for cancelling after preparation starts',
                     ],
+                    [
+                        'key' => 'platform.order_fee_refundable_on_platform_failure', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'رد رسوم الخدمة إذا فشلت المنصة في التوصيل', 'label_en' => 'Refund the service fee when the platform fails to deliver',
+                    ],
                 ],
             ],
             [
@@ -144,6 +148,74 @@ final class SettingsCatalog
                         'label_ar' => 'إعادة عرض الطلب على كل الكباتن كل', 'label_en' => 'Offer the order to every captain again every'],
                     ['key' => 'dispatch.escalate_after_seconds', 'type' => 'int', 'default' => 120, 'min' => 30, 'max' => 3600,
                         'suffix_ar' => 'ثانية', 'suffix_en' => 's',
+                        'label_ar' => 'تنبيه الإدارة إن لم يقبل أي كابتن بعد', 'label_en' => 'Alert the office when no captain has accepted after'],
+                ],
+            ],
+            // The knobs `DispatchService` has always read and no screen could reach. The
+            // defaults are the ones the code falls back to, so declaring them changes nothing
+            // until an operator edits one.
+            [
+                'key' => 'dispatch',
+                'title_ar' => 'توزيع الطلبات على الكباتن',
+                'title_en' => 'Offering orders to captains',
+                'fields' => [
+                    ['key' => 'dispatch.offer_to_all_online', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'عرض الطلب على كل كابتن متصل ومتفرغ', 'label_en' => 'Offer the order to every free captain online',
+                        'helper_ar' => 'الأقرب أولًا. عند إيقافه يُعرض على أقرب الكباتن في نطاق المسافة فقط.',
+                        'helper_en' => 'Nearest first. Off, only the nearest captains within the radius are asked.'],
+                    ['key' => 'dispatch.batch_size', 'type' => 'int', 'default' => 3, 'min' => 1, 'max' => 20,
+                        'label_ar' => 'عدد الكباتن في كل جولة', 'label_en' => 'Captains asked per round'],
+                    ['key' => 'dispatch.radius_km', 'type' => 'decimal', 'default' => 5, 'min' => 0.5, 'max' => 50, 'step' => 0.5,
+                        'suffix_ar' => 'كم', 'suffix_en' => 'km',
+                        'label_ar' => 'نطاق البحث عن كابتن', 'label_en' => 'Search radius for a captain'],
+                    ['key' => 'dispatch.radius_expand_km', 'type' => 'decimal', 'default' => 2, 'min' => 0, 'max' => 20, 'step' => 0.5,
+                        'suffix_ar' => 'كم', 'suffix_en' => 'km',
+                        'label_ar' => 'توسيع النطاق في كل جولة', 'label_en' => 'Radius added each round'],
+                    ['key' => 'dispatch.max_rounds', 'type' => 'int', 'default' => 3, 'min' => 1, 'max' => 10,
+                        'label_ar' => 'عدد الجولات', 'label_en' => 'Rounds'],
+                    ['key' => 'dispatch.last_call_all_drivers', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'في الجولة الأخيرة يُعرض على كل الكباتن', 'label_en' => 'Last round goes to every captain'],
+                    ['key' => 'dispatch.allow_neighbour_zones', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'عرض الطلب على كباتن المناطق الأخرى', 'label_en' => 'Offer orders to captains of other areas',
+                        'helper_ar' => 'كابتن المنطقة يأتي أولًا ولا يُخفى غيره. عند إيقافه لا يرى الكابتن إلا طلبات مناطقه.',
+                        'helper_en' => "The area's own captains rank first and nobody is hidden. Off, a captain sees only his own areas' orders."],
+                    ['key' => 'dispatch.location_stale_seconds', 'type' => 'int', 'default' => 90, 'min' => 30, 'max' => 600,
+                        'suffix_ar' => 'ثانية', 'suffix_en' => 's',
+                        'label_ar' => 'يُعد الكابتن غير متصل إذا انقطع موقعه أكثر من', 'label_en' => 'A captain counts as offline after no location for'],
+                ],
+            ],
+            [
+                'key' => 'kitchen',
+                'title_ar' => 'وقت التحضير',
+                'title_en' => 'Preparation time',
+                'fields' => [
+                    ['key' => 'restaurant.prep_minutes_min', 'type' => 'int', 'default' => 5, 'min' => 1, 'max' => 60,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'أقل وقت تحضير يختاره المكان', 'label_en' => 'Shortest preparation time a place may pick'],
+                    ['key' => 'restaurant.prep_minutes_max', 'type' => 'int', 'default' => 120, 'min' => 10, 'max' => 240,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'أطول وقت تحضير يختاره المكان', 'label_en' => 'Longest preparation time a place may pick'],
+                    ['key' => 'restaurant.prep_extension_max_minutes', 'type' => 'int', 'default' => 15, 'min' => 0, 'max' => 60,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'أقصى تمديد لوقت التحضير', 'label_en' => 'Longest preparation extension'],
+                ],
+            ],
+            [
+                'key' => 'errands',
+                'title_ar' => 'المشاوير',
+                'title_en' => 'Errands',
+                'fields' => [
+                    ['key' => 'errands.base_fee', 'type' => 'decimal', 'default' => 20, 'min' => 0, 'max' => 500,
+                        'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP', 'label_ar' => 'رسوم فتح المشوار', 'label_en' => 'Base fee'],
+                    ['key' => 'errands.per_km_fee', 'type' => 'decimal', 'default' => 5, 'min' => 0, 'max' => 100,
+                        'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP', 'label_ar' => 'رسوم كل كيلومتر', 'label_en' => 'Fee per kilometre'],
+                    ['key' => 'errands.min_fee', 'type' => 'decimal', 'default' => 20, 'min' => 0, 'max' => 500,
+                        'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP', 'label_ar' => 'أقل رسوم للمشوار', 'label_en' => 'Minimum fee'],
+                    ['key' => 'errands.republish_interval_minutes', 'type' => 'int', 'default' => 1, 'min' => 1, 'max' => 60,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'إعادة عرض المشوار على الكباتن كل', 'label_en' => 'Offer the errand again every'],
+                    ['key' => 'errands.escalate_after_minutes', 'type' => 'int', 'default' => 5, 'min' => 1, 'max' => 120,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
                         'label_ar' => 'تنبيه الإدارة إن لم يقبل أي كابتن بعد', 'label_en' => 'Alert the office when no captain has accepted after'],
                 ],
             ],
@@ -410,6 +482,11 @@ final class SettingsCatalog
             if ($touches('payment.reminder_before_minutes', 'payment.transfer_deadline_minutes')
                 && (int) $after('payment.reminder_before_minutes') >= (int) $after('payment.transfer_deadline_minutes')) {
                 $errors['payment.reminder_before_minutes'] = ['يجب أن يأتي التذكير قبل انتهاء مهلة التحويل'];
+            }
+
+            if ($touches('restaurant.prep_minutes_min', 'restaurant.prep_minutes_max')
+                && (int) $after('restaurant.prep_minutes_min') >= (int) $after('restaurant.prep_minutes_max')) {
+                $errors['restaurant.prep_minutes_min'] = ['يجب أن يكون أقل وقت تحضير أقصر من أطوله'];
             }
         }
 

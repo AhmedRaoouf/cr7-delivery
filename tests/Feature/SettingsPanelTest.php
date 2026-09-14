@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Errand\QuoteErrandAction;
 use App\Enums\AdminScopeType;
 use App\Models\Setting;
 use App\Models\User;
@@ -116,7 +117,7 @@ class SettingsPanelTest extends TestCase
         $groups = collect($response->json('data'))->keyBy('key');
 
         $this->assertSame(
-            ['delivery', 'cart', 'payment', 'ring', 'timeouts', 'codes', 'otp', 'addresses', 'direct', 'support'],
+            ['delivery', 'cart', 'payment', 'ring', 'timeouts', 'dispatch', 'kitchen', 'errands', 'codes', 'otp', 'addresses', 'direct', 'support'],
             $groups->keys()->all(),
         );
 
@@ -126,6 +127,55 @@ class SettingsPanelTest extends TestCase
         $required = collect($groups['addresses']['fields'])->firstWhere('key', 'addresses.required_fields');
         $this->assertSame(['street'], $required['value']);
         $this->assertSame('الشارع', $required['options'][0]['label_ar']);
+    }
+
+    /**
+     * «كل النسب والأرقام يتحكم فيها من الادمن» — the dispatch, preparation and errand
+     * numbers were read by the code and reachable from no screen.
+     */
+    public function test_every_number_the_code_reads_is_on_the_panel_with_the_seeded_value(): void
+    {
+        $fields = collect($this->asAdmin()->getJson('/api/v1/admin/settings/schema')->assertOk()->json('data'))
+            ->flatMap(fn (array $group) => $group['fields'])
+            ->keyBy('key');
+
+        foreach ([
+            'dispatch.radius_km' => 5, 'dispatch.batch_size' => 3, 'dispatch.max_rounds' => 3,
+            'dispatch.offer_to_all_online' => true, 'dispatch.allow_neighbour_zones' => true,
+            'dispatch.location_stale_seconds' => 90,
+            'restaurant.prep_minutes_min' => 5, 'restaurant.prep_minutes_max' => 120,
+            'restaurant.prep_extension_max_minutes' => 15,
+            'errands.base_fee' => 20, 'errands.per_km_fee' => 5, 'errands.min_fee' => 20,
+            'platform.order_fee_refundable_on_platform_failure' => true,
+        ] as $key => $seeded) {
+            $this->assertTrue($fields->has($key), "{$key} is not on the panel");
+            $this->assertEquals($seeded, $fields[$key]['value'], "{$key} reads a different value than the one seeded");
+        }
+    }
+
+    public function test_an_edited_errand_fee_is_the_one_the_quote_charges(): void
+    {
+        $this->asAdmin()
+            ->patchJson('/api/v1/admin/settings', ['settings' => ['errands.base_fee' => 35, 'errands.min_fee' => 25]])
+            ->assertOk();
+
+        $this->seedLocation();
+
+        // ‪1‬ km across the centre: ‪35 + 5‬ = ‪40‬ — the edited base, not the seeded ‪20‬.
+        $quote = app(QuoteErrandAction::class)->execute(31.3833, 31.4833, 31.3923, 31.4833);
+
+        $this->assertEquals(40, $quote['suggested_fee']);
+        $this->assertEquals(25, $quote['min_fee']);
+    }
+
+    public function test_the_shortest_preparation_time_must_be_shorter_than_the_longest(): void
+    {
+        $response = $this->asAdmin()
+            ->patchJson('/api/v1/admin/settings', ['restaurant.prep_minutes_min' => 50, 'restaurant.prep_minutes_max' => 40])
+            ->assertStatus(422);
+
+        // Each value is in its own range; it is the pair that is refused.
+        $this->assertSame('يجب أن يكون أقل وقت تحضير أقصر من أطوله', $response->json('errors')['restaurant.prep_minutes_min'][0]);
     }
 
     public function test_a_key_with_no_row_reads_its_default_and_is_created_on_first_save(): void

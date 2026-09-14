@@ -73,6 +73,9 @@ class OfferController extends Controller
             'restaurant_order_ref' => $order->restaurant_order_ref,
             'restaurant' => [
                 'name' => $order->restaurant->name_ar,
+                'name_en' => $order->restaurant->name_en,
+                // The card drew the place's initial where every other screen shows its mark.
+                'logo' => $order->restaurant->logo,
                 'address' => $order->restaurant->address,
                 'latitude' => (float) $order->restaurant->latitude,
                 'longitude' => (float) $order->restaurant->longitude,

@@ -91,6 +91,7 @@ class OfferPayloadTest extends TestCase
     public function test_a_live_offer_is_returned_rather_than_a_server_error(): void
     {
         $restaurant = $this->makeRestaurant('ابن البلد', ...self::RESTAURANT);
+        $restaurant->update(['logo' => 'restaurants/ibn-elbalad.png']);
         $order = $this->makeOrder($restaurant);
         $driver = $this->makeDriver();
 
@@ -99,7 +100,8 @@ class OfferPayloadTest extends TestCase
         $this->offers($driver)
             ->assertOk()
             ->assertJsonPath('data.0.order_id', $order->id)
-            ->assertJsonPath('data.0.restaurant.name', 'ابن البلد');
+            ->assertJsonPath('data.0.restaurant.name', 'ابن البلد')
+            ->assertJsonPath('data.0.restaurant.logo', $restaurant->fresh()->logo);
     }
 
     /** The captain the broadcast exists for: online, free, and no position ever sent. */

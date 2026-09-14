@@ -47,9 +47,12 @@ class NotificationDispatcher
         // False writes the row and sends nothing — for a notification whose push is
         // sent another way, like the place's ring (D-100).
         bool $push = true,
-        // Which of the recipient's devices get the push; null is all of them. The place's
-        // new-order push goes to the devices the ring cannot reach (D-100).
-        ?\Closure $only = null,
+        // Skip the recipient's devices that ring: the place's new-order push goes only to
+        // the devices the ring cannot reach (D-100). A flag and never a closure — the push
+        // leaves `afterResponse()` serialised, and a closure written as a ternary's branch
+        // was cut at the ternary's `:` and did not parse on the other side, so on
+        // production the place heard about no new order at all (2026-09-14).
+        bool $exceptRinging = false,
     ): ?Notification {
         if ($recipient === null) {
             return null;
@@ -103,7 +106,7 @@ class NotificationDispatcher
                 'notification_id' => (string) $notification->id,
             ],
             $channel,
-            $only,
+            $exceptRinging,
         );
 
         return $notification;
@@ -119,15 +122,15 @@ class NotificationDispatcher
         array $copy,
         array $data,
         string $channel,
-        ?\Closure $only = null,
+        bool $exceptRinging = false,
     ): void {
         if ($copy['title'] === '') {
             return;
         }
 
-        $send = function () use ($recipient, $notification, $copy, $data, $channel, $only): void {
+        $send = function () use ($recipient, $notification, $copy, $data, $channel, $exceptRinging): void {
             try {
-                $this->deliver($recipient, $notification, $copy, $data, $channel, $only);
+                $this->deliver($recipient, $notification, $copy, $data, $channel, $exceptRinging);
             } catch (Throwable $e) {
                 // A push is never worth failing anything for. The row is already
                 // written and the centre already has it.
@@ -170,11 +173,11 @@ class NotificationDispatcher
         array $copy,
         array $data,
         string $channel,
-        ?\Closure $only = null,
+        bool $exceptRinging = false,
     ): void {
         /** @var array<int, DeviceToken> $devices */
         $devices = $recipient->deviceTokens()->get()
-            ->filter(fn (DeviceToken $device) => $only === null || $only($device))
+            ->filter(fn (DeviceToken $device) => ! $exceptRinging || ! $device->rings())
             ->values()
             ->all();
 

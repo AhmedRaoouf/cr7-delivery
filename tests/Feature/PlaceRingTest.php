@@ -4,12 +4,15 @@ namespace Tests\Feature;
 
 use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Restaurant\AcceptOrderAction;
+use App\Enums\AdminScopeType;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\OrderDeadlines;
 use App\Support\Settings;
+use Database\Seeders\PermissionsSeeder;
+use Database\Seeders\RolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
@@ -177,6 +180,48 @@ class PlaceRingTest extends TestCase
         $this->assertCount(1, collect($this->dataMessagesTo('new-apk'))->where('data.type', 'order.ring_stop'));
     }
 
+    /**
+     * 🔴 Production, 2026-09-14: from the deploy of the test above, the place heard about no
+     * new order at all — not the ring, not the ordinary push.
+     *
+     * Over HTTP a push leaves from `afterResponse()`, which serialises its closure and parses
+     * the closure's source back on the other side. This runner is a console process, so every
+     * other test here calls the closure directly and none of them made that trip. The device
+     * filter was a closure written as a ternary's branch; the serialiser cut its source at the
+     * ternary's `:` and it did not parse (`ParseError: unexpected token ":"`).
+     */
+    public function test_the_place_hears_about_the_order_when_the_push_leaves_after_the_response(): void
+    {
+        $this->pretendThisIsAWebRequest();
+
+        $customer = $this->makeCustomer();
+        $address = $this->makeAddress($customer);
+        $restaurant = $this->makeRestaurant('كنج بروست');
+        $owner = $restaurant->owner;
+        $owner->deviceTokens()->create(['token' => 'old-apk', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'old']);
+        $owner->deviceTokens()->create(['token' => 'new-apk', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'new', 'capabilities' => ['ring']]);
+        $this->makeCart($customer, [[$restaurant, $this->makeProduct($restaurant, 'بروست', 90), 1]]);
+
+        $group = app(CreateOrderAction::class)->execute($customer, ['address_id' => $address->id, 'payment_method' => 'cash'], 'idem-'.uniqid());
+
+        $this->assertSame([], $this->messagesTo('old-apk'), 'nothing leaves before the response is sent');
+        $this->sendWhatWaitsForTheResponse();
+
+        $alerts = $this->alertsSentTo('old-apk');
+        $this->assertCount(1, $alerts, 'the phone that cannot ring heard nothing');
+        $this->assertSame('order.new', $alerts[0]['data']['type']);
+        $this->assertCount(1, $this->ringsSentTo('new-apk'));
+        $this->assertSame([], $this->alertsSentTo('new-apk'));
+
+        // «إعادة تنبيه المطعم» takes the same trip, from the admin's request.
+        $order = Order::query()->where('order_group_id', $group->id)->firstOrFail();
+        Sanctum::actingAs($this->makeAdmin());
+        $this->withHeaders(['X-App' => 'admin'])->postJson("/api/v1/admin/orders/{$order->id}/renotify-restaurant")->assertOk();
+
+        $this->assertCount(2, $this->alertsSentTo('old-apk'));
+        $this->assertCount(2, $this->ringsSentTo('new-apk'));
+    }
+
     public function test_a_phone_says_whether_it_can_ring_every_time_it_registers(): void
     {
         [, $owner] = $this->placeOrder();
@@ -201,6 +246,37 @@ class PlaceRingTest extends TestCase
     }
 
     // ------------------------------------------------------------ plumbing
+
+    /**
+     * What an HTTP request sees: `runningInConsole()` false, so a push is dispatched
+     * `afterResponse()` — serialised and run on `terminate()` — instead of sent in place.
+     */
+    private function makeAdmin(): User
+    {
+        $this->seed([PermissionsSeeder::class, RolesSeeder::class]);
+
+        $admin = User::query()->create(['name' => 'Admin', 'phone' => '01000000099', 'type' => 'admin', 'is_active' => true]);
+        $admin->assignRole('super_admin');
+        $admin->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
+
+        return $admin;
+    }
+
+    /**
+     * The server runs one app per request; a test runs one app for everything, and its
+     * `terminate()` keeps the callbacks it ran — the next request would send them again.
+     */
+    private function sendWhatWaitsForTheResponse(): void
+    {
+        app()->terminate();
+        (new \ReflectionProperty(app(), 'terminatingCallbacks'))->setValue(app(), []);
+    }
+
+    private function pretendThisIsAWebRequest(): void
+    {
+        (new \ReflectionProperty(app(), 'isRunningInConsole'))->setValue(app(), false);
+        $this->assertFalse(app()->runningInConsole());
+    }
 
     /** @return array{0: Order, 1: User} */
     private function placeOrder(): array

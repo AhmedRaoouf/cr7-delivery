@@ -3,7 +3,6 @@
 namespace App\Support\Notifications;
 
 use App\Enums\OrderStatus;
-use App\Models\DeviceToken;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
@@ -135,7 +134,7 @@ class OrderNotifications
                 '/orders/'.$fresh->id,
                 $fresh->id,
                 ['order_id' => (string) $fresh->id],
-                only: $ringing ? fn (DeviceToken $device) => ! $device->rings() : null,
+                exceptRinging: $ringing,
             );
 
             if ($ringing) {

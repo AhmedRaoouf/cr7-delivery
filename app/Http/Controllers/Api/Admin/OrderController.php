@@ -14,7 +14,6 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
-use App\Models\DeviceToken;
 use App\Models\Order;
 use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
@@ -269,7 +268,7 @@ class OrderController extends Controller
             orderId: $fresh->id,
             data: ['order_id' => (string) $fresh->id],
             channel: 'offers',
-            only: $ringing ? fn (DeviceToken $device) => ! $device->rings() : null,
+            exceptRinging: $ringing,
         );
 
         AuditLogger::record($request->user(), $ringing ? 'orders.renotify_restaurant' : 'orders.renotify', $fresh);

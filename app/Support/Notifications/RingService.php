@@ -122,13 +122,15 @@ class RingService
     {
         $send = function () use ($owner, $kind, $copy, $data, $ttl, $notificationId): void {
             try {
-                // A web session has no ring, and an iOS alert cannot be cancelled early.
+                // Only a device that can ring is rung (a browser, or a phone on the build
+                // before the ring, gets the ordinary push from `OrderNotifications`), and an
+                // iOS alert cannot be cancelled early, so it is never sent a stop.
                 $platform = static fn (DeviceToken $device): string => $device->platform instanceof \BackedEnum
                     ? (string) $device->platform->value
                     : (string) $device->platform;
 
                 $devices = $owner->deviceTokens()->get()
-                    ->filter(fn (DeviceToken $device) => $platform($device) !== 'web')
+                    ->filter(fn (DeviceToken $device) => $device->rings())
                     ->filter(fn (DeviceToken $device) => $kind === 'ring' || $platform($device) !== 'ios')
                     ->values()
                     ->all();

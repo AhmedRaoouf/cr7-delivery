@@ -47,6 +47,9 @@ class NotificationDispatcher
         // False writes the row and sends nothing — for a notification whose push is
         // sent another way, like the place's ring (D-100).
         bool $push = true,
+        // Which of the recipient's devices get the push; null is all of them. The place's
+        // new-order push goes to the devices the ring cannot reach (D-100).
+        ?\Closure $only = null,
     ): ?Notification {
         if ($recipient === null) {
             return null;
@@ -100,6 +103,7 @@ class NotificationDispatcher
                 'notification_id' => (string) $notification->id,
             ],
             $channel,
+            $only,
         );
 
         return $notification;
@@ -115,14 +119,15 @@ class NotificationDispatcher
         array $copy,
         array $data,
         string $channel,
+        ?\Closure $only = null,
     ): void {
         if ($copy['title'] === '') {
             return;
         }
 
-        $send = function () use ($recipient, $notification, $copy, $data, $channel): void {
+        $send = function () use ($recipient, $notification, $copy, $data, $channel, $only): void {
             try {
-                $this->deliver($recipient, $notification, $copy, $data, $channel);
+                $this->deliver($recipient, $notification, $copy, $data, $channel, $only);
             } catch (Throwable $e) {
                 // A push is never worth failing anything for. The row is already
                 // written and the centre already has it.
@@ -165,9 +170,13 @@ class NotificationDispatcher
         array $copy,
         array $data,
         string $channel,
+        ?\Closure $only = null,
     ): void {
         /** @var array<int, DeviceToken> $devices */
-        $devices = $recipient->deviceTokens()->get()->all();
+        $devices = $recipient->deviceTokens()->get()
+            ->filter(fn (DeviceToken $device) => $only === null || $only($device))
+            ->values()
+            ->all();
 
         if ($devices === []) {
             return;

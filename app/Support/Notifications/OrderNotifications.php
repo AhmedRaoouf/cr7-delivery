@@ -3,6 +3,7 @@
 namespace App\Support\Notifications;
 
 use App\Enums\OrderStatus;
+use App\Models\DeviceToken;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
@@ -120,7 +121,9 @@ class OrderNotifications
             $ringing = RingService::enabled();
 
             // The feed carries the order once. When the place's phone is going to ring,
-            // the ring **is** the push, so the row is written without one.
+            // the ring **is** the push on every device that can ring — and a device that
+            // cannot (the web board, a phone still on the build before the ring) gets the
+            // ordinary push, or it would hear about no new order at all.
             $row = $this->dispatcher->send(
                 $fresh->restaurant?->owner,
                 'order.new',
@@ -132,7 +135,7 @@ class OrderNotifications
                 '/orders/'.$fresh->id,
                 $fresh->id,
                 ['order_id' => (string) $fresh->id],
-                push: ! $ringing,
+                only: $ringing ? fn (DeviceToken $device) => ! $device->rings() : null,
             );
 
             if ($ringing) {

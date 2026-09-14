@@ -27,6 +27,11 @@ class StoreDeviceRequest extends FormRequest
             // device token stored, which is every push notification on both shells.
             'app' => ['required', Rule::enum(DeviceApp::class)],
             'device_id' => ['required', 'string'],
+            // D-100 — what this build can do. A build that sends nothing is the one before
+            // the ring, and is sent the ordinary push ({@see \App\Models\DeviceToken::rings()}).
+            'capabilities' => ['sometimes', 'array'],
+            'capabilities.*' => ['string', 'in:ring'],
+            'app_version' => ['sometimes', 'nullable', 'string', 'max:20', 'regex:/^\d+(\.\d+){0,3}(\+\d+)?$/'],
         ];
     }
 }

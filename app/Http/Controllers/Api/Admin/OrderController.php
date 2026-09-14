@@ -14,6 +14,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
+use App\Models\DeviceToken;
 use App\Models\Order;
 use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
@@ -248,13 +249,12 @@ class OrderController extends Controller
         $fresh = $order->fresh(['items', 'restaurant.owner']);
 
         // D-100 — with the ring on, the operator's nudge is one more ring on the place's
-        // phone, the same one it missed; the schedule is left as it was.
-        if (RingService::enabled() && $fresh->status === OrderStatus::Pending) {
+        // phone, the same one it missed; the schedule is left as it was. A device that
+        // cannot ring gets the ordinary push below, as it did before the ring.
+        $ringing = RingService::enabled() && $fresh->status === OrderStatus::Pending;
+
+        if ($ringing) {
             app(RingService::class)->ring($fresh, max(1, (int) $fresh->ring_attempts), reschedule: false);
-
-            AuditLogger::record($request->user(), 'orders.renotify_restaurant', $fresh);
-
-            return ApiResponse::success($fresh, 'تم إعادة تنبيه المطعم');
         }
 
         app(NotificationDispatcher::class)->send(
@@ -269,9 +269,10 @@ class OrderController extends Controller
             orderId: $fresh->id,
             data: ['order_id' => (string) $fresh->id],
             channel: 'offers',
+            only: $ringing ? fn (DeviceToken $device) => ! $device->rings() : null,
         );
 
-        AuditLogger::record($request->user(), 'orders.renotify', $order);
+        AuditLogger::record($request->user(), $ringing ? 'orders.renotify_restaurant' : 'orders.renotify', $fresh);
 
         return ApiResponse::success($fresh, 'تم إعادة تنبيه المطعم');
     }

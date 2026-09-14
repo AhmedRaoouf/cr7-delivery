@@ -65,6 +65,11 @@ class DeviceController extends Controller
                     'token' => $validated['token'],
                     'platform' => $validated['platform'],
                     'app' => $validated['app'],
+                    // Written on every registration, so a phone updated from the old APK
+                    // starts ringing the first time the new build registers — and one
+                    // rolled back stops.
+                    'capabilities' => array_values(array_unique($validated['capabilities'] ?? [])),
+                    'app_version' => $validated['app_version'] ?? null,
                     'last_used_at' => now(),
                 ],
             );

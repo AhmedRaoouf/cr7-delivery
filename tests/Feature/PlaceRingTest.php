@@ -15,6 +15,7 @@ use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -88,7 +89,7 @@ class PlaceRingTest extends TestCase
     public function test_an_answer_stops_the_ring_on_every_phone_the_place_has(): void
     {
         [$order, $owner] = $this->placeOrder();
-        $owner->deviceTokens()->create(['token' => 'second-phone', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'second']);
+        $owner->deviceTokens()->create(['token' => 'second-phone', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'second', 'capabilities' => ['ring']]);
 
         app(AcceptOrderAction::class)->execute($owner, $order->fresh(), 15, 'POS-1');
 
@@ -141,6 +142,64 @@ class PlaceRingTest extends TestCase
         $this->assertSame('order.new', $alerts[0]['data']['type']);
     }
 
+    /**
+     * The old APK's background handler is empty: a data-only ring sent to it while it is in
+     * the background draws nothing, so a place that has not updated would hear about no
+     * new order at all. It gets the push it always got.
+     */
+    public function test_a_phone_on_the_build_before_the_ring_gets_the_ordinary_push(): void
+    {
+        $customer = $this->makeCustomer();
+        $address = $this->makeAddress($customer);
+        $restaurant = $this->makeRestaurant('كنج بروست');
+        $owner = $restaurant->owner;
+        $owner->deviceTokens()->create(['token' => 'old-apk', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'old']);
+        $owner->deviceTokens()->create(['token' => 'new-apk', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'new', 'capabilities' => ['ring']]);
+        $owner->deviceTokens()->create(['token' => 'board', 'platform' => 'web', 'app' => 'restaurant', 'device_id' => 'browser']);
+        $this->makeCart($customer, [[$restaurant, $this->makeProduct($restaurant, 'بروست', 90), 1]]);
+
+        $group = app(CreateOrderAction::class)->execute($customer, ['address_id' => $address->id, 'payment_method' => 'cash'], 'idem-'.uniqid());
+
+        foreach (['old-apk', 'board'] as $token) {
+            $this->assertSame([], $this->ringsSentTo($token), "{$token} was rung");
+            $alerts = $this->alertsSentTo($token);
+            $this->assertCount(1, $alerts, "{$token} heard nothing");
+            $this->assertSame('order.new', $alerts[0]['data']['type']);
+        }
+
+        $this->assertCount(1, $this->ringsSentTo('new-apk'));
+        $this->assertSame([], $this->alertsSentTo('new-apk'), 'the ringing phone was also sent the ordinary push');
+        $this->assertSame(1, Notification::query()->where('user_id', $owner->id)->where('type', 'order.new')->count());
+
+        // Only a phone that was rung is told to stop.
+        app(AcceptOrderAction::class)->execute($owner, Order::query()->where('order_group_id', $group->id)->first(), 15, 'POS-3');
+        $this->assertCount(0, collect($this->dataMessagesTo('old-apk'))->where('data.type', 'order.ring_stop'));
+        $this->assertCount(1, collect($this->dataMessagesTo('new-apk'))->where('data.type', 'order.ring_stop'));
+    }
+
+    public function test_a_phone_says_whether_it_can_ring_every_time_it_registers(): void
+    {
+        [, $owner] = $this->placeOrder();
+        Sanctum::actingAs($owner);
+
+        $register = fn (array $extra) => $this->withHeaders(['X-App' => 'restaurant'])
+            ->postJson('/api/v1/devices', ['token' => 'tok-x', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'phone-x'] + $extra)
+            ->assertOk();
+
+        $register(['capabilities' => ['ring'], 'app_version' => '1.0.2+3']);
+        $device = $owner->deviceTokens()->where('device_id', 'phone-x')->sole();
+        $this->assertTrue($device->rings());
+        $this->assertSame('1.0.2+3', $device->app_version);
+
+        // The same phone rolled back to the old APK registers without the list, and stops ringing.
+        $register([]);
+        $this->assertFalse($device->fresh()->rings());
+
+        $this->withHeaders(['X-App' => 'restaurant'])
+            ->postJson('/api/v1/devices', ['token' => 'tok-x', 'platform' => 'android', 'app' => 'restaurant', 'device_id' => 'phone-x', 'capabilities' => ['teleport']])
+            ->assertStatus(422);
+    }
+
     // ------------------------------------------------------------ plumbing
 
     /** @return array{0: Order, 1: User} */
@@ -157,6 +216,7 @@ class PlaceRingTest extends TestCase
             'platform' => 'android',
             'app' => 'restaurant',
             'device_id' => 'dev-'.$restaurant->owner->id,
+            'capabilities' => ['ring'],
         ]);
 
         $group = app(CreateOrderAction::class)->execute(

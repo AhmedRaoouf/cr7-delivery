@@ -5,6 +5,7 @@ namespace App\Actions\Auth;
 use App\Enums\OtpPurpose;
 use App\Exceptions\ApiException;
 use App\Models\User;
+use App\Support\Auth\Sessions;
 use App\Support\OtpVerifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -40,7 +41,9 @@ class ResetPasswordAction
                 'must_change_password' => false,
             ])->save();
 
-            $user->tokens()->delete();
+            // Every session, refresh tokens included (D-120): whoever held the old
+            // password may hold a session made with it.
+            Sessions::revokeAll($user);
         });
     }
 }

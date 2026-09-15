@@ -261,5 +261,7 @@
     "مكان هذا الطلب بعيد عن أماكن رحلتك الحالية": "This order's place is far from the places on your current trip",
     "أنت في مشوار الآن — أنهِه أولًا": "You are on an errand — finish it first",
     "هذا الكابتن في مشوار الآن": "This captain is on an errand right now",
-    "رحلة هذا الكابتن مكتملة": "This captain's trip is full"
+    "رحلة هذا الكابتن مكتملة": "This captain's trip is full",
+    "انتهت الجلسة. سجّل الدخول مرة أخرى.": "Your session has ended. Please sign in again.",
+    "هذه الجلسة تتجدد تلقائيًا بالفعل": "This session already renews itself."
 }

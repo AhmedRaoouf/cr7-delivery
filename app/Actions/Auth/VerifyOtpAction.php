@@ -6,6 +6,8 @@ use App\Enums\OtpPurpose;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\User;
+use App\Support\Auth\SessionClient;
+use App\Support\Auth\SessionIssuer;
 use App\Support\OtpVerifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -36,12 +38,18 @@ class VerifyOtpAction
     /** How long the proof of a verified phone is worth anything. */
     public const REGISTRATION_TOKEN_MINUTES = 15;
 
-    /** @return array{user: User, token: string, is_new_user: bool}|array{registration_token: string, phone: string, expires_at: string} */
-    public function execute(string $phone, string $code, OtpPurpose $purpose): array
+    public function __construct(private readonly SessionIssuer $sessions) {}
+
+    /**
+     * `session` is merged into the response's `data` — see {@see SessionIssuer::signIn()}.
+     *
+     * @return array{user: User, session: array<string, mixed>, is_new_user: bool}|array{registration_token: string, phone: string, expires_at: string}
+     */
+    public function execute(string $phone, string $code, OtpPurpose $purpose, SessionClient $client = new SessionClient): array
     {
         $otp = OtpVerifier::consume($phone, $purpose, $code);
 
-        return DB::transaction(function () use ($phone, $purpose, $otp) {
+        return DB::transaction(function () use ($phone, $purpose, $otp, $client) {
             // Registration stops here. Nothing is created, no session is issued — the
             // caller gets a token to bring back with a password.
             if ($purpose === OtpPurpose::Register) {
@@ -88,9 +96,7 @@ class VerifyOtpAction
 
             $user->forceFill(['phone_verified_at' => now(), 'last_login_at' => now()])->save();
 
-            $token = $user->createToken('customer', [$user->type->value])->plainTextToken;
-
-            return ['user' => $user, 'token' => $token, 'is_new_user' => $isNewUser];
+            return ['user' => $user, 'session' => $this->sessions->signIn($user, $client), 'is_new_user' => $isNewUser];
         });
     }
 }

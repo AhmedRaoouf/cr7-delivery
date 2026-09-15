@@ -6,6 +6,8 @@ use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\OtpCode;
 use App\Models\User;
+use App\Support\Auth\SessionClient;
+use App\Support\Auth\SessionIssuer;
 use App\Support\SettingsCatalog;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -32,11 +34,22 @@ use Illuminate\Support\Facades\Hash;
  */
 class RegisterCustomerAction
 {
-    /** @return array{user: User, token: string} */
-    public function execute(?string $registrationToken, string $name, string $password, ?string $phone = null): array
-    {
+    public function __construct(private readonly SessionIssuer $sessions) {}
+
+    /**
+     * `session` is merged into the response's `data` — see {@see SessionIssuer::signIn()}.
+     *
+     * @return array{user: User, session: array<string, mixed>}
+     */
+    public function execute(
+        ?string $registrationToken,
+        string $name,
+        string $password,
+        ?string $phone = null,
+        SessionClient $client = new SessionClient,
+    ): array {
         if (filled($registrationToken)) {
-            return $this->withToken($registrationToken, $name, $password);
+            return $this->withToken($registrationToken, $name, $password, $client);
         }
 
         if (SettingsCatalog::bool('auth.register_requires_otp')) {
@@ -47,7 +60,7 @@ class RegisterCustomerAction
             throw new ApiException('validation_failed', 'أدخل رقم الهاتف', 422, errors: ['phone' => ['أدخل رقم الهاتف']]);
         }
 
-        return $this->withoutCode($phone, $name, $password);
+        return $this->withoutCode($phone, $name, $password, $client);
     }
 
     /**
@@ -62,10 +75,10 @@ class RegisterCustomerAction
         return new ApiException('phone_taken', 'هذا الرقم مسجل بالفعل — سجّل الدخول بكلمة المرور', 409);
     }
 
-    /** @return array{user: User, token: string} */
-    private function withToken(string $registrationToken, string $name, string $password): array
+    /** @return array{user: User, session: array<string, mixed>} */
+    private function withToken(string $registrationToken, string $name, string $password, SessionClient $client): array
     {
-        return DB::transaction(function () use ($registrationToken, $name, $password): array {
+        return DB::transaction(function () use ($registrationToken, $name, $password, $client): array {
             $otp = OtpCode::query()
                 ->where('follow_up_token', $registrationToken)
                 ->lockForUpdate()
@@ -86,7 +99,7 @@ class RegisterCustomerAction
                 throw self::phoneTaken();
             }
 
-            $created = $this->create($otp->phone, $name, $password, verified: true);
+            $created = $this->create($otp->phone, $name, $password, verified: true, client: $client);
 
             $otp->forceFill(['follow_up_token' => null, 'follow_up_expires_at' => null])->save();
 
@@ -94,15 +107,15 @@ class RegisterCustomerAction
         });
     }
 
-    /** @return array{user: User, token: string} */
-    private function withoutCode(string $phone, string $name, string $password): array
+    /** @return array{user: User, session: array<string, mixed>} */
+    private function withoutCode(string $phone, string $name, string $password, SessionClient $client): array
     {
         if (User::query()->withTrashed()->where('phone', $phone)->exists()) {
             throw self::phoneTaken();
         }
 
         try {
-            return DB::transaction(fn (): array => $this->create($phone, $name, $password, verified: false));
+            return DB::transaction(fn (): array => $this->create($phone, $name, $password, verified: false, client: $client));
         } catch (UniqueConstraintViolationException) {
             // Two taps on «تسجيل» from two devices, the second one losing the race on the
             // unique index. The answer is the same as for a number that was already here.
@@ -110,8 +123,8 @@ class RegisterCustomerAction
         }
     }
 
-    /** @return array{user: User, token: string} */
-    private function create(string $phone, string $name, string $password, bool $verified): array
+    /** @return array{user: User, session: array<string, mixed>} */
+    private function create(string $phone, string $name, string $password, bool $verified, SessionClient $client): array
     {
         // `forceFill`, not `create`: `phone_verified_at` and `last_login_at` are not in
         // `$fillable` — deliberately, so no client request can ever set them — and a
@@ -131,8 +144,6 @@ class RegisterCustomerAction
             'last_login_at' => now(),
         ])->save();
 
-        $token = $user->createToken('customer', [$user->type->value])->plainTextToken;
-
-        return ['user' => $user, 'token' => $token];
+        return ['user' => $user, 'session' => $this->sessions->signIn($user, $client)];
     }
 }

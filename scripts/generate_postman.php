@@ -182,6 +182,8 @@ function exampleBody(string $method, string $uri): ?array
         'POST api/v1/auth/otp/send' => ['phone' => '01012345678'],
         'POST api/v1/auth/otp/verify' => ['phone' => '01012345678', 'code' => '123456'],
         'POST api/v1/auth/login' => ['login' => '01000000099', 'password' => 'Cr7Delivery#2026'],
+        // D-120 — send `X-Auth-Refresh: 1` on the sign-in to receive a refresh token at all.
+        'POST api/v1/auth/refresh' => ['refresh_token' => '{{refresh_token}}'],
         'PATCH api/v1/auth/me' => ['name' => 'New Name', 'locale' => 'ar', 'theme' => 'dark'],
         'POST api/v1/auth/password/change' => ['current_password' => 'old', 'password' => 'new-password', 'password_confirmation' => 'new-password'],
         'POST api/v1/devices' => ['token' => 'fcm-token-example', 'platform' => 'android', 'app' => 'app', 'device_id' => 'device-uuid'],

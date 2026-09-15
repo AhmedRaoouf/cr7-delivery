@@ -36,13 +36,17 @@ use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\ApiResponse;
+use App\Support\Auth\Sessions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Events\TokenAuthenticated;
+use Laravel\Sanctum\Sanctum;
 use Laravel\Telescope\Telescope;
 
 class AppServiceProvider extends ServiceProvider
@@ -235,6 +239,46 @@ class AppServiceProvider extends ServiceProvider
                 429,
                 meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 3600)],
             )->withHeaders($headers)));
+
+        /*
+         * D-120 — the session.
+         *
+         * A legacy token (no `expires_at`) lives while it is used rather than for ever;
+         * Sanctum's own verdict is passed in and can only be narrowed. And an access
+         * token's first request is copied onto its refresh row, which is how a refresh
+         * token presented twice is told apart from a response that never arrived — see
+         * {@see Sessions}, where both live so the rules are read in one place.
+         */
+        Sanctum::authenticateAccessTokensUsing([Sessions::class, 'accepts']);
+        Event::listen(TokenAuthenticated::class, [Sessions::class, 'noteFirstUse']);
+
+        /*
+         * `POST /auth/refresh` is public, so it is throttled — but not per IP alone. Both
+         * dashboards reach the API from their BFF's one server address, so a per-IP ceiling
+         * of ‪30‬ would be a ceiling on every place and every operator together, and the
+         * place whose renewal is refused is signed out. So: ‪30‬ a minute for one token from
+         * one address, which is far beyond anything a client racing itself sends, and ‪300‬
+         * a minute for the address as a whole, which still stops a sprayer.
+         */
+        //
+        // Refused in the envelope with its own code, never `session_expired`: a client that
+        // is told to wait must wait and try again, not sign the person out.
+        RateLimiter::for('auth-refresh', function (Request $request) {
+            $token = $request->input('refresh_token');
+            $token = is_string($token) ? $token : '';
+
+            $refused = fn (Request $request, array $headers) => ApiResponse::error(
+                'refresh_rate_limited',
+                'محاولات كثيرة جدًا، حاول لاحقًا',
+                429,
+                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+            )->withHeaders($headers);
+
+            return [
+                Limit::perMinute(30)->by('refresh-token:'.$request->ip().'|'.hash('sha256', $token))->response($refused),
+                Limit::perMinute(300)->by('refresh-ip:'.$request->ip())->response($refused),
+            ];
+        });
 
         // What cannot work at all with the log as the channel, whatever the panel says:
         // an admin's reset code and every password-change code are real SMS by rule

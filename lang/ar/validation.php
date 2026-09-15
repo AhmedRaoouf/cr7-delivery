@@ -221,6 +221,7 @@ return [
         'prep_minutes' => 'مدة التحضير',
         'price' => 'السعر',
         'reason_code' => 'سبب الإجراء',
+        'refresh_token' => 'رمز التجديد',
         'restaurant_id' => 'المطعم',
         'restaurant_order_ref' => 'رقم الطلب لدى المطعم',
         'service_zone_id' => 'المنطقة',

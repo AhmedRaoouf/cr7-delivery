@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\Auth\PasswordAuthController;
+use App\Http\Controllers\Api\Auth\SessionController;
 use App\Http\Controllers\Api\Customer\AddressController;
 use App\Http\Controllers\Api\Customer\AddressPhoneController;
 use App\Http\Controllers\Api\Customer\CartController;
@@ -171,6 +172,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
         Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
+        // D-120 — renewing a session. Public: the access token it replaces has usually
+        // expired by the time it is called, so `auth:sanctum` would refuse the one
+        // request that can fix that. Throttled per token and per IP (`auth-refresh` in
+        // `AppServiceProvider`) — per IP alone would throttle every dashboard user
+        // together, since the BFF calls from one server address.
+        Route::post('/refresh', [SessionController::class, 'refresh'])->middleware('throttle:auth-refresh');
+
         Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::patch('/me', [AuthController::class, 'updateMe']);
@@ -181,6 +189,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/password/change', [AuthController::class, 'changePassword']);
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);
+            // D-120 — a legacy token (no `expires_at`) exchanged for a session that renews.
+            Route::post('/session/upgrade', [SessionController::class, 'upgrade']);
             Route::delete('/account', [AuthController::class, 'deleteAccount']);
         });
     });

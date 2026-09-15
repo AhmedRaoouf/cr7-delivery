@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
+use App\Support\Auth\SessionClient;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -35,11 +36,18 @@ class PasswordAuthController extends Controller
             default => throw new ApiException('wrong_client', 'هذا الحساب لا يمكنه الدخول من هذه الواجهة', 403),
         };
 
-        $result = $action->execute($request->string('login'), $request->string('password'), $expected);
+        $result = $action->execute(
+            $request->string('login'),
+            $request->string('password'),
+            $expected,
+            SessionClient::fromRequest($request),
+        );
 
+        // D-120 — `{user, token}` exactly as before for a client that did not send
+        // `X-Auth-Refresh`; the whole session block beside `user` for one that did.
         return ApiResponse::success([
             'user' => new UserResource($result['user']),
-            'token' => $result['token'],
+            ...$result['session'],
         ], 'تم تسجيل الدخول بنجاح');
     }
 }

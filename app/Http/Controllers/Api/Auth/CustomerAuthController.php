@@ -12,6 +12,7 @@ use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
+use App\Support\Auth\SessionClient;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -44,16 +45,23 @@ class CustomerAuthController extends Controller
     {
         $purpose = OtpPurpose::from($request->string('purpose')->isNotEmpty() ? $request->string('purpose')->value() : 'login');
 
-        $result = $action->execute($request->string('phone'), $request->string('code'), $purpose);
+        $result = $action->execute(
+            $request->string('phone'),
+            $request->string('code'),
+            $purpose,
+            SessionClient::fromRequest($request),
+        );
 
         // Registration answers a token, not a session — the account does not exist yet.
         if (array_key_exists('registration_token', $result)) {
             return ApiResponse::success($result, 'تم التحقق من رقمك — اختر كلمة مرور');
         }
 
+        // D-120 — `session` is `{token}` for a client without `X-Auth-Refresh`, so this is
+        // `{user, token, is_new_user}` exactly as it always was.
         return ApiResponse::success([
             'user' => new UserResource($result['user']),
-            'token' => $result['token'],
+            ...$result['session'],
             'is_new_user' => $result['is_new_user'],
         ], 'تم تسجيل الدخول بنجاح');
     }
@@ -65,11 +73,12 @@ class CustomerAuthController extends Controller
             $request->string('name'),
             $request->string('password'),
             $request->string('phone')->value() ?: null,
+            SessionClient::fromRequest($request),
         );
 
         return ApiResponse::success([
             'user' => new UserResource($result['user']),
-            'token' => $result['token'],
+            ...$result['session'],
         ], 'تم إنشاء حسابك بنجاح', status: 201);
     }
 }

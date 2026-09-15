@@ -17,8 +17,8 @@ use Illuminate\Support\Facades\Schema;
  * - `access_token_id` — the `personal_access_tokens` row issued beside it. Nullable, and
  *   nulled by the database when that row goes: the access token is deleted on rotation and
  *   pruned by `sanctum:prune-expired` a day after it expires, and neither may leave a
- *   dangling id behind. Whether it was ever used is copied to `access_used_at` on its
- *   first request, so the answer survives the row.
+ *   dangling id behind. Nothing is decided on it: whether a pair was ever held is read
+ *   from the refresh token alone (`rotated_at`, `last_used_at`), see `SessionIssuer`.
  * - `grace_payload` — the successor pair, encrypted with `Crypt::encryptString`, written at
  *   rotation and read only for the next ‪120‬ s. It is what lets five requests that all
  *   found the access token expired renew at once and get one pair between them. Nulled
@@ -47,8 +47,8 @@ return new class extends Migration
                 ->constrained('refresh_tokens')->nullOnDelete();
             $table->timestamp('revoked_at')->nullable()->index();
             $table->text('grace_payload')->nullable();
+            // When this refresh token was last presented — a renewal or a replay.
             $table->timestamp('last_used_at')->nullable();
-            $table->timestamp('access_used_at')->nullable();
             $table->timestamps();
         });
     }

@@ -7,7 +7,6 @@ use App\Models\RefreshToken;
 use App\Models\User;
 use App\Support\SettingsCatalog;
 use Illuminate\Database\Eloquent\Builder;
-use Laravel\Sanctum\Events\TokenAuthenticated;
 use Laravel\Sanctum\PersonalAccessToken;
 
 /**
@@ -85,29 +84,6 @@ final class Sessions
         $lastSeen = $token->last_used_at ?? $token->created_at;
 
         return $lastSeen !== null && $lastSeen->gt(now()->subDays(self::idleDays($owner)));
-    }
-
-    /**
-     * The first request an access token ever authenticates, copied onto its refresh row.
-     *
-     * {@see SessionIssuer::refresh()} tells a lost response from a stolen token by whether
-     * the successor pair was ever used, and the access token's own `last_used_at` does not
-     * survive it: `sanctum:prune-expired` deletes the row a day after it expires. The copy
-     * does. Written once per access token — while `last_used_at` is still null, which the
-     * guard reads before it writes — so it costs one query an hour, not one per request.
-     */
-    public static function noteFirstUse(TokenAuthenticated $event): void
-    {
-        $token = $event->token;
-
-        if (! $token instanceof PersonalAccessToken || $token->expires_at === null || $token->last_used_at !== null) {
-            return;
-        }
-
-        RefreshToken::query()
-            ->where('access_token_id', $token->getKey())
-            ->whereNull('access_used_at')
-            ->update(['access_used_at' => now()]);
     }
 
     /** The sign-in an access token belongs to, or null for a legacy token that has none. */

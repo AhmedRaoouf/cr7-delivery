@@ -32,11 +32,11 @@ use Laravel\Sanctum\PersonalAccessToken;
  * - **The same token twice within ‪120‬ s** is a client racing itself — a board firing
  *   five requests that all found the access token expired, or the app's main and
  *   background isolates. Every one of them gets the pair the first one got.
- * - **The same token again later, with its successor never used**, is a response that
- *   never reached the client. The unused successor is withdrawn and a fresh pair issued.
- * - **The same token again later, with its successor used**, means two parties hold this
- *   sign-in and one of them is not the client. There is no telling which, so the whole
- *   sign-in ends and whoever is legitimate signs in again.
+ * - **The same token again later, with its successor never presented**, is a response
+ *   that never reached the client. The successor is withdrawn and a fresh pair issued.
+ * - **The same token again later, with its successor renewed**, means two parties hold
+ *   this sign-in and one of them is not the client. There is no telling which, so the
+ *   whole sign-in ends and whoever is legitimate signs in again.
  *
  * Every refusal is the same 401 `session_expired` in the same words — unknown, expired,
  * revoked and reused alike. A caller probing with refresh tokens learns nothing from the
@@ -140,15 +140,31 @@ final class SessionIssuer
                 ? null
                 : RefreshToken::query()->lockForUpdate()->find($row->replaced_by_id);
 
-            if ($successor !== null && $successor->revoked_at === null && ! $successor->wasUsed()) {
-                // The response carrying the successor never arrived: nothing has used it,
-                // so the client never had it. Withdraw it, and answer this time.
+            /*
+             * The successor's refresh token has never been presented, so nothing proves
+             * the client ever held the pair: the response carrying it never arrived.
+             * Withdraw it, and answer this time.
+             *
+             * Its access token is deliberately not the test. The dashboards renew inside a
+             * request and draw the page with the new access token, so that token is used on
+             * the server whether or not the browser ever stored the new cookie — and a
+             * navigation aborted in between, followed by the old refresh token more than
+             * ‪120‬ s later, read as a theft and signed a real place out.
+             *
+             * It stays safe. A thief who presents the old token here, before the real client
+             * has renewed, is answered with a pair and the real client's pair is withdrawn.
+             * The real client's next request answers 401, it presents its withdrawn refresh
+             * token, and a revoked token presented again ends its family (above) — the
+             * thief's pair with it. The same outcome as deciding on the access token, a
+             * request later, and never a signed-out client that merely lost a response.
+             */
+            if ($successor !== null && $successor->revoked_at === null && ! $successor->hasBeenPresented()) {
                 $this->withdraw($successor);
 
                 return ['ok', $this->rotate($row, $owner, $client)];
             }
 
-            Log::warning('[session] a rotated refresh token was presented again after its successor was used — the sign-in is revoked', [
+            Log::warning('[session] a rotated refresh token was presented again after its successor was renewed — the sign-in is revoked', [
                 'user_id' => $owner->id,
                 'family' => $row->family,
                 'client' => $client->app,

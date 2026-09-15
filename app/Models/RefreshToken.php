@@ -21,7 +21,7 @@ class RefreshToken extends Model
     protected $fillable = [
         'user_id', 'family', 'token_hash', 'access_token_id', 'client', 'device_id', 'ip',
         'user_agent', 'expires_at', 'rotated_at', 'replaced_by_id', 'revoked_at',
-        'grace_payload', 'last_used_at', 'access_used_at',
+        'grace_payload', 'last_used_at',
     ];
 
     protected $hidden = ['token_hash', 'grace_payload'];
@@ -33,7 +33,6 @@ class RefreshToken extends Model
             'rotated_at' => 'datetime',
             'revoked_at' => 'datetime',
             'last_used_at' => 'datetime',
-            'access_used_at' => 'datetime',
         ];
     }
 
@@ -68,23 +67,15 @@ class RefreshToken extends Model
     }
 
     /**
-     * Whether either half of this pair has ever been used: the refresh token renewed, or
-     * the access token authenticated a request.
+     * Whether this refresh token has itself been presented — renewed, or replayed.
      *
-     * This is the line between a response that was lost on the way to the client — its
-     * successor is untouched, so the client simply never had it — and a token presented a
-     * second time by somebody who is not the client, which is what a used successor means.
+     * The one proof that a client held it. Its access token is no such proof: the
+     * dashboards renew inside a request and draw the page with the new access token, so
+     * that token is used on the server whether or not the browser ever stored the pair.
+     * See {@see SessionIssuer::refresh()} for why deciding on this alone stays safe.
      */
-    public function wasUsed(): bool
+    public function hasBeenPresented(): bool
     {
-        if ($this->rotated_at !== null || $this->access_used_at !== null) {
-            return true;
-        }
-
-        // `access_used_at` is the copy that outlives the access token's row; the row's own
-        // `last_used_at` is read too while it exists, so the answer never rests on the
-        // copy alone.
-        return $this->access_token_id !== null
-            && PersonalAccessToken::query()->whereKey($this->access_token_id)->whereNotNull('last_used_at')->exists();
+        return $this->rotated_at !== null || $this->last_used_at !== null;
     }
 }

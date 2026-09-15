@@ -341,44 +341,96 @@ class SessionRefreshTest extends TestCase
         $this->assertExpired($this->refresh($recovered['refresh_token']));
     }
 
-    public function test_a_rotated_token_presented_after_its_successor_was_used_revokes_that_sign_in_only(): void
+    /**
+     * The dashboards renew inside a request and draw the page with the new access token.
+     * If that navigation is aborted before the browser stores the new cookie, the browser
+     * comes back with the old refresh token — and the server has already used the new
+     * access token itself. That is a lost response, not a theft.
+     */
+    public function test_a_page_drawn_with_the_new_access_token_but_never_stored_is_still_a_lost_response(): void
+    {
+        $session = $this->signedIn($this->customer(), 'app');
+
+        // The middleware renews and renders the page with the new access token…
+        $rendered = $this->refresh($session['refresh_token'])->assertOk()->json('data');
+        $this->me($rendered['token'])->assertOk();
+
+        // …the navigation is aborted, and the browser returns later with the old cookie.
+        $this->travel(5)->minutes();
+
+        $recovered = $this->refresh($session['refresh_token'])->assertOk()->json('data');
+
+        $this->assertNotSame($rendered['refresh_token'], $recovered['refresh_token']);
+        $this->me($recovered['token'])->assertOk();
+        $this->refresh($recovered['refresh_token'])->assertOk();
+
+        // The pair the page was drawn with is withdrawn, never the sign-in.
+        $this->me($rendered['token'])->assertStatus(401);
+        $this->assertNotNull(RefreshToken::query()->where('token_hash', hash('sha256', $rendered['refresh_token']))->value('revoked_at'));
+    }
+
+    /**
+     * A thief who presents the old token after the grace window, before the real client has
+     * renewed, is answered with a pair and the real client's pair is withdrawn. The real
+     * client's next request ends the thief's session.
+     */
+    public function test_a_thief_who_beats_the_client_to_a_renewal_is_ended_by_the_clients_next_request(): void
+    {
+        $user = $this->customer();
+        $client = $this->signedIn($user);
+        $tablet = $this->signedIn($user);
+        $stolen = $client['refresh_token'];
+
+        // The real client renews and goes on using its new access token.
+        $held = $this->refresh($client['refresh_token'])->assertOk()->json('data');
+        $this->me($held['token'])->assertOk();
+
+        // The thief comes in with the copied, already rotated token.
+        $this->travel(5)->minutes();
+        $thief = $this->refresh($stolen)->assertOk()->json('data');
+        $this->me($thief['token'])->assertOk();
+
+        // The real client's next request fails, so it renews with the token it holds…
+        $this->me($held['token'])->assertStatus(401);
+        $this->assertExpired($this->refresh($held['refresh_token']));
+
+        // …and that is the end of the thief's session.
+        $this->me($thief['token'])->assertStatus(401);
+        $this->assertExpired($this->refresh($thief['refresh_token']));
+        $this->assertSame(0, RefreshToken::query()->where('family', RefreshToken::query()
+            ->where('token_hash', hash('sha256', $stolen))->value('family'))->whereNull('revoked_at')->count());
+
+        // The same account's other sign-in never noticed.
+        $this->me($tablet['token'])->assertOk();
+        $this->refresh($tablet['refresh_token'])->assertOk();
+    }
+
+    /**
+     * A rotated token presented after its successor was itself renewed: two parties hold
+     * the sign-in, and it ends. Decided on the refresh tokens alone, so it holds a day
+     * later, after every access token involved has been pruned.
+     */
+    public function test_a_rotated_token_presented_after_its_successor_was_renewed_revokes_that_sign_in_only(): void
     {
         $user = $this->customer();
         $phone = $this->signedIn($user);
         $tablet = $this->signedIn($user);
 
         $renewed = $this->refresh($phone['refresh_token'])->assertOk()->json('data');
-        $this->me($renewed['token'])->assertOk();
-
-        // Somebody else kept the old refresh token.
-        $this->travel(5)->minutes();
-        $this->assertExpired($this->refresh($phone['refresh_token']));
-
-        // Everything descended from that sign-in is gone…
-        $this->me($renewed['token'])->assertStatus(401);
-        $this->assertExpired($this->refresh($renewed['refresh_token']));
-
-        // …and the same account's other sign-in is untouched.
-        $this->me($tablet['token'])->assertOk();
-        $this->refresh($tablet['refresh_token'])->assertOk();
-    }
-
-    /**
-     * The access token's `last_used_at` does not survive `sanctum:prune-expired`; the
-     * copy on the refresh row does, so a theft is still a theft a day later.
-     */
-    public function test_a_used_successor_is_still_known_after_its_access_token_is_pruned(): void
-    {
-        $session = $this->signedIn($this->customer());
-        $renewed = $this->refresh($session['refresh_token'])->assertOk()->json('data');
-        $this->me($renewed['token'])->assertOk();
+        $this->travel(61)->minutes();
+        $renewed = $this->refresh($renewed['refresh_token'])->assertOk()->json('data');
 
         $this->travel(26)->hours();
         $this->artisan('sanctum:prune-expired', ['--hours' => 24])->assertSuccessful();
-        $this->assertNull(PersonalAccessToken::findToken($renewed['token']));
 
-        $this->assertExpired($this->refresh($session['refresh_token']));
+        // Somebody else kept the first refresh token.
+        $this->assertExpired($this->refresh($phone['refresh_token']));
+
+        // Everything descended from that sign-in is gone…
         $this->assertExpired($this->refresh($renewed['refresh_token']));
+
+        // …and the same account's other sign-in is untouched.
+        $this->refresh($tablet['refresh_token'])->assertOk();
     }
 
     public function test_every_refusal_is_the_same_401_and_a_missing_field_is_a_422(): void

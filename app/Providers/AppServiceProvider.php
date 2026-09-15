@@ -40,12 +40,10 @@ use App\Support\Auth\Sessions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Sanctum\Events\TokenAuthenticated;
 use Laravel\Sanctum\Sanctum;
 use Laravel\Telescope\Telescope;
 
@@ -241,16 +239,11 @@ class AppServiceProvider extends ServiceProvider
             )->withHeaders($headers)));
 
         /*
-         * D-120 — the session.
-         *
-         * A legacy token (no `expires_at`) lives while it is used rather than for ever;
-         * Sanctum's own verdict is passed in and can only be narrowed. And an access
-         * token's first request is copied onto its refresh row, which is how a refresh
-         * token presented twice is told apart from a response that never arrived — see
-         * {@see Sessions}, where both live so the rules are read in one place.
+         * D-120 — the session. A legacy token (no `expires_at`) lives while it is used
+         * rather than for ever; Sanctum's own verdict is passed in and can only be
+         * narrowed. The rule lives in {@see Sessions::accepts()}.
          */
         Sanctum::authenticateAccessTokensUsing([Sessions::class, 'accepts']);
-        Event::listen(TokenAuthenticated::class, [Sessions::class, 'noteFirstUse']);
 
         /*
          * `POST /auth/refresh` is public, so it is throttled — but not per IP alone. Both

@@ -308,6 +308,41 @@
             "name": "00 - Public",
             "item": [
                 {
+                    "name": "Areas",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/areas",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/areas",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "areas"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Banners",
                     "item": [
                         {
@@ -982,6 +1017,37 @@
                 {
                     "name": "Geo",
                     "item": [
+                        {
+                            "name": "GET /api/v1/geo/expand-link",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/geo/expand-link",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "geo",
+                                        "expand-link"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
                         {
                             "name": "GET /api/v1/geo/places",
                             "request": {
@@ -1901,6 +1967,52 @@
                             }
                         },
                         {
+                            "name": "POST /api/v1/auth/password/change/send-code",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/auth/password/change/send-code",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "auth",
+                                        "password",
+                                        "change",
+                                        "send-code"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
                             "name": "POST /api/v1/auth/password/forgot",
                             "request": {
                                 "method": "POST",
@@ -1991,6 +2103,50 @@
                             }
                         },
                         {
+                            "name": "POST /api/v1/auth/refresh",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/auth/refresh",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "auth",
+                                        "refresh"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
                             "name": "POST /api/v1/auth/register",
                             "request": {
                                 "method": "POST",
@@ -2035,7 +2191,7 @@
                             }
                         },
                         {
-                            "name": "POST /api/v1/auth/social",
+                            "name": "POST /api/v1/auth/session/upgrade",
                             "request": {
                                 "method": "POST",
                                 "header": [
@@ -2057,58 +2213,14 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{base_url}}/auth/social",
+                                    "raw": "{{base_url}}/auth/session/upgrade",
                                     "host": [
                                         "{{base_url}}"
                                     ],
                                     "path": [
                                         "auth",
-                                        "social"
-                                    ],
-                                    "variable": []
-                                },
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{}",
-                                    "options": {
-                                        "raw": {
-                                            "language": "json"
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "name": "POST /api/v1/auth/social/link",
-                            "request": {
-                                "method": "POST",
-                                "header": [
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "key": "Accept-Language",
-                                        "value": "ar"
-                                    },
-                                    {
-                                        "key": "X-App",
-                                        "value": "app"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "url": {
-                                    "raw": "{{base_url}}/auth/social/link",
-                                    "host": [
-                                        "{{base_url}}"
-                                    ],
-                                    "path": [
-                                        "auth",
-                                        "social",
-                                        "link"
+                                        "session",
+                                        "upgrade"
                                     ],
                                     "variable": []
                                 },
@@ -2206,6 +2318,104 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{\n    \"label\": \"home\",\n    \"city_id\": 1,\n    \"zone_id\": 1,\n    \"street\": \"Test St\",\n    \"latitude\": 31.383,\n    \"longitude\": 31.483,\n    \"is_default\": true\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/addresses/phone/send-code",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{customer_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/addresses/phone/send-code",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "addresses",
+                                        "phone",
+                                        "send-code"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/addresses/phone/verify",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{customer_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/addresses/phone/verify",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "addresses",
+                                        "phone",
+                                        "verify"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
                                     "options": {
                                         "raw": {
                                             "language": "json"
@@ -4511,6 +4721,42 @@
                             }
                         },
                         {
+                            "name": "GET /api/v1/driver/earnings/unsettled",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/earnings/unsettled",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "earnings",
+                                        "unsettled"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
                             "name": "GET /api/v1/driver/earnings/{order}",
                             "request": {
                                 "method": "GET",
@@ -5970,6 +6216,46 @@
                                             "language": "json"
                                         }
                                     }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Trip",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/driver/trip",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "app"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{driver_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/driver/trip",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "driver",
+                                        "trip"
+                                    ],
+                                    "variable": []
                                 }
                             }
                         }
@@ -11536,6 +11822,48 @@
                                     }
                                 }
                             }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/drivers/{driver}/unsettled",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/drivers/:driver/unsettled",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "drivers",
+                                        ":driver",
+                                        "unsettled"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "driver",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
                         }
                     ]
                 },
@@ -11993,6 +12321,42 @@
                                         "admin",
                                         "finance",
                                         "drivers"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/finance/restaurants",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/finance/restaurants",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "finance",
+                                        "restaurants"
                                     ],
                                     "variable": []
                                 }
@@ -12694,6 +13058,42 @@
                                     "path": [
                                         "admin",
                                         "orders"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/orders/export",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/orders/export",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "orders",
+                                        "export"
                                     ],
                                     "variable": []
                                 }
@@ -17190,6 +17590,78 @@
                                             "language": "json"
                                         }
                                     }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/settings/schema",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/settings/schema",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "settings",
+                                        "schema"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/settings/sms-status",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/settings/sms-status",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "settings",
+                                        "sms-status"
+                                    ],
+                                    "variable": []
                                 }
                             }
                         }

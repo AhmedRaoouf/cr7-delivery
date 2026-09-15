@@ -287,6 +287,28 @@ final class SettingsCatalog
                         'label_ar' => 'أقصى رسائل للرقم الواحد في الساعة', 'label_en' => 'Most messages to one number per hour'],
                 ],
             ],
+            // D-120 — how long a session may sit unused. There is no cap on a session that
+            // is used: each renewal starts the window again. Declared, not seeded — with no
+            // row each key reads its default.
+            [
+                'key' => 'session',
+                'title_ar' => 'الجلسات',
+                'title_en' => 'Sessions',
+                'fields' => [
+                    ['key' => 'auth.session_days', 'type' => 'int', 'default' => 60, 'min' => 7, 'max' => 365,
+                        'suffix_ar' => 'يوم', 'suffix_en' => 'days',
+                        'label_ar' => 'مدة بقاء الجلسة دون استخدام — العملاء والكباتن والأماكن',
+                        'label_en' => 'How long a session lasts unused — customers, captains and places',
+                        'helper_ar' => 'يبقى الحساب مسجلًا ما دام يُستخدم مرة واحدة على الأقل خلال هذه المدة. التقصير يسري فورًا، والإطالة تسري من التجديد التالي لكل جلسة.',
+                        'helper_en' => 'An account stays signed in as long as it is used at least once within this period. Shortening it applies at once; lengthening it applies from each session\'s next renewal.'],
+                    ['key' => 'auth.admin_session_days', 'type' => 'int', 'default' => 14, 'min' => 1, 'max' => 90,
+                        'suffix_ar' => 'يوم', 'suffix_en' => 'days',
+                        'label_ar' => 'مدة بقاء جلسة الإدارة دون استخدام',
+                        'label_en' => 'How long an admin session lasts unused',
+                        'helper_ar' => 'أقصر من غيرها لأن حساب الإدارة يملك صلاحيات المنصة كلها. التقصير يسري فورًا، والإطالة تسري من التجديد التالي لكل جلسة.',
+                        'helper_en' => 'Shorter than the others because an admin account holds the whole platform. Shortening it applies at once; lengthening it applies from each session\'s next renewal.'],
+                ],
+            ],
             [
                 'key' => 'addresses',
                 'title_ar' => 'العناوين',

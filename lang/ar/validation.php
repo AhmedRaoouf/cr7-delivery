@@ -192,6 +192,7 @@ return [
         'description_ar' => 'الوصف بالعربية',
         'description_en' => 'الوصف بالإنجليزية',
         'discount_price' => 'سعر الخصم',
+        'direct_orders_enabled' => 'تفعيل الطلبات المباشرة',
         'driver_id' => 'الكابتن',
         'email' => 'البريد الإلكتروني',
         'enabled' => 'التفعيل',

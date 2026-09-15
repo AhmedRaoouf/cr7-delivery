@@ -238,8 +238,16 @@ class AdminOrderListExportTest extends TestCase
         $box = $this->makeRestaurant('بوكس ع السريع');
         $omar = $this->makeRestaurant('سندوتش عمر');
 
-        $this->makeOrder($box, ['restaurant_order_ref' => '777']);
-        $this->makeOrder($omar, ['restaurant_order_ref' => '888']);
+        // Everything the sheet prints is pinned, not random — the same trap as the search
+        // test above. `makeCustomer` builds a phone as '010'.random_int() and `makeOrder`
+        // an order number as 'O'.random_int(); both land on the row, and a phone such as
+        // «01074488834» contains «888» — so the absence of the other place's order was
+        // asserted against digits that were never its order. No pinned value below
+        // contains «777» or «888», so each marker can only come from its own order.
+        $boxOrder = $this->makeOrder($box, ['restaurant_order_ref' => '777', 'order_number' => 'O700011']);
+        $omarOrder = $this->makeOrder($omar, ['restaurant_order_ref' => '888', 'order_number' => 'O700012']);
+        $boxOrder->user->update(['phone' => '01111100011']);
+        $omarOrder->user->update(['phone' => '01111100012']);
 
         $text = $this->sheetText(
             $this->get("/api/v1/admin/orders/export?filter[restaurant_id]={$box->id}")->assertOk()->streamedContent()

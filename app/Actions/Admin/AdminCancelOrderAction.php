@@ -24,10 +24,9 @@ class AdminCancelOrderAction
         return DB::transaction(function () use ($admin, $order, $reasonCode, $note, $refund) {
             $from = $order->status;
 
-            if ($order->driver_id) {
-                $order->driver->update(['is_available' => true, 'active_order_id' => null]);
-            }
-
+            // The order leaves its captain's trip and the rest of the trip is untouched:
+            // `OrderObserver` re-derives their focus on the write below, and
+            // `OrderNotifications` tells them (`trip.order_cancelled`, doc 63 §7).
             $order->update([
                 'status' => OrderStatus::Cancelled,
                 'cancelled_by' => 'admin',

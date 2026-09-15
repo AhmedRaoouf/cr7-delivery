@@ -6,6 +6,8 @@ use App\Enums\OrderStatus;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\DriverTrip;
+use App\Support\TripAssignment;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -322,7 +324,26 @@ class OrderNotifications
             'vehicle' => $vehicle === '' ? null : ['ar' => '— '.$vehicle, 'en' => '— '.$vehicle],
         ]);
 
-        $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
+        // doc 63 D-115 — a basket's sibling handed straight to the captain already carrying
+        // the basket: nobody pressed «قبول», so «أصبح الطلب لك» would be the wrong sentence.
+        // One push, to them alone; the customer and the place heard the ordinary ones above
+        // and below.
+        if ($order->assignedVia === TripAssignment::VIA_BASKET) {
+            $this->dispatcher->send(
+                $order->driver?->user,
+                'trip.order_ready',
+                [
+                    'number' => '#'.$order->order_number,
+                    'place' => $this->placeName($order),
+                    'details' => $this->assignmentDetails($order),
+                ],
+                'cr7://trip/'.$order->id,
+                $order->id,
+                ['order_id' => (string) $order->id, 'kind' => 'trip'],
+            );
+        } else {
+            $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
+        }
 
         $phone = $order->driver?->user?->phone;
         $captain = trim(implode(' · ', array_filter([$vehicle, $phone === null ? null : '‪'.$phone.'‬'])));
@@ -405,6 +426,8 @@ class OrderNotifications
 
     private function cancelled(Order $order): void
     {
+        $this->tellTheCaptainItLeftTheTrip($order);
+
         /*
          * doc 62 §9 — the two deadlines the clock now enforces say what happened, and say
          * it to the customer once per basket: the basket is what they failed to confirm or
@@ -430,6 +453,32 @@ class OrderNotifications
 
         $this->toCustomer($order, 'order.cancelled', ['order_number' => $order->order_number]);
         $this->toRestaurant($order, 'order.cancelled_restaurant', ['order_number' => $order->order_number]);
+    }
+
+    /**
+     * doc 63 §7 — «the captain is told, which nothing did before». A cancellation told the
+     * customer and the place, and the captain on the way to that counter found out when
+     * he got there. The captain carrying it — or, for a sibling still in the kitchen, the
+     * captain holding its basket — hears it now, whoever cancelled.
+     */
+    private function tellTheCaptainItLeftTheTrip(Order $order): void
+    {
+        $captain = $order->driver_id !== null
+            ? $order->driver()->with('user')->first()
+            : DriverTrip::holderFor($order);
+
+        if ($captain?->user === null) {
+            return;
+        }
+
+        $this->dispatcher->send(
+            $captain->user,
+            'trip.order_cancelled',
+            ['number' => '#'.$order->order_number, 'place' => $this->placeName($order)],
+            'cr7://trip',
+            $order->id,
+            ['order_id' => (string) $order->id, 'kind' => 'trip'],
+        );
     }
 
     private function issue(Order $order): void
@@ -557,6 +606,14 @@ class OrderNotifications
     private function restaurantName(Order $order): ?string
     {
         return $order->restaurant?->name_ar;
+    }
+
+    /** @return array{ar: string, en: string} the place, said in each locale */
+    private function placeName(Order $order): array
+    {
+        $ar = (string) ($order->restaurant?->name_ar ?? $order->restaurant_name_snapshot ?? '');
+
+        return ['ar' => $ar, 'en' => (string) ($order->restaurant?->name_en ?: $ar)];
     }
 
     private function money(mixed $amount): string

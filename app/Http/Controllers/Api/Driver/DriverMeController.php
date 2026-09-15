@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Support\ApiResponse;
 use App\Support\DispatchService;
+use App\Support\DriverTrip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -35,17 +36,12 @@ class DriverMeController extends Controller
             throw new ApiException('account_suspended', 'حسابك موقوف حاليًا', 423);
         }
 
-        // Before the busy check, not after it. A leftover `active_order_id` —
-        // an order long since delivered or cancelled by an admin — made the
-        // refusal below permanent: the captain could not go online, so could not
-        // take a trip, so nothing ever cleared the lock. The only way out was a
-        // manual UPDATE. See {@see DispatchService::releaseIfStale()}.
-        $dispatch->releaseIfStale($driver);
-        $driver->refresh();
-
-        if ($validated['is_online'] && $driver->active_order_id) {
-            throw new ApiException('driver_already_busy', 'لا يمكن الاتصال بالإنترنت أثناء وجود طلب نشط', 422);
-        }
+        // doc 63 D-117 — the captain's focus and «carries nothing» re-derived from their
+        // orders. There is no busy check after it any more: it used to refuse going online
+        // while `active_order_id` was set, and a leftover one — an order long since
+        // delivered, or cancelled by an admin — made that refusal permanent. With batching
+        // a captain on a trip going online is the point.
+        DriverTrip::refresh($driver);
 
         // DRV-07's «متصل منذ» reads this. Set only on the transition, so a captain
         // who re-sends `is_online: true` on a reconnect does not restart their shift.
@@ -58,8 +54,8 @@ class DriverMeController extends Controller
 
         // «لو في طلبات ملهاش حد وفي كابتن لسه فاتح، أهو تبدأ تبعتله طلب» — the
         // captain hears about the backlog the moment they come on shift rather
-        // than whenever the next sweep happens to run. It is also what keeps
-        // dispatch alive on a host whose cron is not firing, which is this one.
+        // than whenever the next sweep happens to run — only what fits their trip,
+        // when they carry one.
         if ($goingOnline) {
             $dispatch->offerBacklogTo($driver);
         }
@@ -88,6 +84,8 @@ class DriverMeController extends Controller
 
         foreach ($validated as $point) {
             $driver->locations()->create([
+                // The trip's focus (doc 63 D-117) — the order of the stop the captain is
+                // making. A trip of three is one track, filed under the order it serves now.
                 'order_id' => $driver->active_order_id,
                 'latitude' => $point['latitude'],
                 'longitude' => $point['longitude'],
@@ -152,7 +150,11 @@ class DriverMeController extends Controller
         }
 
         try {
-            broadcast(DriverLocationChanged::fromDriver($driver->loadMissing('activeOrder')));
+            // Every basket on the trip, not only the focus's: each of those customers is
+            // watching the same captain move (doc 63 D-116).
+            $groups = DriverTrip::query($driver)->pluck('order_group_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+
+            broadcast(DriverLocationChanged::fromDriver($driver->loadMissing('activeOrder'), $groups));
         } catch (\Throwable $e) {
             Log::warning('driver location broadcast failed', ['driver' => $driver->id, 'error' => $e->getMessage()]);
         }

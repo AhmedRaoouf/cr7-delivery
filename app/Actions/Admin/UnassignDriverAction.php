@@ -35,10 +35,12 @@ class UnassignDriverAction
         DB::transaction(function () use ($admin, $order, $reasonCode, $note, $requeue) {
             $driver = $order->driver;
 
+            // Marked, so the holder rule of doc 63 §1.2 never hands this order back to the
+            // captain it was just taken from — the requeue below would otherwise do exactly
+            // that when they still carry a sibling. Their trip is re-derived by
+            // `OrderObserver` when `driver_id` is cleared.
             $order->driverAttempts()->where('driver_id', $driver->id)->where('result', 'accepted')
                 ->update(['result' => 'unassigned_by_admin', 'reason_code' => $reasonCode, 'responded_at' => now()]);
-
-            $driver->update(['is_available' => true, 'active_order_id' => null]);
 
             $from = $order->status;
             $nextStatus = $requeue ? OrderStatus::SearchingDriver : OrderStatus::Ready;

@@ -14,6 +14,7 @@ use App\Models\Setting;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\DriverTrip;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -341,7 +342,15 @@ class DashboardController extends Controller
             // every online captain as offline — three zeroed tiles, an empty list and a
             // map with no markers, while `ADM-19` beside it showed the same captain
             // «متصل ومتفرغ» because that screen selects the whole row.
-            ->get(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_online', 'is_available', 'is_active'])
+            //
+            // `select()` before `withCount()`, never `get([...])` after it: `withCount`
+            // widens a null column list to `drivers.*`, and `get()`'s list only applies to
+            // a query that has none — so the row would have gone out whole, national id
+            // and balances included.
+            ->select(['id', 'user_id', 'current_lat', 'current_lng', 'location_updated_at', 'active_order_id', 'is_online', 'is_available', 'is_active'])
+            // doc 63 §3.6 — «في رحلة (‪2‬)» beside the focus: how many orders the captain carries.
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
+            ->get()
             // A captain with no fix has no marker. Serving the zeros put them in
             // the Atlantic off West Africa and stretched `ADM-56`'s camera across
             // an ocean to fit one of them in.

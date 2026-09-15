@@ -167,14 +167,47 @@ class AssignmentAndModerationTest extends TestCase
 
     public function test_blocking_a_captain_takes_them_off_the_dispatch_pool(): void
     {
-        [, $driver, $admin] = $this->scenario();
+        [$order, $driver, $admin] = $this->scenario();
 
         app(ModerateAccountAction::class)->block($admin, $driver->user, 'مخالفة');
 
         $fresh = $driver->fresh();
         $this->assertFalse((bool) $fresh->is_online);
-        $this->assertFalse((bool) $fresh->is_available);
+        // `is_available` means «carries nothing» since doc 63 (D-117), and a suspended
+        // captain with no trip carries nothing. Going offline is what takes them off the
+        // pool — and the round below proves it.
+        $this->assertTrue((bool) $fresh->is_available);
         $this->assertSame(0, $driver->user->tokens()->count());
+
+        app(DispatchService::class)->dispatchRound($order, 1);
+        $this->assertSame(0, $order->driverAttempts()->where('driver_id', $driver->id)->count());
+    }
+
+    /**
+     * doc 63 §7 — «on unblock the captain is dispatchable again». `block()` wrote
+     * `is_available = false`, `unblock()` never wrote it back, and every dispatch query
+     * required it — so a captain who had been suspended once was invisible to dispatch for
+     * good, however many times they went online.
+     */
+    public function test_an_unblocked_captain_is_dispatchable_again(): void
+    {
+        [$order, $driver, $admin] = $this->scenario();
+
+        app(ModerateAccountAction::class)->block($admin, $driver->user, 'مخالفة');
+        app(ModerateAccountAction::class)->unblock($admin, $driver->user->fresh());
+
+        // They sign in again and go on shift.
+        $this->actingAs($driver->user->fresh())->withHeaders(['X-App' => 'app'])
+            ->postJson('/api/v1/driver/status', ['is_online' => true])
+            ->assertOk();
+
+        app(DispatchService::class)->dispatchRound($order->fresh(), 1);
+
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'result' => 'sent',
+        ]);
     }
 
     public function test_moderation_reaches_a_customer_which_the_admin_only_route_never_did(): void

@@ -64,6 +64,7 @@ use App\Http\Controllers\Api\Driver\EarningsController as DriverEarningsControll
 use App\Http\Controllers\Api\Driver\ErrandController as DriverErrandController;
 use App\Http\Controllers\Api\Driver\OfferController as DriverOfferController;
 use App\Http\Controllers\Api\Driver\OrderController as DriverOrderController;
+use App\Http\Controllers\Api\Driver\TripController as DriverTripController;
 use App\Http\Controllers\Api\Restaurant\CategoryController as RestaurantCategoryController;
 use App\Http\Controllers\Api\Restaurant\ComplaintController as RestaurantComplaintController;
 use App\Http\Controllers\Api\Restaurant\DirectOrderController as RestaurantDirectOrderController;
@@ -418,6 +419,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/errands/{errand}/deliver', [DriverErrandController::class, 'deliver']);
         Route::post('/errands/{errand}/purchases', [DriverErrandController::class, 'purchases']);
         Route::post('/errands/{errand}/cancel', [DriverErrandController::class, 'cancel']);
+
+        // doc 63 §3.3 — the whole trip; `/orders/active` stays and answers its focus.
+        Route::get('/trip', [DriverTripController::class, 'show']);
 
         Route::post('/orders/{order}/accept', [DriverOrderController::class, 'accept']);
         Route::post('/orders/{order}/reject', [DriverOrderController::class, 'reject']);

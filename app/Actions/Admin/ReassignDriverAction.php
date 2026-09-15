@@ -2,22 +2,26 @@
 
 namespace App\Actions\Admin;
 
-use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
-use App\Support\DriverEarningCalculator;
+use App\Support\DriverTrip;
 use App\Support\Otp;
-use App\Support\RollupStatus;
+use App\Support\TripAssignment;
 use Illuminate\Support\Facades\DB;
 
 /**
  * doc 24 §5 / doc 16 D-54 — hand the order to a named captain. Closes the old
  * attempt row with an admin result code, regenerates the pickup OTP, and never
  * exists once the order has been picked_up.
+ *
+ * doc 63 §3.6 — the captain no longer has to be empty-handed, only to have room: the
+ * target must pass the capacity gate (`driver_trip_full`) and must not be on an errand
+ * (`driver_on_an_errand`). How far this order's place is from the rest of their trip is
+ * the operator's call and is not checked.
  */
 class ReassignDriverAction
 {
@@ -31,70 +35,55 @@ class ReassignDriverAction
 
         $newDriver = Driver::query()->where('is_active', true)->findOrFail($driverId);
 
-        if ($newDriver->active_order_id) {
-            throw new ApiException('driver_already_busy', 'هذا الكابتن مشغول بطلب آخر حاليًا', 422);
-        }
+        self::assertTheCaptainCanTakeIt($newDriver, $order);
 
         return DB::transaction(function () use ($admin, $order, $newDriver, $reasonCode, $note) {
             $oldDriver = $order->driver;
 
+            // The captain who loses it can never be its holder again (doc 63 §1.2). Their
+            // trip is re-derived by `OrderObserver` on the assignment below.
             if ($oldDriver) {
                 $order->driverAttempts()->where('driver_id', $oldDriver->id)->where('result', 'accepted')
                     ->update(['result' => 'reassigned_by_admin', 'reason_code' => $reasonCode, 'responded_at' => now()]);
-                $oldDriver->update(['is_available' => true, 'active_order_id' => null]);
             }
 
-            $order->driverAttempts()->create([
-                'driver_id' => $newDriver->id,
-                'round' => $order->dispatch_round + 1,
-                'distance_km' => 0,
-                'result' => 'accepted',
-                'sent_at' => now(),
-                'responded_at' => now(),
-            ]);
-
-            $from = $order->status;
-
-            $order->update([
-                'driver_id' => $newDriver->id,
-                'status' => OrderStatus::DriverAssigned,
-                'driver_assigned_at' => now(),
-                'pickup_otp' => Otp::orderCode(),
-                'pickup_otp_attempts' => 0,
-                /*
-                 * 🔴 The money was never recalculated here.
-                 *
-                 * `AcceptOfferAction` snapshots `driver_earning` and
-                 * `platform_delivery_margin` when a captain accepts; an admin assignment
-                 * wrote neither — so an order handed over by an operator carried **0/0**,
-                 * the captain's wallet was credited nothing on delivery, and the platform's
-                 * 15 % (D-70) never appeared in any report. A reassignment was worse: the
-                 * new captain inherited the old one's numbers, which are only right if the
-                 * two are on the same earning rule.
-                 */
-                'driver_earning' => DriverEarningCalculator::calculate($order, $newDriver),
-                'platform_delivery_margin' => DriverEarningCalculator::platformMargin($order, $newDriver),
-                'dispatch_admin_notified_at' => null,
-            ]);
-
-            $newDriver->update(['is_available' => false, 'active_order_id' => $order->id]);
-
-            $order->statusHistory()->create([
-                'from_status' => $from->value,
-                'to_status' => OrderStatus::DriverAssigned->value,
-                'actor_type' => OrderStatusActorType::Admin,
-                'actor_id' => $admin->id,
-                'reason_code' => $reasonCode,
-                'note' => $note,
-                'meta' => ['message' => 'تدخّلت الإدارة'],
-            ]);
-
-            $group = $order->orderGroup;
-            $group->update(['rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status'))]);
+            /*
+             * 🔴 The money was never recalculated here, and the new captain inherited the
+             * old one's numbers. `TripAssignment` snapshots `driver_earning` and
+             * `platform_delivery_margin` exactly as an accept does (doc 62 §4.6).
+             */
+            TripAssignment::assign(
+                $order,
+                $newDriver,
+                OrderStatusActorType::Admin,
+                $admin->id,
+                TripAssignment::VIA_OFFICE,
+                history: ['reason_code' => $reasonCode, 'note' => $note, 'meta' => ['message' => 'تدخّلت الإدارة']],
+                columns: ['pickup_otp' => Otp::orderCode(), 'pickup_otp_attempts' => 0],
+                round: (int) $order->dispatch_round + 1,
+            );
 
             AuditLogger::record($admin, 'orders.reassign_driver', $order, ['driver_id' => $newDriver->id, 'reason_code' => $reasonCode]);
 
             return $order->fresh();
         });
+    }
+
+    /**
+     * The office's two refusals (doc 63 §2.4) — shared with the assignment that arrives as
+     * an offer, {@see OfferOrderToDriverAction}.
+     */
+    public static function assertTheCaptainCanTakeIt(Driver $driver, Order $order): void
+    {
+        if (DriverTrip::onErrand($driver)) {
+            throw new ApiException('driver_on_an_errand', 'هذا الكابتن في مشوار الآن', 422);
+        }
+
+        if (DriverTrip::capacityRefusal($driver, $order) !== null) {
+            throw new ApiException('driver_trip_full', 'رحلة هذا الكابتن مكتملة', 422, meta: [
+                'trip_count' => DriverTrip::count($driver),
+                'trip_max' => DriverTrip::max(),
+            ]);
+        }
     }
 }

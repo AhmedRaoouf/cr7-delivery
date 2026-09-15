@@ -64,8 +64,12 @@ class ModerateAccountAction
                 ]);
             }
 
-            // A captain on shift must not stay on the dispatch pool's shortlist.
-            $target->driver?->update(['is_online' => false, 'is_available' => false]);
+            // A captain on shift must not stay on the dispatch pool's shortlist — going
+            // offline does that, and the suspended account (`users.is_active`) keeps them
+            // off it. `is_available` is not written: it used to be set false here and never
+            // restored by `unblock()`, so an unblocked captain was invisible to dispatch
+            // for good. It means «carries nothing» now, derived by `DriverTrip` (doc 63 §7).
+            $target->driver?->update(['is_online' => false]);
 
             $target->tokens()->delete();
             // The phone stops receiving this platform's pushes the moment it stops

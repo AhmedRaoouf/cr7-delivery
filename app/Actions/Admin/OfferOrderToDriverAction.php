@@ -53,23 +53,23 @@ class OfferOrderToDriverAction
 
         $driver = Driver::query()->where('is_active', true)->findOrFail($driverId);
 
-        if ($driver->active_order_id !== null && $driver->active_order_id !== $order->id) {
-            throw new ApiException('driver_already_busy', 'هذا الكابتن مشغول بطلب آخر حاليًا', 422);
-        }
+        // doc 63 §3.6 — room on their trip, not an empty hand, and not mid-errand.
+        // Distance is the operator's call: the captain's accept skips that gate for an
+        // offer with `assigned_by` on it.
+        ReassignDriverAction::assertTheCaptainCanTakeIt($driver, $order);
 
         $order = DB::transaction(function () use ($admin, $order, $driver, $reasonCode, $note) {
             $previous = $order->driver;
 
             // Released now rather than on acceptance. Holding the order for a captain
             // who may never answer is what «إسناد» used to mean, and it is what left
-            // orders parked against an unreachable phone.
+            // orders parked against an unreachable phone. Their trip is re-derived by
+            // `OrderObserver` when `driver_id` is cleared below.
             if ($previous !== null && $previous->id !== $driver->id) {
                 $order->driverAttempts()
                     ->where('driver_id', $previous->id)
                     ->where('result', 'accepted')
                     ->update(['result' => 'reassigned_by_admin', 'reason_code' => $reasonCode, 'responded_at' => now()]);
-
-                $previous->update(['is_available' => true, 'active_order_id' => null]);
             }
 
             // An operator who assigns twice must not create two live offers to the same

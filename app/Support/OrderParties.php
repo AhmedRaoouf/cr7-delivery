@@ -58,10 +58,46 @@ final class OrderParties
             $order->unsetRelation($relation);
         }
 
-        return $order->toArray() + $parties + [
+        $payload = $order->toArray() + $parties + [
             'pickup_code_required' => (bool) ($order->pickup_code_required ?? true),
             'delivery_code_required' => ! $order->isDirect() && (bool) ($order->delivery_code_required ?? true),
         ];
+
+        if ($viewer === 'restaurant') {
+            $payload['basket_captain'] = self::basketCaptain($order);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * doc 63 §1.4 — who is coming for a sub-order still in the kitchen while its basket is
+     * already on a captain's trip: the holder of D-115, in the same block as `captain`, so
+     * the board can print «سيستلمه الكابتن {name} مع طلب آخر من نفس العميل». Null once the
+     * order has its own captain, when the order is over, and when nobody holds the basket.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function basketCaptain(Order $order): ?array
+    {
+        if ($order->driver_id !== null || $order->status->isTerminal()) {
+            return null;
+        }
+
+        $holder = DriverTrip::holderFor($order);
+
+        if ($holder === null) {
+            return null;
+        }
+
+        // Reloaded through the same column limits `relations()` puts on `captain` — the
+        // place is entitled to a name, a number and a vehicle, never a captain's balances.
+        $holder = Driver::query()
+            ->select(['id', 'user_id', 'vehicle_type', 'vehicle_plate', 'rating_avg', 'current_lat', 'current_lng', 'location_updated_at'])
+            ->with('user:id,name,phone,avatar')
+            ->find($holder->id);
+
+        return self::captain($holder);
     }
 
     /**

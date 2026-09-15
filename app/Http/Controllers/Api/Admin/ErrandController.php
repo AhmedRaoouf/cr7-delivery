@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\DriverTrip;
 use App\Support\Geo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,6 +90,7 @@ class ErrandController extends Controller
         $drivers = Driver::query()
             ->with('user')
             ->where('is_active', true)
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
             ->get()
             ->map(fn (Driver $driver) => [
                 'id' => $driver->id,
@@ -97,6 +99,9 @@ class ErrandController extends Controller
                 'is_online' => (bool) $driver->is_online,
                 'is_available' => (bool) $driver->is_available,
                 'active_order_id' => $driver->active_order_id,
+                // doc 63 gate 4 — a captain carrying orders cannot be handed an errand; the
+                // count says why `assign` would refuse them.
+                'trip_count' => (int) $driver->trip_count,
                 'rating_avg' => (float) $driver->rating_avg,
                 'distance_km' => $driver->current_lat === null || $driver->current_lng === null
                     ? null

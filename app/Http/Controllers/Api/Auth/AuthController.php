@@ -125,9 +125,11 @@ class AuthController extends Controller
      * it either — the 90-second staleness rule only downgrades a captain to «موقعه
      * قديم», it never takes them offline.
      *
-     * `is_available` and `active_order_id` are deliberately untouched: a captain who
-     * signs out mid-delivery still holds that order, and clearing it here would silently
-     * unassign it outside `UnassignDriverAction` and its audit trail.
+     * The trip is deliberately untouched (doc 63 §7): a captain who signs out mid-delivery
+     * still carries every order on it, and taking one away here would silently unassign
+     * it outside `UnassignDriverAction` and its audit trail. `is_available` and
+     * `active_order_id` are not written either — they are derived from those orders by
+     * `DriverTrip::refresh`, never by hand.
      */
     private static function endCaptainShift(User $user): void
     {

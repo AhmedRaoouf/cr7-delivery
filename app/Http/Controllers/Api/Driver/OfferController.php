@@ -4,12 +4,24 @@ namespace App\Http\Controllers\Api\Driver;
 
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
+use App\Models\OrderDriverAttempt;
 use App\Support\ApiResponse;
+use App\Support\DriverTrip;
 use App\Support\Notifications\OfferContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
-/** doc 08 §5 — GET /driver/offers, GET /driver/offers/{orderId}: open offers, recovery after a missed push. */
+/**
+ * doc 08 §5 — GET /driver/offers, GET /driver/offers/{orderId}: open offers, recovery after a missed push.
+ *
+ * doc 63 — a captain carrying orders has offers too (D-116), and a basket is one offer
+ * (D-115): the list carries **one entry per basket**, led by its oldest open offer, with a
+ * `basket` block naming every sub-order the captain would carry and a `trip` block saying
+ * where their trip would stand. A 1.0.3 app reads `offers.first` and its keys, which are all
+ * still here, and its «قبول» takes the basket.
+ */
 class OfferController extends Controller
 {
     public function index(Request $request): JsonResponse
@@ -20,28 +32,21 @@ class OfferController extends Controller
         // The old `expires_at > now()` filter hid every one of them, so the recovery
         // list a captain falls back to after a missed push would have come back empty
         // for exactly the offers that are still theirs to take.
-        // A captain already on a trip has no offers, whatever rows are lying
-        // about. Without this the recovery poll could draw an offer whose
-        // «قبول» answers `already_on_a_trip` — and the client shows
-        // `offers.first`, so one stale row is enough to wedge the screen.
-        if ($driver->active_order_id !== null) {
-            return ApiResponse::success([]);
-        }
+        $attempts = $this->openAttempts($driver)
+            // One the captain could no longer accept is not an offer: «قبول» would answer
+            // `trip_full`, `too_far_for_trip` or `on_an_errand`, and the client shows
+            // `offers.first`, so one such row is enough to wedge the screen. An offer the
+            // office sent by name skips the distance gate (doc 63 §3.6).
+            ->filter(fn (OrderDriverAttempt $attempt) => DriverTrip::refusal($driver, $attempt->order, enforceRadius: $attempt->assigned_by === null) === null);
 
-        $offers = $driver->driverAttempts()
-            ->where('result', 'sent')
-            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            // An order that has since found a captain, been cancelled or been
-            // delivered is not an offer any more. The row said `sent` forever
-            // because only the accepting path ever superseded its siblings.
-            ->whereHas('order', fn ($q) => $q
-                ->whereNull('driver_id')
-                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
-            ->with(['order.restaurant', 'order.serviceZone', 'assignedBy:id,name'])
-            ->get()
-            ->map(fn ($attempt) => $this->formatOffer($attempt));
+        $leads = DriverTrip::oneCaptainPerBasket()
+            ? $attempts->groupBy(fn (OrderDriverAttempt $attempt) => $attempt->order->order_group_id ?? 'order-'.$attempt->order_id)
+                ->map(fn (Collection $basket) => $basket->sortBy('id')->first())
+            : $attempts;
 
-        return ApiResponse::success($offers);
+        return ApiResponse::success(
+            $leads->sortBy('id')->values()->map(fn (OrderDriverAttempt $attempt) => $this->formatOffer($attempt, $driver))->all(),
+        );
     }
 
     public function show(Request $request, int $orderId): JsonResponse
@@ -52,16 +57,31 @@ class OfferController extends Controller
             ->where('order_id', $orderId)
             ->where('result', 'sent')
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->with(['order.restaurant', 'order.serviceZone', 'assignedBy:id,name'])
+            ->with(['order.restaurant', 'order.serviceZone', 'order.orderGroup', 'assignedBy:id,name'])
             ->firstOrFail();
 
-        return ApiResponse::success($this->formatOffer($attempt));
+        return ApiResponse::success($this->formatOffer($attempt, $driver));
     }
 
-    private function formatOffer($attempt): array
+    /** @return Collection<int, OrderDriverAttempt> */
+    private function openAttempts(Driver $driver): Collection
+    {
+        return $driver->driverAttempts()
+            ->where('result', 'sent')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            // An order that has since found a captain, been cancelled or been
+            // delivered is not an offer any more. The row said `sent` forever
+            // because only the accepting path ever superseded its siblings.
+            ->whereHas('order', fn ($q) => $q
+                ->whereNull('driver_id')
+                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
+            ->with(['order.restaurant', 'order.serviceZone', 'order.orderGroup', 'assignedBy:id,name'])
+            ->get();
+    }
+
+    private function formatOffer(OrderDriverAttempt $attempt, Driver $driver): array
     {
         $order = $attempt->order;
-        $driver = $attempt->driver;
         // doc 62 §9 — the distance from where the captain is **now**, when he has a fix;
         // the stored one is where he was when the offer went out.
         $offer = OfferContext::for($order, $driver, OfferContext::toPlaceKm($order, $driver) ?? ($attempt->distance_km === null ? null : (float) $attempt->distance_km));
@@ -119,6 +139,10 @@ class OfferController extends Controller
             // so the captain knows this one came from the office rather than the queue.
             'assigned_by_admin' => $attempt->assigned_by !== null,
             'assigned_by_name' => $attempt->assignedBy?->name,
+            // doc 63 §1.3 — the whole basket this «قبول» takes; null for one place.
+            'basket' => DriverTrip::offerBasket($driver, $order),
+            // doc 63 §2.3 — «معك الآن ‪{count}‬ · ستصبح ‪{after}‬ من ‪{max}‬».
+            'trip' => DriverTrip::offerTrip($driver, $order),
         ];
     }
 }

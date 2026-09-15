@@ -47,6 +47,14 @@ class Order extends Model
     protected $hidden = ['pickup_otp', 'delivery_otp'];
 
     /**
+     * How the write being announced assigned a captain — `basket` when doc 63's D-115 handed
+     * a ready sibling to the captain already carrying the basket. Transient, never a
+     * column: `TripAssignment` sets it around the one `update()` and `OrderNotifications`
+     * reads it while that same write is announced.
+     */
+    public ?string $assignedVia = null;
+
+    /**
      * doc 04 §11.1 — the states in which the pickup OTP belongs to the restaurant.
      *
      * Before `ready` there is nothing to hand over; after the captain has quoted it

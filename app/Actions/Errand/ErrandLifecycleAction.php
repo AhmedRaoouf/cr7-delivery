@@ -6,10 +6,13 @@ use App\Enums\ErrandStatus;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\ErrandRequest;
+use App\Models\OrderDriverAttempt;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\DeliveryCommission;
+use App\Support\DispatchService;
 use App\Support\DriverLedger;
+use App\Support\DriverTrip;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\DB;
 
@@ -35,7 +38,10 @@ class ErrandLifecycleAction
      */
     public function accept(Driver $driver, ErrandRequest $errand): ErrandRequest
     {
-        if ($driver->active_order_id !== null) {
+        // doc 63 gate 4, from the errand's side: a captain carrying orders cannot take an
+        // errand. Read from the trip, not from `active_order_id` — that column is the
+        // trip's focus now and only ever a copy.
+        if (DriverTrip::count($driver) > 0) {
             throw new ApiException('driver_busy', 'لا يمكنك قبول مشوار وأنت على طلب آخر', 422);
         }
 
@@ -70,6 +76,14 @@ class ErrandLifecycleAction
 
             $locked->record(ErrandStatus::Assigned, $driver->user, 'driver');
 
+            // …and the other way round: a captain on an errand is offered no orders, so
+            // the order offers already in their hand are over. Left open, «قبول» on one
+            // would answer `on_an_errand`.
+            OrderDriverAttempt::query()
+                ->where('driver_id', $driver->id)
+                ->where('result', 'sent')
+                ->update(['result' => 'superseded', 'responded_at' => now()]);
+
             return $locked;
         });
 
@@ -92,7 +106,7 @@ class ErrandLifecycleAction
      */
     public function assign(User $admin, ErrandRequest $errand, Driver $driver, ?string $note = null): ErrandRequest
     {
-        if ($driver->active_order_id !== null) {
+        if (DriverTrip::count($driver) > 0) {
             throw new ApiException('driver_busy', 'هذا الكابتن على طلب آخر', 422);
         }
 
@@ -244,6 +258,10 @@ class ErrandLifecycleAction
         $this->notifications->send($errand->customer, 'errand.delivered_customer', [],
             deepLink: 'cr7://errands/'.$errand->id);
 
+        // Off the errand, back in the order pool — and handed the backlog now rather
+        // than at the next two-minute sweep (doc 63 gate 4).
+        app(DispatchService::class)->offerBacklogTo($driver);
+
         return $errand->fresh(['driver.user']);
     }
 
@@ -284,6 +302,10 @@ class ErrandLifecycleAction
             $this->notifications->send($driver->user, 'errand.cancelled_driver', [
                 'reference' => $errand->reference,
             ]);
+        }
+
+        if ($driver !== null) {
+            app(DispatchService::class)->offerBacklogTo($driver);
         }
 
         if ($role !== 'customer') {

@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\OrderDriverAttempt;
 use App\Support\DispatchService;
+use App\Support\DriverTrip;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,14 +44,21 @@ class RejectOfferAction
             throw new ApiException('not_eligible', 'هذا العرض غير متاح لك', 403);
         }
 
-        DB::transaction(function () use ($driver, $attempt, $reasonCode) {
-            $attempt->update(['result' => 'rejected', 'reason_code' => $reasonCode, 'responded_at' => now()]);
+        $attempts = $this->theBasket($driver, $attempt);
+
+        DB::transaction(function () use ($driver, $attempts, $reasonCode) {
+            foreach ($attempts as $open) {
+                $open->update(['result' => 'rejected', 'reason_code' => $reasonCode, 'responded_at' => now()]);
+            }
+
+            // One «رفض», one refusal on the captain's record — a basket is one offer.
             $driver->increment('rejected_offers');
         });
 
-        $this->tellTheOperator($attempt, $driver, $reasonCode);
-
-        $this->dispatch->advanceIfRoundExhausted($attempt->order()->lockForUpdate()->first());
+        foreach ($attempts as $open) {
+            $this->tellTheOperator($open, $driver, $reasonCode);
+            $this->dispatch->advanceIfRoundExhausted($open->order()->lockForUpdate()->first());
+        }
 
         // «ولو رفضه، ابعت التاني اللي لسه مش لاقي ليه كابتن، وهكذا» — a captain
         // who says no to one order is still on shift and still free, so the next
@@ -58,6 +66,29 @@ class RejectOfferAction
         // for a sweep. Their `rejected` row on *this* order keeps it from coming
         // straight back.
         $this->dispatch->offerBacklogTo($driver);
+    }
+
+    /**
+     * doc 63 §1.3 — «reject refuses the basket»: every open offer this captain holds on a
+     * sub-order of the same basket is refused with it, because it was one card and one
+     * button. With the basket switch off, only the order that was answered.
+     *
+     * @return list<OrderDriverAttempt>
+     */
+    private function theBasket(Driver $driver, OrderDriverAttempt $attempt): array
+    {
+        $groupId = $attempt->order?->order_group_id;
+
+        if ($groupId === null || ! DriverTrip::oneCaptainPerBasket()) {
+            return [$attempt];
+        }
+
+        return $driver->driverAttempts()
+            ->where('result', 'sent')
+            ->whereHas('order', fn ($q) => $q->where('order_group_id', $groupId)->whereNull('driver_id'))
+            ->orderBy('id')
+            ->get()
+            ->all() ?: [$attempt];
     }
 
     private function tellTheOperator(OrderDriverAttempt $attempt, Driver $driver, string $reasonCode): void

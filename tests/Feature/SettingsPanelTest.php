@@ -143,6 +143,9 @@ class SettingsPanelTest extends TestCase
             'dispatch.radius_km' => 5, 'dispatch.batch_size' => 3, 'dispatch.max_rounds' => 3,
             'dispatch.offer_to_all_online' => true, 'dispatch.allow_neighbour_zones' => true,
             'dispatch.location_stale_seconds' => 90,
+            // doc 63 — declared, not seeded: with no row each reads its default.
+            'dispatch.one_captain_per_basket' => true, 'dispatch.batching_enabled' => true,
+            'dispatch.max_orders_per_trip' => 3, 'dispatch.batch_radius_km' => 1.5,
             'restaurant.prep_minutes_min' => 5, 'restaurant.prep_minutes_max' => 120,
             'restaurant.prep_extension_max_minutes' => 15,
             'errands.base_fee' => 20, 'errands.per_km_fee' => 5, 'errands.min_fee' => 20,

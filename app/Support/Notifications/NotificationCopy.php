@@ -157,6 +157,18 @@ class NotificationCopy
             'ar' => ['🚨 طلب جديد قريب منك', '{summary}'],
             'en' => ['🚨 New order near you', '{summary}'],
         ],
+        // doc 63 D-115 — a sibling of the basket this captain carries is ready, and it is
+        // theirs: nobody else was offered it. `{number}` carries its own «#».
+        'trip.order_ready' => [
+            'ar' => ['طلب {number} من {place} جاهز — استلمه ضمن رحلتك', '{details}'],
+            'en' => ['Order {number} from {place} is ready — pick it up on this trip', '{details}'],
+        ],
+        // doc 63 §7 — the captain carrying (or holding) a sub-order that was cancelled. Nothing
+        // told them before: a captain on the way to a cancelled pickup learned it at the counter.
+        'trip.order_cancelled' => [
+            'ar' => ['أُلغي الطلب {number} — أُزيل من رحلتك', '{place}'],
+            'en' => ['Order {number} was cancelled — removed from your trip', '{place}'],
+        ],
         // doc 62 §9 — where to go, what to pay there, what to collect at the door.
         'order.assigned' => [
             'ar' => ['أصبح الطلب لك ✅', '{details}'],

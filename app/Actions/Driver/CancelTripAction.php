@@ -29,11 +29,17 @@ class CancelTripAction
         DB::transaction(function () use ($driver, $order, $reasonCode, $note) {
             $from = $order->status;
 
+            // Every row this captain has on the order, so the holder rule of doc 63 §1.2
+            // reads them as having stepped off it — the dispatch below must not hand it
+            // straight back to them as the captain of its basket.
             $order->driverAttempts()->where('driver_id', $driver->id)->where('order_id', $order->id)
                 ->update(['result' => 'cancelled_after_accept', 'reason_code' => $reasonCode, 'responded_at' => now()]);
 
-            $driver->update(['is_available' => true, 'active_order_id' => null, 'cancelled_orders' => $driver->cancelled_orders + 1]);
+            $driver->increment('cancelled_orders');
 
+            // The rest of the trip stays theirs. Their focus and «carries nothing» are
+            // re-derived by `DriverTrip::refresh` on the write below (`OrderObserver`).
+            //
             // The search starts again, so the two-minute clock does too: this order has
             // been without a captain for zero seconds, not since it was first made ready.
             $order->update([
@@ -58,7 +64,7 @@ class CancelTripAction
 
         $this->dispatch->dispatchRound($order->fresh(), $round);
 
-        // The captain who stepped off this trip is free again, so they get the
+        // The captain who stepped off this order may have room again, so they get the
         // rest of the backlog rather than sitting idle until a sweep. Their own
         // `cancelled_after_accept` row keeps this order from coming back to them.
         $this->dispatch->offerBacklogTo($driver);

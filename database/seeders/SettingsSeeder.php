@@ -39,7 +39,12 @@ class SettingsSeeder extends Seeder
             // and the office had to hand it over by name. `true` makes a zone rank
             // the ring rather than close it; `0` puts the old gate back.
             'dispatch.allow_neighbour_zones' => [true, 'dispatch'],
-            'dispatch.mode_multi_restaurant' => ['driver_per_restaurant', 'dispatch'],
+            // `dispatch.mode_multi_restaurant` is gone (doc 63). It was seeded
+            // `driver_per_restaurant` on day one and read by nothing; reading it now would
+            // have left every deployment on D-30, because this seeder never overwrites a
+            // row. D-115's switch is `dispatch.one_captain_per_basket`, declared in
+            // `SettingsCatalog` with its default, and the migration of 2026-09-23 deletes
+            // the old row.
             'dispatch.multi_pickup_ready_window_seconds' => [600, 'dispatch'],
             'dispatch.location_stale_seconds' => [90, 'dispatch'],
             // doc 04 E-71 — how long a stranded order waits before `cr7:tick` offers it

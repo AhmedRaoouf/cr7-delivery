@@ -17,6 +17,7 @@ use App\Http\Requests\Driver\PickupRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\DriverTrip;
 use App\Support\OrderParties;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
@@ -42,9 +43,19 @@ class OrderController extends Controller
         return ApiResponse::success(message: 'تم رفض العرض');
     }
 
+    /**
+     * The trip's focus — the order of the first stop the captain can act on (doc 63 D-117).
+     *
+     * Kept for the 1.0.3 app, which reads «the» active order: it sees one order at a time
+     * and completes them one by one, and the next one is here when the last is done. The
+     * whole trip is `GET /driver/trip`.
+     */
     public function active(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
+
+        // Re-derived rather than trusted: the stop order depends on where the captain is.
+        DriverTrip::refresh($driver);
 
         if (! $driver->active_order_id) {
             return ApiResponse::success(null);

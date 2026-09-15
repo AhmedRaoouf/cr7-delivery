@@ -75,7 +75,9 @@ final class SessionIssuer
      * it are serialised: the second one waits, then finds the row already rotated and
      * takes the replay path instead of rotating it a second time. The outcome is returned
      * out of the transaction and thrown after it commits — a family revoked on the way to a
-     * refusal must stay revoked.
+     * refusal must stay revoked. Three attempts, because a deadlock between two renewals
+     * is the database asking for a retry, and the whole decision is inside the transaction
+     * that would be retried.
      *
      * @return array<string, mixed>
      *
@@ -156,7 +158,7 @@ final class SessionIssuer
             Sessions::revokeFamily($row->family);
 
             return ['expired', null];
-        });
+        }, 3);
 
         return match ($outcome) {
             'ok' => $payload,
@@ -212,7 +214,7 @@ final class SessionIssuer
             }
 
             return $session;
-        });
+        }, 3);
     }
 
     /** The one refusal, whatever was wrong with the token. */
@@ -284,12 +286,18 @@ final class SessionIssuer
         ])->save();
 
         // Whatever an earlier renewal in this sign-in still holds past its own window.
-        RefreshToken::query()
+        // Found by a plain read and written by primary key, so the write locks those rows
+        // and not a range of the `family` index that another sign-in may be inserting into.
+        $stale = RefreshToken::query()
             ->where('family', $row->family)
             ->whereKeyNot($row->id)
             ->whereNotNull('grace_payload')
             ->where('rotated_at', '<', now()->subSeconds(self::GRACE_SECONDS))
-            ->update(['grace_payload' => null]);
+            ->pluck('id');
+
+        if ($stale->isNotEmpty()) {
+            RefreshToken::query()->whereKey($stale->all())->update(['grace_payload' => null]);
+        }
 
         return $session;
     }

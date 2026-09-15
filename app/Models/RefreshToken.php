@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Auth\SessionIssuer;
 use App\Support\Auth\Sessions;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 /**
  * D-120 — one refresh token, and the access token issued beside it.
  *
- * Written only by {@see \App\Support\Auth\SessionIssuer} and revoked only through
+ * Written only by {@see SessionIssuer} and revoked only through
  * {@see Sessions}. Nothing reads `token_hash` or `grace_payload` outside those two, which
  * is why both are hidden: a row that reaches a `toArray()` by accident must not carry
  * what it takes to renew somebody's session.

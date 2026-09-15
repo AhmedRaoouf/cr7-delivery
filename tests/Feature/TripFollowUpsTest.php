@@ -85,6 +85,38 @@ class TripFollowUpsTest extends TestCase
         $pushes = $this->pushesOfType('captain-'.$captain->id, 'order.unassigned');
         $this->assertCount(1, $pushes);
         $this->assertSame((string) $order->id, $pushes[0]['data']['order_id']);
+        $this->assertSame('driver_unresponsive', $pushes[0]['data']['reason_code'], 'DRV-35 says why');
+    }
+
+    public function test_the_basket_offer_says_what_each_stop_costs_in_cash(): void
+    {
+        $second = $this->makeRestaurant('سعد الدمياطي', 31.3930, 31.4840);
+        [$a, $b] = $this->basket([$this->place, $second]);
+        $captain = $this->captain('كابتن الأول');
+
+        $this->ready($a);
+        $this->ready($b);
+
+        $offers = $this->asCaptain($captain)->getJson('/api/v1/driver/offers')->assertOk()->json('data');
+        $this->assertCount(1, $offers, 'one card per basket');
+
+        $basket = $offers[0]['basket'];
+        foreach ($basket['orders'] as $stop) {
+            $this->assertArrayHasKey('paid_at_pickup', $stop);
+            $this->assertArrayHasKey('cash_to_collect', $stop);
+        }
+
+        $this->assertEqualsWithDelta(
+            array_sum(array_column($basket['orders'], 'paid_at_pickup')),
+            $basket['pay_places_total'],
+            0.001,
+        );
+        $this->assertEqualsWithDelta(
+            array_sum(array_column($basket['orders'], 'cash_to_collect')),
+            $basket['cash_to_collect_total'],
+            0.001,
+        );
+        $this->assertGreaterThan(0, $basket['cash_to_collect_total'], 'a cash basket collects something at the door');
     }
 
     public function test_a_captain_reassigned_away_after_reaching_the_place_is_told_once(): void

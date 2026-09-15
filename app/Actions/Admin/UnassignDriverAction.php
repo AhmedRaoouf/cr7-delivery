@@ -90,7 +90,7 @@ class UnassignDriverAction
                 ['order_number' => $order->order_number],
                 null,
                 $order->id,
-                ['order_id' => (string) $order->id],
+                ['order_id' => (string) $order->id, 'reason_code' => $reasonCode],
             );
         }
 

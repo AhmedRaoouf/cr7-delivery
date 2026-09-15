@@ -339,7 +339,7 @@ class OrderNotifications
                 ],
                 'cr7://trip/'.$order->id,
                 $order->id,
-                ['order_id' => (string) $order->id, 'kind' => 'trip'],
+                ['order_id' => (string) $order->id, 'order_number' => (string) $order->order_number, 'kind' => 'trip'],
             );
         } else {
             $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
@@ -477,7 +477,9 @@ class OrderNotifications
             ['number' => '#'.$order->order_number, 'place' => $this->placeName($order)],
             'cr7://trip',
             $order->id,
-            ['order_id' => (string) $order->id, 'kind' => 'trip'],
+            // The number rides in the data as well as the title: the app draws its own
+            // sentence on the trip screen, and a push's title is the phone's, not the app's.
+            ['order_id' => (string) $order->id, 'order_number' => (string) $order->order_number, 'kind' => 'trip'],
         );
     }
 
@@ -502,13 +504,20 @@ class OrderNotifications
                 ->whereHas('driver', fn ($q) => $q->whereKey($previous))
                 ->first();
 
+            // The office's reason, so `DRV-35` says why rather than a default.
+            $reason = $order->driverAttempts()
+                ->where('driver_id', $previous)
+                ->whereIn('result', ['unassigned_by_admin', 'reassigned_by_admin'])
+                ->latest('responded_at')
+                ->value('reason_code');
+
             $this->dispatcher->send(
                 $lost,
                 $order->driver_id === null ? 'order.unassigned' : 'order.reassigned',
                 ['order_number' => $order->order_number],
                 null,
                 $order->id,
-                ['order_id' => (string) $order->id],
+                ['order_id' => (string) $order->id, ...($reason === null ? [] : ['reason_code' => (string) $reason])],
             );
         }
 

@@ -97,6 +97,7 @@ class TripPushesAfterTheResponseTest extends TestCase
         $pushes = $this->pushesOfType('captain-'.$captain->id, 'trip.order_cancelled');
         $this->assertCount(1, $pushes);
         $this->assertStringContainsString('أُزيل من رحلتك', $pushes[0]['notification']['title']);
+        $this->assertSame($order->order_number, $pushes[0]['data']['order_number'], 'the app draws its own sentence and needs the number');
         $this->assertNull($captain->fresh()->active_order_id);
     }
 

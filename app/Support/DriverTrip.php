@@ -619,6 +619,11 @@ final class DriverTrip
                 'ready_in_seconds' => $ready ? null : self::readyInSeconds($member),
                 'your_earning' => DriverEarningCalculator::calculate($member, $driver),
                 'free_delivery_reason' => $member->free_delivery_reason,
+                // D-103, per stop: what this captain hands this place at its counter and
+                // what they collect at the door for it — the offer's own two fields, for
+                // every sibling and not only the lead.
+                'paid_at_pickup' => $member->placePaidAtPickup(),
+                'cash_to_collect' => $member->cashToCollect(),
                 'offered' => in_array((int) $member->id, $open, true),
             ];
         })->values();
@@ -630,6 +635,8 @@ final class DriverTrip
             'lead_order_id' => $order->id,
             'orders' => $orders->all(),
             'total_earning' => round((float) $orders->sum('your_earning'), 2),
+            'pay_places_total' => round((float) $orders->sum('paid_at_pickup'), 2),
+            'cash_to_collect_total' => round((float) $orders->sum('cash_to_collect'), 2),
         ];
     }
 

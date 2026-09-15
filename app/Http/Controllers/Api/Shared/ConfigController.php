@@ -16,7 +16,15 @@ use App\Support\PaymentMethods;
 use App\Support\SettingsCatalog;
 use Illuminate\Http\JsonResponse;
 
-/** doc 08 §2 — GET /config: app bootstrap payload. */
+/**
+ * doc 08 §2 — GET /config: app bootstrap payload.
+ *
+ * Not cached on the server — every read is live, so there is no cache key here to get
+ * wrong. It does answer differently per request: `maps` follows `Accept-Language` (an
+ * Arabic basemap, when one is configured) and `first_order.free_delivery_eligible`
+ * follows the bearer token. `Vary` says both, so a proxy or a client-side cache that
+ * honours HTTP keys on them rather than handing one person's answer to another.
+ */
 class ConfigController extends Controller
 {
     public function index(): JsonResponse
@@ -84,7 +92,7 @@ class ConfigController extends Controller
             // The tile template, its zoom scale and the attribution the
             // provider's terms require. Published here rather than compiled
             // into the app so rotating the token is a server edit, not a store
-            // release.
+            // release. Built for the request's locale — `maps.language` says which.
             'maps' => MapStyles::payload(),
             // D-106 / D-107. `static_otp` is only ever non-null while `otp.mode =
             // test` on ADM-46, and then it is already public — the app prints it as
@@ -146,6 +154,6 @@ class ConfigController extends Controller
                 'color' => $s->color(),
             ]),
             'cancel_reasons' => [],
-        ]);
+        ])->setVary(['Accept-Language', 'Authorization'], false);
     }
 }

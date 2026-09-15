@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
+use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Otp;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
@@ -31,14 +32,17 @@ class UnassignDriverAction
         }
 
         $round = $order->dispatch_round;
+        $removed = $order->driver?->user;
 
         DB::transaction(function () use ($admin, $order, $reasonCode, $note, $requeue) {
             $driver = $order->driver;
 
+            // Marked, so the holder rule of doc 63 §1.2 never hands this order back to the
+            // captain it was just taken from — the requeue below would otherwise do exactly
+            // that when they still carry a sibling. Their trip is re-derived by
+            // `OrderObserver` when `driver_id` is cleared.
             $order->driverAttempts()->where('driver_id', $driver->id)->where('result', 'accepted')
                 ->update(['result' => 'unassigned_by_admin', 'reason_code' => $reasonCode, 'responded_at' => now()]);
-
-            $driver->update(['is_available' => true, 'active_order_id' => null]);
 
             $from = $order->status;
             $nextStatus = $requeue ? OrderStatus::SearchingDriver : OrderStatus::Ready;
@@ -76,8 +80,25 @@ class UnassignDriverAction
             AuditLogger::record($admin, 'orders.unassign_driver', $order, ['reason_code' => $reasonCode, 'requeue' => $requeue]);
         });
 
+        // The captain it was taken from is told. `OrderNotifications::driverChanged()` says
+        // so only when `driver_id` moves **without** a status change, and an unassign always
+        // moves the status too — so the captain learned it at the counter, if at all.
+        if ($removed !== null) {
+            app(NotificationDispatcher::class)->send(
+                $removed,
+                'order.unassigned',
+                ['order_number' => $order->order_number],
+                null,
+                $order->id,
+                ['order_id' => (string) $order->id, 'reason_code' => $reasonCode],
+            );
+        }
+
+        // A retry, not a first round: a first round excludes every captain ever asked about
+        // this order, so the requeue reached nobody until the two-minute rebroadcast. A
+        // retry excludes only those who refused it or were taken off it.
         if ($requeue) {
-            $this->dispatch->dispatchRound($order->fresh(), $round + 1);
+            $this->dispatch->dispatchRound($order->fresh(), $round + 1, retry: true);
         }
 
         return $order->fresh();

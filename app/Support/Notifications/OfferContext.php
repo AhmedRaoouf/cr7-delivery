@@ -5,6 +5,7 @@ namespace App\Support\Notifications;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Support\DriverEarningCalculator;
+use App\Support\DriverTrip;
 use App\Support\Geo;
 
 /**
@@ -27,7 +28,7 @@ use App\Support\Geo;
  */
 final class OfferContext
 {
-    /** @return array{summary: array{ar: string, en: string}, earning: float, to_place_km: float|null, trip_km: float|null} */
+    /** @return array{summary: array{ar: string, en: string}, earning: float, to_place_km: float|null, trip_km: float|null, on_trip: bool} */
     public static function for(Order $order, Driver $driver, ?float $toPlaceKm = null): array
     {
         $toPlaceKm ??= self::toPlaceKm($order, $driver);
@@ -67,11 +68,21 @@ final class OfferContext
             $en[] = 'you pay the place '.number_format($pay, 2).' EGP';
         }
 
+        // doc 63 §2.3 — an offer to a captain already carrying orders says so: it joins
+        // the trip they are on, it does not start a new one.
+        $onTrip = $driver->exists && DriverTrip::query($driver)->whereKeyNot($order->id)->exists();
+
+        if ($onTrip) {
+            $ar[] = 'ضمن رحلتك الحالية';
+            $en[] = 'on your current trip';
+        }
+
         return [
             'summary' => ['ar' => implode(' · ', array_filter($ar)), 'en' => implode(' · ', array_filter($en))],
             'earning' => $earning,
             'to_place_km' => $toPlaceKm,
             'trip_km' => $tripKm,
+            'on_trip' => $onTrip,
         ];
     }
 

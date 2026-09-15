@@ -88,7 +88,9 @@ class DeliverOrderAction
                 'actor_id' => $actorId,
             ]);
 
-            $driver->update(['is_available' => true, 'active_order_id' => null, 'completed_orders' => $driver->completed_orders + 1]);
+            // The rest of the trip is untouched: `OrderObserver` re-derived this captain's
+            // focus and «carries nothing» on the write above (doc 63 D-117).
+            $driver->increment('completed_orders');
 
             // D-103 — a pickup that was forced, or that predates the advance, still owes
             // the captain the food money he handed the place. Idempotent.

@@ -182,6 +182,24 @@ final class SettingsCatalog
                     ['key' => 'dispatch.location_stale_seconds', 'type' => 'int', 'default' => 90, 'min' => 30, 'max' => 600,
                         'suffix_ar' => 'ثانية', 'suffix_en' => 's',
                         'label_ar' => 'يُعد الكابتن غير متصل إذا انقطع موقعه أكثر من', 'label_en' => 'A captain counts as offline after no location for'],
+                    // doc 63 D-115/D-116 — declared here and nowhere else: with no row a
+                    // key reads its default, so a deployment is on the new rules the moment
+                    // the code lands and an operator turns them off with one switch.
+                    ['key' => 'dispatch.one_captain_per_basket', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'كابتن واحد لكل سلة', 'label_en' => 'One captain per basket',
+                        'helper_ar' => 'الكابتن الذي يستلم أول طلب من السلة يُسند إليه باقيها حين يجهز، دون عرضه على غيره.',
+                        'helper_en' => 'The captain who takes the first order of a basket is given the rest as each is ready, offered to nobody else.'],
+                    ['key' => 'dispatch.batching_enabled', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'أكثر من طلب في الرحلة الواحدة', 'label_en' => 'More than one order per trip',
+                        'helper_ar' => 'يُعرض على الكابتن الذي معه طلبات طلبٌ جديد من مكان قريب من أماكن رحلته. عند إيقافه تكون الرحلة طلبًا واحدًا.',
+                        'helper_en' => 'A captain carrying orders is offered new ones from places near those on the trip. Off, a trip is one order.'],
+                    ['key' => 'dispatch.max_orders_per_trip', 'type' => 'int', 'default' => 3, 'min' => 1, 'max' => 6,
+                        'label_ar' => 'أقصى عدد طلبات في الرحلة', 'label_en' => 'Most orders on one trip',
+                        'helper_ar' => 'لا يُطبَّق على كابتن لا يحمل شيئًا، فلا يبقى طلب بلا كابتن بسبب هذا الرقم.',
+                        'helper_en' => 'Never applied to a captain carrying nothing, so no order is left without a captain because of it.'],
+                    ['key' => 'dispatch.batch_radius_km', 'type' => 'decimal', 'default' => 1.5, 'min' => 0.2, 'max' => 10, 'step' => 0.1,
+                        'suffix_ar' => 'كم', 'suffix_en' => 'km',
+                        'label_ar' => 'أقصى مسافة بين الأماكن لضم طلب إلى الرحلة (كم)', 'label_en' => 'Farthest a place may be from the trip\'s places to join it (km)'],
                 ],
             ],
             [

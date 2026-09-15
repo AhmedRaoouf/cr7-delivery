@@ -251,5 +251,15 @@
     "يمكنك الطلب من ثلاثة أماكن كحد أقصى في الطلب الواحد": "You can order from three places at most in a single order",
     "يمكنك الطلب من خمسة أماكن كحد أقصى في الطلب الواحد": "You can order from five places at most in a single order",
     "يمكنك الطلب من مكان واحد كحد أقصى في الطلب الواحد": "You can order from one place at most in a single order",
-    "يمكنك الطلب من مكانين كحد أقصى في الطلب الواحد": "You can order from two places at most in a single order"
+    "يمكنك الطلب من مكانين كحد أقصى في الطلب الواحد": "You can order from two places at most in a single order",
+    "رحلتك مكتملة — طلب واحد كحدٍّ أقصى": "Your trip is full — 1 order at most",
+    "رحلتك مكتملة — طلبان كحدٍّ أقصى": "Your trip is full — 2 orders at most",
+    "رحلتك مكتملة — ‪3‬ طلبات كحدٍّ أقصى": "Your trip is full — 3 orders at most",
+    "رحلتك مكتملة — ‪4‬ طلبات كحدٍّ أقصى": "Your trip is full — 4 orders at most",
+    "رحلتك مكتملة — ‪5‬ طلبات كحدٍّ أقصى": "Your trip is full — 5 orders at most",
+    "رحلتك مكتملة — ‪6‬ طلبات كحدٍّ أقصى": "Your trip is full — 6 orders at most",
+    "مكان هذا الطلب بعيد عن أماكن رحلتك الحالية": "This order's place is far from the places on your current trip",
+    "أنت في مشوار الآن — أنهِه أولًا": "You are on an errand — finish it first",
+    "هذا الكابتن في مشوار الآن": "This captain is on an errand right now",
+    "رحلة هذا الكابتن مكتملة": "This captain's trip is full"
 }

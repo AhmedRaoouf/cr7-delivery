@@ -7,7 +7,9 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Support\DispatchService;
+use App\Support\DriverTrip;
 use App\Support\Geo;
+use App\Support\SettingsCatalog;
 use Illuminate\Console\Command;
 
 /**
@@ -67,6 +69,25 @@ class DispatchDoctorCommand extends Command
             $this->line(sprintf('  %-42s %s', $key, $settings[$key] ?? '(not set)'));
         }
 
+        // doc 63 — the trip's four knobs, as the code reads them: a missing row is the
+        // catalogue's default, not «(not set)».
+        foreach (['dispatch.one_captain_per_basket', 'dispatch.batching_enabled', 'dispatch.max_orders_per_trip', 'dispatch.batch_radius_km'] as $key) {
+            $value = SettingsCatalog::get($key);
+            $this->line(sprintf(
+                '  %-42s %s%s',
+                $key,
+                is_bool($value) ? ($value ? 'true' : 'false') : (string) $value,
+                $settings->has($key) ? '' : '  (default)',
+            ));
+        }
+
+        $holder = DriverTrip::holderFor($order);
+        $this->line(sprintf(
+            '  basket holder: %s   need: %d',
+            $holder === null ? '—' : '#'.$holder->id.' '.($holder->user?->name ?? ''),
+            DriverTrip::need($order),
+        ));
+
         // `->value`, because `result` is an `OrderDriverAttemptResult` and a table
         // cell has to be a string. Cast where it is read, not in the model: the
         // enum is what every other caller wants.
@@ -79,11 +100,17 @@ class DispatchDoctorCommand extends Command
             ]);
         $rows = [];
 
-        foreach (Driver::query()->with(['user:id,name', 'assignedZones:id'])->get() as $driver) {
+        $drivers = Driver::query()->with(['user:id,name', 'assignedZones:id'])
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
+            ->get();
+        $refusals = DriverTrip::refusals($drivers, $order);
+
+        foreach ($drivers as $driver) {
             $rows[] = [
                 $driver->id,
                 mb_substr($driver->user?->name ?? '—', 0, 18),
-                $this->verdict($driver, $order),
+                $this->verdict($driver, $refusals[(int) $driver->id] ?? null),
+                $driver->trip_count.'/'.DriverTrip::max(),
                 $driver->assignedZones->isEmpty()
                     ? 'أي نطاق'
                     : $driver->assignedZones->pluck('id')->implode(','),
@@ -96,7 +123,7 @@ class DispatchDoctorCommand extends Command
         }
 
         $this->table(
-            ['id', 'اسم', 'الحالة', 'نطاقات', 'آخر إشارة', 'كم', 'عُرض عليه'],
+            ['id', 'اسم', 'الحالة', 'رحلة', 'نطاقات', 'آخر إشارة', 'كم', 'عُرض عليه'],
             $rows,
         );
 
@@ -105,15 +132,18 @@ class DispatchDoctorCommand extends Command
 
     /**
      * The gates, in the order {@see DispatchService::dispatchRound()}
-     * applies them — the first one that fails is the whole answer.
+     * applies them — the first one that fails is the whole answer. Since doc 63 a
+     * captain carrying orders is not «busy»: the trip gates say whether this one fits.
      */
-    private function verdict(Driver $driver, Order $order): string
+    private function verdict(Driver $driver, ?string $refusal): string
     {
         return match (true) {
             ! $driver->is_active => 'موقوف',
             ! $driver->is_online => 'غير متصل',
-            ! $driver->is_available => 'مشغول (is_available)',
-            $driver->active_order_id !== null => 'على طلب '.$driver->active_order_id,
+            $refusal === DriverTrip::ON_AN_ERRAND => 'في مشوار',
+            $refusal === DriverTrip::TRIP_FULL => 'رحلته مكتملة',
+            $refusal === DriverTrip::TOO_FAR => 'بعيد عن أماكن رحلته',
+            $driver->trip_count > 0 => 'مرشّح (ضمن رحلته)',
             default => 'مرشّح',
         };
     }

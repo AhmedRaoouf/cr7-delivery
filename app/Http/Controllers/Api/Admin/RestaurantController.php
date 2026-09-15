@@ -100,9 +100,23 @@ class RestaurantController extends Controller
         $this->ensureInScope($request, $restaurant);
 
         // Only the switch. The 20/day cap on `ADM-48` is D-49's platform-wide setting,
-        // not a per-restaurant column — there is no `direct_orders_daily_cap` to write.
-        $validated = $request->validate(['enabled' => ['required', 'boolean']]);
-        $restaurant->update(['direct_orders_enabled' => $validated['enabled']]);
+        // not a per-restaurant column — there is no `direct_orders_daily_cap` to write,
+        // so one that arrives is ignored rather than refused.
+        //
+        // doc 63 §6 — either name. The mobile console posted `{direct_orders_enabled: …}`
+        // — the column's name — to an endpoint that validated `enabled`, so every press on
+        // the place screen answered «حقل التفعيل مطلوب.» and changed nothing. The installed
+        // 1.0.3 keeps sending that name, and the web dashboard sends `enabled`.
+        $validated = $request->validate([
+            'enabled' => ['required_without:direct_orders_enabled', 'boolean'],
+            'direct_orders_enabled' => ['required_without:enabled', 'boolean'],
+        ]);
+
+        $enabled = array_key_exists('enabled', $validated) && $validated['enabled'] !== null
+            ? (bool) $validated['enabled']
+            : (bool) $validated['direct_orders_enabled'];
+
+        $restaurant->update(['direct_orders_enabled' => $enabled]);
 
         return ApiResponse::success($restaurant, 'تم تحديث إعداد الطلبات المباشرة بنجاح');
     }

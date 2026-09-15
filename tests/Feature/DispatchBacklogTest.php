@@ -8,6 +8,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\DispatchService;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -127,7 +128,13 @@ class DispatchBacklogTest extends TestCase
         );
     }
 
-    public function test_accepting_one_order_closes_this_captains_offers_on_every_other(): void
+    /**
+     * doc 63 §2.2, restating what this test guarded since 2026-09-12: accepting one order
+     * re-checks every other offer in the captain's hand against the trip they now carry.
+     * One that still fits stays open — «يجيله أكتر من order مع بعض» — and is on the next
+     * poll with the trip it would join.
+     */
+    public function test_accepting_one_order_keeps_this_captains_offers_that_still_fit_the_trip(): void
     {
         [$driver, $first] = $this->strandedOrderAndFreeCaptain();
         $second = $this->strandedOrder();
@@ -139,17 +146,67 @@ class DispatchBacklogTest extends TestCase
             ->postJson("/api/v1/driver/orders/{$first->id}/accept")
             ->assertOk();
 
-        // Left open, the next poll draws an offer whose «قبول» answers
-        // `already_on_a_trip` — and the app shows `offers.first`, so one stale
-        // row is enough to wedge the screen behind a button that cannot work.
         $this->assertDatabaseHas('order_driver_attempts', [
-            'order_id' => $second->id, 'driver_id' => $driver->id, 'result' => 'superseded',
+            'order_id' => $second->id, 'driver_id' => $driver->id, 'result' => 'sent',
         ]);
 
         $this->asCaptain($driver)
             ->getJson('/api/v1/driver/offers')
             ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.order_id', $second->id)
+            ->assertJsonPath('data.0.trip.count', 1)
+            ->assertJsonPath('data.0.trip.after', 2)
+            ->assertJsonPath('data.0.trip.max', 3);
+    }
+
+    /**
+     * …and one that no longer fits is closed. Left open, the next poll draws an offer whose
+     * «قبول» can only refuse — and the app shows `offers.first`, so one such row is enough
+     * to wedge the screen behind a button that cannot work.
+     */
+    public function test_accepting_one_order_closes_this_captains_offers_that_no_longer_fit(): void
+    {
+        [$driver, $first] = $this->strandedOrderAndFreeCaptain();
+        $full = $this->strandedOrder();
+        // Eight kilometres from the first place: outside the 1.5 km that joins a trip.
+        $far = $this->strandedOrder('كنج بروست', 31.4560, 31.4840);
+
+        app(DispatchService::class)->offerBacklogTo($driver);
+        $this->assertSame(3, $driver->driverAttempts()->where('result', 'sent')->count());
+
+        Settings::set('dispatch.max_orders_per_trip', 1);
+
+        $this->asCaptain($driver)
+            ->postJson("/api/v1/driver/orders/{$first->id}/accept")
+            ->assertOk();
+
+        foreach ([$full, $far] as $order) {
+            $this->assertDatabaseHas('order_driver_attempts', [
+                'order_id' => $order->id, 'driver_id' => $driver->id, 'result' => 'superseded',
+            ]);
+        }
+
+        $this->asCaptain($driver)
+            ->getJson('/api/v1/driver/offers')
+            ->assertOk()
             ->assertJsonPath('data', []);
+    }
+
+    public function test_an_offer_whose_place_is_far_from_the_trip_is_closed_on_accept(): void
+    {
+        [$driver, $first] = $this->strandedOrderAndFreeCaptain();
+        $near = $this->strandedOrder();
+        $far = $this->strandedOrder('كنج بروست', 31.4560, 31.4840);
+
+        app(DispatchService::class)->offerBacklogTo($driver);
+
+        $this->asCaptain($driver)
+            ->postJson("/api/v1/driver/orders/{$first->id}/accept")
+            ->assertOk();
+
+        $this->assertDatabaseHas('order_driver_attempts', ['order_id' => $near->id, 'driver_id' => $driver->id, 'result' => 'sent']);
+        $this->assertDatabaseHas('order_driver_attempts', ['order_id' => $far->id, 'driver_id' => $driver->id, 'result' => 'superseded']);
     }
 
     public function test_an_order_that_has_since_found_a_captain_is_not_still_an_offer(): void
@@ -210,9 +267,9 @@ class DispatchBacklogTest extends TestCase
     }
 
     /** An order the kitchen has marked ready and nobody has taken. */
-    private function strandedOrder(string $restaurantName = 'ابن البلد'): Order
+    private function strandedOrder(string $restaurantName = 'ابن البلد', float $lat = 31.3840, float $lng = 31.4840): Order
     {
-        $restaurant = $this->makeRestaurant($restaurantName);
+        $restaurant = $this->makeRestaurant($restaurantName, $lat, $lng);
         $customer = $this->makeCustomer();
         $address = $this->makeAddress($customer);
         $this->makeCart($customer, [[$restaurant, $this->makeProduct($restaurant, 'سندوتش', 100.0), 1]]);

@@ -167,7 +167,7 @@ class ErrandDispatcher
     }
 
     /**
-     * Online, free, and seen recently enough to be somewhere real.
+     * Online, carrying no orders, and seen recently enough to be somewhere real.
      *
      * @return Collection<int, Driver>
      */
@@ -179,8 +179,10 @@ class ErrandDispatcher
             ->with('user')
             ->where('is_active', true)
             ->where('is_online', true)
-            ->where('is_available', true)
-            ->whereNull('active_order_id')
+            // doc 63 gate 4, from the errand's side: a captain carrying orders is offered
+            // no errands. Read from the trip itself rather than from `is_available`, which
+            // is only a copy of it.
+            ->whereDoesntHave('orders', fn ($q) => $q->whereIn('status', DriverTrip::STATES))
             ->where(fn ($q) => $q->whereNull('location_updated_at')
                 ->orWhere('location_updated_at', '>=', now()->subSeconds($staleSeconds)))
             ->get();

@@ -20,6 +20,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
+use App\Support\DriverTrip;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Notifications\RingService;
 use App\Support\Otp;
@@ -75,12 +76,22 @@ class OrderController extends Controller
         // sees each captain's state on the row.
         $includeOffline = $request->boolean('include_offline');
 
+        $tripMax = DriverTrip::max();
+
         $drivers = $dispatch->eligibleDrivers($order, $radius, $includeOffline)->map(fn ($c) => [
             'driver_id' => $c['driver']->id,
             'name' => $c['driver']->user->name,
             'distance_km' => $c['distance_km'] === null ? null : round($c['distance_km'], 2),
             'state' => $c['state'],
-            'is_busy' => $c['driver']->active_order_id !== null,
+            // doc 63 §3.6 — «busy» is «carrying something» now, and carrying something no
+            // longer rules a captain out: the trip, its room and the gate that would stop
+            // dispatch offering them this order are on the row. Only `trip_full` and
+            // `on_an_errand` stop the office too; `too_far_for_trip` is the operator's call.
+            'is_busy' => $c['trip_count'] > 0,
+            'trip_count' => $c['trip_count'],
+            'trip_max' => $tripMax,
+            'can_take' => $c['refusal'] === null,
+            'refusal' => $c['refusal'],
             'last_seen_at' => $c['driver']->location_updated_at?->toIso8601String(),
             'rating_avg' => (float) $c['driver']->rating_avg,
         ]);

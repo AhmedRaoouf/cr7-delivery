@@ -12,6 +12,7 @@ use App\Models\Driver;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\DriverTrip;
 use App\Support\FileUploader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,9 @@ class DriverController extends Controller
     {
         $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->with(['user', 'city'])
+            // doc 63 §3.6 — `ADM-19` prints «في رحلة (‪2‬)» beside `active_order_id`, which is
+            // only the trip's focus now.
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
             ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->when($this->filterBool($request, 'is_online') !== null, fn ($q) => $q->where('is_online', $this->filterBool($request, 'is_online')))
             // `ADM-19` has had a search box since it was drawn and the endpoint never had
@@ -47,7 +51,8 @@ class DriverController extends Controller
     {
         $this->ensureInScope($request, $driver);
 
-        return ApiResponse::success($driver->load(['user', 'city', 'assignedZones', 'documents']));
+        return ApiResponse::success($driver->load(['user', 'city', 'assignedZones', 'documents'])
+            ->loadCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)]));
     }
 
     public function store(StoreDriverRequest $request, CreateDriverAction $action): JsonResponse

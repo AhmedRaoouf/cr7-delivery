@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Events\OrderChanged;
 use App\Models\Order;
+use App\Support\DriverTrip;
 use App\Support\Notifications\OrderNotifications;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,6 +44,11 @@ class OrderObserver
 
     public function created(Order $order): void
     {
+        // Only a seeded or imported order is born with a captain; it is on their trip now.
+        if ($order->driver_id !== null) {
+            DriverTrip::refresh((int) $order->driver_id);
+        }
+
         $this->announce($order, null);
     }
 
@@ -52,6 +58,8 @@ class OrderObserver
             return;
         }
 
+        $this->refreshTrips($order);
+
         $previous = $order->getOriginal('status');
         $previousStatus = match (true) {
             $previous instanceof \BackedEnum => (string) $previous->value,
@@ -60,6 +68,37 @@ class OrderObserver
         };
 
         $this->announce($order, $previousStatus);
+    }
+
+    public function deleted(Order $order): void
+    {
+        if ($order->driver_id !== null) {
+            DriverTrip::refresh((int) $order->driver_id);
+        }
+    }
+
+    /**
+     * doc 63 D-117 — the trip is derived, so every write that moves an order's status or
+     * captain re-derives the focus and «carries nothing» for the captains on either side
+     * of it. The same argument as the broadcast below: hooking the nineteen call sites
+     * that write `status` was nineteen chances to forget one, and a forgotten one is a
+     * captain whose `active_order_id` names an order they no longer carry. Not wrapped:
+     * it is a row in the same transaction, and a failure here should fail the write.
+     *
+     * The observer does not see a query-builder write. None of `orders.status` or
+     * `orders.driver_id` is written that way today; one that ever is has to call
+     * {@see DriverTrip::refresh()} itself.
+     */
+    private function refreshTrips(Order $order): void
+    {
+        $drivers = array_unique(array_filter([
+            $order->driver_id === null ? null : (int) $order->driver_id,
+            $order->getOriginal('driver_id') === null ? null : (int) $order->getOriginal('driver_id'),
+        ]));
+
+        foreach ($drivers as $driverId) {
+            DriverTrip::refresh($driverId);
+        }
     }
 
     private function announce(Order $order, ?string $previousStatus): void

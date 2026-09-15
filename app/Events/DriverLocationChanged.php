@@ -49,9 +49,12 @@ class DriverLocationChanged implements ShouldBroadcastNow
         public readonly bool $isOnline,
         public readonly bool $isAvailable,
         public readonly string $updatedAt,
+        /** @var list<int> every other basket on the captain's trip (doc 63 D-116) */
+        public readonly array $tripGroupIds = [],
     ) {}
 
-    public static function fromDriver(Driver $driver): self
+    /** @param list<int> $tripGroupIds the baskets on the captain's trip besides the focus's */
+    public static function fromDriver(Driver $driver, array $tripGroupIds = []): self
     {
         return new self(
             driverId: $driver->id,
@@ -64,6 +67,7 @@ class DriverLocationChanged implements ShouldBroadcastNow
             isOnline: (bool) $driver->is_online,
             isAvailable: (bool) $driver->is_available,
             updatedAt: ($driver->location_updated_at ?? now())->toIso8601String(),
+            tripGroupIds: array_values(array_map('intval', $tripGroupIds)),
         );
     }
 
@@ -79,8 +83,10 @@ class DriverLocationChanged implements ShouldBroadcastNow
             $channels[] = new PrivateChannel('admin.fleet.'.$this->cityId);
         }
 
-        if ($this->orderGroupId !== null) {
-            $channels[] = new PrivateChannel('order-group.'.$this->orderGroupId);
+        $groups = array_values(array_unique(array_filter([$this->orderGroupId, ...$this->tripGroupIds])));
+
+        foreach ($groups as $groupId) {
+            $channels[] = new PrivateChannel('order-group.'.$groupId);
         }
 
         return $channels;

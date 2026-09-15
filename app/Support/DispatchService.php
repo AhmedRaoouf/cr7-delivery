@@ -5,10 +5,11 @@ namespace App\Support;
 use App\Actions\Admin\ReassignDriverAction;
 use App\Console\Commands\TickCommand;
 use App\Enums\OrderStatus;
+use App\Enums\OrderStatusActorType;
 use App\Events\DriverOfferSent;
-use App\Http\Controllers\Api\AuthController;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\OrderDriverAttempt;
 use App\Models\Setting;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Notifications\OfferContext;
@@ -39,6 +40,14 @@ class DispatchService
      */
     public function dispatchRound(Order $order, int $round, bool $retry = false): void
     {
+        // doc 63 D-115 — a sibling of a basket somebody already carries is theirs: no round,
+        // no offer to anyone else. Every path to `ready` comes through here, and so does
+        // every retry — which is why the holder rule excludes a captain who refused,
+        // stepped off or was removed from this very order: a retry must not hand it back.
+        if ($this->assignToHolder($order)) {
+            return;
+        }
+
         $settings = Setting::query()->whereIn('key', [
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
             'dispatch.max_rounds',
@@ -101,16 +110,21 @@ class DispatchService
          * «as long as it stays open» became «forever».
          */
         $excludedDriverIds = $order->driverAttempts()
+            // A retry also leaves out a captain the office took off this order: re-offering
+            // it to them a second later undoes the unassign. The two-minute rebroadcast
+            // still asks everyone (doc 05 §3.1).
             ->when($retry, fn ($q) => $q->where(fn ($inner) => $inner
-                ->whereIn('result', ['rejected', 'cancelled_after_accept'])
+                ->whereIn('result', DriverTrip::EXCLUDING_RESULTS)
                 ->orWhere(fn ($open) => $open->where('result', 'sent')->whereNull('expires_at'))))
             ->pluck('driver_id');
 
-        $candidates = Driver::query()
+        $pool = Driver::query()
             ->where('is_active', true)
             ->where('is_online', true)
-            ->where('is_available', true)
-            ->whereNull('active_order_id')
+            // doc 63 D-116 — «متصل وفاضي» is no longer the whole condition. A captain
+            // carrying orders is still a candidate when this one fits their trip; the
+            // trip gates below decide, not `active_order_id IS NULL`.
+            //
             // A stale fix is a reason to rank a captain last, not a reason to keep an
             // order in the kitchen. Four of the seven captains on the deployment had
             // never pinged from the current build, so a freshness gate ahead of the
@@ -131,7 +145,9 @@ class DispatchService
                 ->whereDoesntHave('assignedZones')
                 ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id))))
             ->with('assignedZones:id')
-            ->get()
+            ->get();
+
+        $candidates = $this->throughTheTripGates($pool, $order)
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
                 // Casting a null coordinate to float gives 0.0, and 0.0 is a real place
@@ -211,25 +227,9 @@ class DispatchService
                 'expires_at' => null,
             ]);
 
-            // Wakes the captain's app instead of it asking every three seconds. A
-            // broadcast failure is not a dispatch failure: the row above is the offer,
-            // this is only the notification, and the app's own poll still finds it.
-            try {
-                DriverOfferSent::dispatch(
-                    (int) $candidate['driver']->id,
-                    (int) $order->id,
-                    $round,
-                    null,
-                );
-            } catch (\Throwable $e) {
-                Log::warning('offer broadcast failed', [
-                    'order_id' => $order->id,
-                    'driver_id' => $candidate['driver']->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            $this->ring($order, $candidate);
+            // Wakes the captain's app instead of it asking every three seconds, and rings
+            // the phone in a pocket — once per basket (doc 63 §1.3).
+            $this->wake($order, $candidate, $round);
         }
 
         $order->update([
@@ -262,6 +262,7 @@ class DispatchService
     private function ring(Order $order, array $candidate): void
     {
         try {
+            // doc 63 §2.3 — the summary says «ضمن رحلتك الحالية» to a captain carrying orders.
             $offer = OfferContext::for($order, $candidate['driver'], $candidate['distance_km']);
 
             app(NotificationDispatcher::class)->send(
@@ -301,6 +302,12 @@ class DispatchService
      *
      * Offline captains also have no distance to sort by if they never reported a
      * position, so they come last, and the caller shows each one's state on the row.
+     *
+     * doc 63 §3.6 — a captain carrying orders is listed like anyone else, with their trip
+     * and the gate that would stop dispatch offering them this order. The office enforces
+     * only the capacity gate (and the errand), so a row refused for distance is still one
+     * the operator may pick.
+     * @return Collection<int, array{driver: Driver, distance_km: float|null, state: string, trip_count: int, refusal: string|null}>
      */
     public function eligibleDrivers(Order $order, float $radiusKm, bool $includeOffline = false): Collection
     {
@@ -310,12 +317,17 @@ class DispatchService
                 ->pluck('value', 'key')
         );
 
-        return Driver::query()
+        $drivers = Driver::query()
             ->where('is_active', true)
             ->when(! $includeOffline, fn ($q) => $q->whereNotNull('location_updated_at'))
             ->with('user:id,name')
-            ->get()
-            ->map(function (Driver $driver) use ($order, $staleSeconds) {
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
+            ->get();
+
+        $refusals = DriverTrip::refusals($drivers, $order);
+
+        return $drivers
+            ->map(function (Driver $driver) use ($order, $staleSeconds, $refusals) {
                 // `location_updated_at` is null for a captain who has never sent a ping,
                 // and `include_offline` exists precisely to list those rows — so calling
                 // `diffInSeconds()` on the null answered the whole request with a 500.
@@ -331,14 +343,16 @@ class DispatchService
                         ? null
                         : Geo::haversineKm((float) $driver->current_lat, (float) $driver->current_lng, (float) $order->restaurant->latitude, (float) $order->restaurant->longitude),
                     'state' => $isLive ? 'live' : ($driver->is_online ? 'stale' : 'offline'),
+                    'trip_count' => (int) $driver->trip_count,
+                    'refusal' => $refusals[(int) $driver->id] ?? null,
                 ];
             })
-            // `active_order_id` and nothing else, because that is the only rule
-            // `ReassignDriverAction` itself enforces. `is_available` is not checked
-            // there, and a list stricter than the action hides captains the operator
-            // could have picked — which is the defect this whole method just had.
+            // Nobody is hidden for carrying orders any more (doc 63): a captain with room
+            // is assignable, and one without it is listed with `trip_full` on the row — a
+            // list stricter than the action hides captains the operator could have picked,
+            // which is the defect this method has had twice.
             ->filter(fn ($c) => $includeOffline
-                ? $c['driver']->active_order_id === null
+                ? true
                 // The radius ranks; it must not hide. A **live** captain is assignable at
                 // any distance — `ReassignDriverAction` accepts them — so filtering on it
                 // removed the one captain actually on the road, twenty kilometres out,
@@ -400,7 +414,8 @@ class DispatchService
      * the order sat in `searching_driver` with three silent offers until an operator
      * noticed.
      *
-     * Every online, free captain is a candidate on every pass:
+     * Every online captain the order fits is a candidate on every pass — free, or
+     * carrying a trip it joins (doc 63 §2.1):
      *
      * - one already **holding** an open offer is rung again, not given a second row —
      *   two live offers for one order is two «قبول» buttons and a race the database
@@ -420,6 +435,11 @@ class DispatchService
         }
 
         if ($order->driver_id !== null) {
+            return 0;
+        }
+
+        // A sibling of a basket somebody carries is theirs, not everybody's (doc 63 D-115).
+        if ($this->assignToHolder($order)) {
             return 0;
         }
 
@@ -494,9 +514,12 @@ class DispatchService
      *
      * So this is called the moment a captain becomes available by any route —
      * going online, rejecting an offer, finishing a delivery, having a trip
-     * cancelled. It is cheap (one indexed query) and idempotent (a captain
-     * already holding an offer for an order is not given a second row), which is
-     * what lets it sit on all four paths without any of them coordinating.
+     * cancelled — and, since doc 63 D-116, the moment they **accept** one: a
+     * captain with room is handed the waiting orders around the place they have
+     * just taken, and the trip gates decide which of them fit. It is cheap and
+     * idempotent (a captain already holding an offer for an order is not given a
+     * second row), which is what lets it sit on every path without any of them
+     * coordinating.
      *
      * Oldest order first: the customer who has been waiting longest is the one
      * the next free captain should hear about.
@@ -507,10 +530,10 @@ class DispatchService
     {
         $driver = $driver->fresh() ?? $driver;
 
-        // A captain mid-trip is not free, whatever the flags say. This also
-        // makes the method safe to call from anywhere without the caller having
-        // to know the captain's state.
-        if (! $driver->is_active || ! $driver->is_online || ! $driver->is_available || $driver->active_order_id !== null) {
+        // Offline or suspended hears nothing; a captain mid-errand hears no orders
+        // (gate 4). A captain mid-trip is no longer turned away here — the gates below
+        // decide, order by order, whether each fits.
+        if (! $driver->is_active || ! $driver->is_online || DriverTrip::onErrand($driver)) {
             return 0;
         }
 
@@ -549,6 +572,12 @@ class DispatchService
         $offered = 0;
 
         foreach ($orders as $order) {
+            // A sibling somebody already carries is theirs, and one that does not fit
+            // this captain's trip is not an offer they could accept (doc 63 §2.1).
+            if (DriverTrip::holderFor($order) !== null || DriverTrip::refusal($driver, $order) !== null) {
+                continue;
+            }
+
             $round = (int) $order->dispatch_round + 1;
 
             $order->driverAttempts()->create([
@@ -584,64 +613,107 @@ class DispatchService
         return $offered;
     }
 
-    /**
-     * Let go of a trip lock whose order is over — the reason a captain can be
-     * «متصل» all day and never hear a thing.
-     *
-     * `drivers.is_available` and `drivers.active_order_id` are cleared on the
-     * paths that finish an order properly, and on **no other path**. Signing out
-     * deliberately leaves them ({@see AuthController}),
-     * an admin force-cancel clears them only through its own action, and nothing
-     * ever swept the leftovers. Both {@see self::dispatchRound} and
-     * {@see self::availableCandidates} require `active_order_id IS NULL`, so one
-     * stuck row takes that captain out of every future search permanently —
-     * while their phone keeps showing «أنت متصل الآن», because the app reads
-     * `is_online`, which is a different column and is still true.
-     *
-     * Called wherever a captain announces themselves, so the repair happens
-     * without a cron and without anyone noticing there was anything to repair.
+    /*
+     * `releaseIfStale()` is **gone** (doc 63 D-117). It swept up an `active_order_id`
+     * left behind by a path that finished an order without clearing it — and because
+     * dispatch required that column to be null, one stuck row took a captain out of every
+     * search for good. The column is derived now: `DriverTrip::refresh()` recomputes it
+     * on every write that moves an order, so a leftover cannot be written in the first
+     * place, and nothing reads it to decide who is free.
      */
-    public function releaseIfStale(Driver $driver): bool
+
+    /**
+     * D-115 — hand a sibling to the captain already carrying its basket.
+     *
+     * When `$order` has a holder and `dispatch.one_captain_per_basket` is on, it is
+     * assigned to them directly — `ready → driver_assigned`, history actor `system`,
+     * reason `basket` — through the same {@see TripAssignment} an accept goes through, so
+     * the money is snapshotted identically and the customer and the place hear what any
+     * assignment tells them. The holder alone hears `trip.order_ready`. Nobody else is
+     * offered anything, and any offer already out on the order is superseded.
+     *
+     * @return bool whether the order was assigned
+     */
+    public function assignToHolder(Order $order): bool
     {
-        if ($driver->active_order_id === null) {
+        if ($order->driver_id !== null
+            || ! in_array($order->status, [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver], true)) {
             return false;
         }
 
-        $order = Order::query()->find($driver->active_order_id);
+        $holder = DriverTrip::holderFor($order);
 
-        // Gone, finished, or handed to somebody else — three different ways for
-        // the lock to be a leftover, and none of them leaves the captain busy.
-        $stale = $order === null
-            || $order->status->isTerminal()
-            || ($order->driver_id !== null && (int) $order->driver_id !== (int) $driver->id);
-
-        if (! $stale) {
+        if ($holder === null) {
             return false;
         }
 
-        Log::info('[dispatch] released a stale trip lock', [
-            'driver_id' => $driver->id,
-            'order_id' => $driver->active_order_id,
-            'order_status' => $order?->status->value,
-        ]);
-
-        $driver->forceFill(['active_order_id' => null, 'is_available' => true])->save();
+        TripAssignment::assign(
+            $order,
+            $holder,
+            OrderStatusActorType::System,
+            null,
+            TripAssignment::VIA_BASKET,
+            history: ['reason_code' => 'basket'],
+            columns: ['dispatch_started_at' => $order->dispatch_started_at ?? now()],
+        );
 
         return true;
     }
 
     /**
-     * «متصل وفاضي» — the whole condition, ranked by distance and never filtered by it.
+     * Gates 2–4 of doc 63 §2.1, applied to a pool that already passed gate 1.
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Driver>  $pool
+     * @return Collection<int, Driver>
+     */
+    private function throughTheTripGates(Collection $pool, Order $order): Collection
+    {
+        $refusals = DriverTrip::refusals($pool, $order);
+
+        return $pool->filter(fn (Driver $driver) => ($refusals[(int) $driver->id] ?? null) === null)->values();
+    }
+
+    /**
+     * «One ring per basket» (doc 63 §1.3). A captain who already holds an older open
+     * offer on a sibling of this order has had the basket rung once; the row for this
+     * sub-order is still written — the attempts table stays complete per order — but no
+     * second push goes out. The oldest offer of the basket is the one that rings, on
+     * every pass, so a rebroadcast still reaches them.
+     */
+    private function isBasketLead(Order $order, Driver $driver): bool
+    {
+        if (! DriverTrip::oneCaptainPerBasket() || $order->order_group_id === null) {
+            return true;
+        }
+
+        $own = OrderDriverAttempt::query()
+            ->where('order_id', $order->id)
+            ->where('driver_id', $driver->id)
+            ->where('result', 'sent')
+            ->min('id');
+
+        return ! OrderDriverAttempt::query()
+            ->where('driver_id', $driver->id)
+            ->where('result', 'sent')
+            ->where('order_id', '!=', $order->id)
+            ->when($own !== null, fn ($q) => $q->where('id', '<', $own))
+            ->whereHas('order', fn ($q) => $q
+                ->where('order_group_id', $order->order_group_id)
+                ->whereNull('driver_id')
+                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
+            ->exists();
+    }
+
+    /**
+     * Everybody on shift who could take it — ranked by distance and never filtered by it.
      *
      * @return Collection<int, array{driver: Driver, distance_km: float|null}>
      */
     private function availableCandidates(Order $order): Collection
     {
-        return Driver::query()
+        $pool = Driver::query()
             ->where('is_active', true)
             ->where('is_online', true)
-            ->where('is_available', true)
-            ->whereNull('active_order_id')
             // A captain with no zone rows is unrestricted, not «matches no zone» — and
             // with `dispatch.allow_neighbour_zones` on, which is the seeded default,
             // a zone is not a filter here at all. «الناس كلها» was the ruling, and a
@@ -651,7 +723,9 @@ class DispatchService
                 ->whereDoesntHave('assignedZones')
                 ->orWhereHas('assignedZones', fn ($zq) => $zq->where('service_zones.id', $order->service_zone_id))))
             ->with('assignedZones:id')
-            ->get()
+            ->get();
+
+        return $this->throughTheTripGates($pool, $order)
             ->map(fn (Driver $driver) => [
                 'driver' => $driver,
                 'distance_km' => $driver->hasFix()
@@ -671,10 +745,15 @@ class DispatchService
     /**
      * Wake one captain: the socket for a phone that is awake, the push for one that is not.
      *
+     * The socket always goes — it only tells an open app to refetch its offers, and the
+     * basket card has changed. The push goes only for the basket's lead offer.
+     *
      * @param  array{driver: Driver, distance_km: float|null}  $candidate
      */
     private function wake(Order $order, array $candidate, int $round): void
     {
+        // A broadcast failure is not a dispatch failure: the attempt row is the offer,
+        // this is only the notification, and the app's own poll still finds it.
         try {
             DriverOfferSent::dispatch((int) $candidate['driver']->id, (int) $order->id, $round, null);
         } catch (\Throwable $e) {
@@ -685,7 +764,9 @@ class DispatchService
             ]);
         }
 
-        $this->ring($order, $candidate);
+        if ($this->isBasketLead($order, $candidate['driver'])) {
+            $this->ring($order, $candidate);
+        }
     }
 
     /**

@@ -42,7 +42,9 @@ enum OrderStatus: string
             self::AwaitingPayment => [self::Confirmed, self::Cancelled],
             self::Confirmed => [self::Preparing, self::Cancelled],
             self::Preparing => [self::Ready, self::Cancelled],
-            self::Ready => [self::SearchingDriver, self::Cancelled],
+            // doc 63 D-115 — a sibling of a basket a captain already carries goes straight to
+            // that captain the moment it is ready: no round, no offer to anybody else.
+            self::Ready => [self::SearchingDriver, self::DriverAssigned, self::Cancelled],
             self::SearchingDriver => [self::DriverAssigned, self::WaitingForDriver, self::Cancelled],
             self::WaitingForDriver => [self::SearchingDriver, self::DriverAssigned, self::Cancelled],
             self::DriverAssigned => [self::ArrivedRestaurant, self::SearchingDriver, self::Cancelled],

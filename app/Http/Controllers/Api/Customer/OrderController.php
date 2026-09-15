@@ -80,7 +80,11 @@ class OrderController extends Controller
         $locale = Locale::current($request);
         $orders = $orderGroup->orders()->with(['restaurant', 'driver.user', 'statusHistory'])->get();
 
-        $subOrders = $orders->map(function ($order) use ($locale) {
+        // How old a fix may be before the map says so — the same rule `OrderParties` gives
+        // the place and the office, so the three screens agree on one captain.
+        $staleSeconds = (int) (SettingsCatalog::get('dispatch.location_stale_seconds') ?? 90);
+
+        $subOrders = $orders->map(function ($order) use ($locale, $staleSeconds) {
             $etaMinutes = $order->serviceZone?->avg_delivery_minutes ?? 30;
 
             return [
@@ -112,7 +116,12 @@ class OrderController extends Controller
                     'latitude' => $order->driver->hasFix() ? (float) $order->driver->current_lat : null,
                     'longitude' => $order->driver->hasFix() ? (float) $order->driver->current_lng : null,
                     'location_updated_at' => $order->driver->location_updated_at,
-                    'is_location_stale' => ! $order->driver->isLive(),
+                    // The fix's age and nothing else. `isLive()` also requires
+                    // `is_available`, which is «carries nothing» (D-117) — false for exactly
+                    // the captain carrying this customer's order, so the map called every
+                    // live captain on the way to them stale.
+                    'is_location_stale' => $order->driver->location_updated_at === null
+                        || $order->driver->location_updated_at->diffInSeconds(now()) >= $staleSeconds,
                 ] : null,
             ];
         });

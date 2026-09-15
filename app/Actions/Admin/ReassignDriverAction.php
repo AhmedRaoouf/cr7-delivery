@@ -2,6 +2,7 @@
 
 namespace App\Actions\Admin;
 
+use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
@@ -9,6 +10,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\DriverTrip;
+use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Otp;
 use App\Support\TripAssignment;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +41,7 @@ class ReassignDriverAction
 
         return DB::transaction(function () use ($admin, $order, $newDriver, $reasonCode, $note) {
             $oldDriver = $order->driver;
+            $from = $order->status;
 
             // The captain who loses it can never be its holder again (doc 63 §1.2). Their
             // trip is re-derived by `OrderObserver` on the assignment below.
@@ -64,6 +67,21 @@ class ReassignDriverAction
             );
 
             AuditLogger::record($admin, 'orders.reassign_driver', $order, ['driver_id' => $newDriver->id, 'reason_code' => $reasonCode]);
+
+            // The captain who lost it is told. `OrderNotifications::driverChanged()` covers
+            // a reassignment that leaves the status where it was (`driver_assigned` stays
+            // `driver_assigned`); one made after the old captain reached the counter moves
+            // it back to `driver_assigned`, and that captain heard nothing.
+            if ($oldDriver !== null && $from !== OrderStatus::DriverAssigned && $oldDriver->user !== null) {
+                app(NotificationDispatcher::class)->send(
+                    $oldDriver->user,
+                    'order.reassigned',
+                    ['order_number' => $order->order_number],
+                    null,
+                    $order->id,
+                    ['order_id' => (string) $order->id],
+                );
+            }
 
             return $order->fresh();
         });

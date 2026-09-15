@@ -62,7 +62,10 @@ class CancelTripAction
             $group->update(['rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status'))]);
         });
 
-        $this->dispatch->dispatchRound($order->fresh(), $round);
+        // A retry: a first round excludes every captain ever asked about this order, so it
+        // reached nobody until the two-minute rebroadcast. This captain is still left out —
+        // their own `cancelled_after_accept` row is one of a retry's exclusions.
+        $this->dispatch->dispatchRound($order->fresh(), $round, retry: true);
 
         // The captain who stepped off this order may have room again, so they get the
         // rest of the backlog rather than sitting idle until a sweep. Their own

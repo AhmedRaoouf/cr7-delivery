@@ -110,8 +110,11 @@ class DispatchService
          * «as long as it stays open» became «forever».
          */
         $excludedDriverIds = $order->driverAttempts()
+            // A retry also leaves out a captain the office took off this order: re-offering
+            // it to them a second later undoes the unassign. The two-minute rebroadcast
+            // still asks everyone (doc 05 §3.1).
             ->when($retry, fn ($q) => $q->where(fn ($inner) => $inner
-                ->whereIn('result', ['rejected', 'cancelled_after_accept'])
+                ->whereIn('result', DriverTrip::EXCLUDING_RESULTS)
                 ->orWhere(fn ($open) => $open->where('result', 'sent')->whereNull('expires_at'))))
             ->pluck('driver_id');
 

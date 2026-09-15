@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\AdminScopeType;
 use App\Http\Resources\UserResource;
+use App\Models\Driver;
 use App\Models\RefreshToken;
+use App\Models\Restaurant;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Settings;
@@ -13,6 +15,7 @@ use Database\Seeders\RolesSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Concerns\FakesOtpChannel;
@@ -105,6 +108,27 @@ class SessionRefreshTest extends TestCase
     private function customer(): User
     {
         return $this->account('customer');
+    }
+
+    /** A place whose owner signs in with the same password as every other fixture here. */
+    private function place(): Restaurant
+    {
+        $place = $this->makeRestaurant('بوكس ع السريع');
+        $place->owner->forceFill(['password' => Hash::make('password')])->save();
+
+        return $place->fresh('owner');
+    }
+
+    private function captain(): Driver
+    {
+        return Driver::query()->create([
+            'user_id' => $this->account('driver')->id,
+            'city_id' => $this->city->id,
+            'vehicle_type' => 'motorcycle',
+            'earning_type' => 'percent_of_delivery_fee',
+            'earning_value' => 0,
+            'is_active' => true,
+        ])->load('user');
     }
 
     private function admin(): User
@@ -613,6 +637,61 @@ class SessionRefreshTest extends TestCase
 
         $this->me($session['token'])->assertStatus(401);
         $this->assertExpired($this->refresh($session['refresh_token']));
+    }
+
+    // -------------------------------------------------------------- the office
+
+    /**
+     * A password the office replaces is replaced because the old one is lost or leaked,
+     * and a session made with it is exactly what must not survive — for a place, a
+     * captain and an admin alike, legacy tokens included.
+     */
+    public function test_an_office_password_reset_ends_every_session_the_account_held(): void
+    {
+        $this->seedLocation();
+        $operator = $this->signedIn($this->admin(), 'admin');
+        $place = $this->place();
+        $captain = $this->captain();
+        $colleague = $this->admin();
+
+        foreach ([
+            [$place->owner, 'restaurant', "/api/v1/admin/restaurants/{$place->id}/reset-password"],
+            [$captain->user, 'app', "/api/v1/admin/drivers/{$captain->id}/reset-password"],
+            [$colleague, 'admin', "/api/v1/admin/users/{$colleague->id}/reset-password"],
+        ] as [$account, $app, $route]) {
+            $session = $this->signedIn($account, $app);
+            $legacy = $this->signIn($account, $app, refreshable: false)->json('data.token');
+
+            $this->client($operator['token'], 'admin')->postJson($route)
+                ->assertOk()
+                ->assertJsonStructure(['data' => ['temp_password']]);
+
+            $this->me($session['token'], $app)->assertStatus(401);
+            $this->me($legacy, $app)->assertStatus(401);
+            $this->assertExpired($this->refresh($session['refresh_token'], $app));
+            $this->assertSame(0, $account->tokens()->count());
+        }
+
+        // The office's own session is not one of them.
+        $this->me($operator['token'], 'admin')->assertOk();
+    }
+
+    public function test_the_reset_password_command_ends_every_session_the_account_held(): void
+    {
+        $user = $this->account('driver');
+        $session = $this->signedIn($user);
+        $legacy = $this->signIn($user, refreshable: false)->json('data.token');
+        $bystander = $this->signedIn($this->customer());
+
+        $this->artisan('cr7:reset-password', ['login' => $user->phone])
+            ->expectsOutputToContain('every session this account held is signed out')
+            ->assertSuccessful();
+
+        $this->me($session['token'])->assertStatus(401);
+        $this->me($legacy)->assertStatus(401);
+        $this->assertExpired($this->refresh($session['refresh_token']));
+
+        $this->me($bystander['token'])->assertOk();
     }
 
     // ------------------------------------------------------------------ panel

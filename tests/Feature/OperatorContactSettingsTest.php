@@ -86,6 +86,76 @@ class OperatorContactSettingsTest extends TestCase
         $this->assertSame('01555000111', $this->value('support.phone'));
     }
 
+    /**
+     * 🔴 A field the operator **cleared** stays cleared through the next `db:seed`.
+     *
+     * `->value('value')` answers `null` both for a row that does not exist and for a row
+     * holding null, and `replacePlaceholder` treated the two the same — so clearing
+     * «رقم الدعم» on `ADM-46` lasted exactly until the next deploy, which runs a seed.
+     * All four keys this seeder corrects are nullable, so all four could be reverted.
+     */
+    public function test_a_field_the_operator_cleared_stays_cleared_through_a_reseed(): void
+    {
+        foreach (['support.phone', 'support.whatsapp', 'payment.vodafone_cash_number', 'payment.instapay_handle'] as $key) {
+            Setting::query()->where('key', $key)->first()->update(['value' => null]);
+        }
+
+        $this->seed(OperatorSettingsSeeder::class);
+
+        foreach (['support.phone', 'support.whatsapp', 'payment.vodafone_cash_number', 'payment.instapay_handle'] as $key) {
+            $this->assertNull($this->value($key), "{$key} was refilled over a deliberate blank");
+        }
+    }
+
+    /**
+     * 🔴 A deliberate `0` is a value, not a placeholder.
+     *
+     * `'0'` and `''` sat in `PLACEHOLDERS`, which is compared with `(string) $current` —
+     * so a zero an operator typed matched «nobody has set this yet» and was overwritten.
+     */
+    public function test_a_zero_the_operator_typed_is_not_treated_as_unset(): void
+    {
+        Setting::query()->where('key', 'payment.instapay_handle')->first()->update(['value' => '0']);
+
+        $this->seed(OperatorSettingsSeeder::class);
+
+        $this->assertSame('0', $this->value('payment.instapay_handle'));
+    }
+
+    /**
+     * 🔴 The captain-earning defaults were `force()`d on every run.
+     *
+     * They are a migration off the pre-D-70 values, not a standing instruction: an
+     * operator who moved the default onto a fixed amount had D-70's numbers put back by
+     * the next deploy, silently, while the panel still showed what they had chosen until
+     * the page was reloaded.
+     */
+    public function test_an_earning_default_the_operator_changed_survives_a_reseed(): void
+    {
+        $this->seed(OperatorSettingsSeeder::class);
+
+        foreach (['driver.default_earning_type' => 'fixed', 'driver.default_earning_value' => 25] as $key => $chosen) {
+            Setting::query()->where('key', $key)->first()->update(['value' => $chosen]);
+        }
+
+        $this->seed(OperatorSettingsSeeder::class);
+
+        $this->assertSame('fixed', $this->value('driver.default_earning_type'));
+        $this->assertSame('25', $this->value('driver.default_earning_value'));
+    }
+
+    /** …and the pre-D-70 pair is still migrated, which is what the forces were for. */
+    public function test_the_pre_d70_earning_default_is_still_migrated(): void
+    {
+        Setting::query()->updateOrCreate(['key' => 'driver.default_earning_type'], ['value' => 'fixed', 'group' => 'driver']);
+        Setting::query()->updateOrCreate(['key' => 'driver.default_earning_value'], ['value' => 15, 'group' => 'driver']);
+
+        $this->seed(OperatorSettingsSeeder::class);
+
+        $this->assertSame('percent_of_delivery_fee', $this->value('driver.default_earning_type'));
+        $this->assertSame('0', $this->value('driver.default_earning_value'));
+    }
+
     public function test_config_publishes_the_second_number_and_the_hours_line(): void
     {
         $this->seed(OperatorSettingsSeeder::class);

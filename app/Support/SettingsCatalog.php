@@ -262,7 +262,11 @@ final class SettingsCatalog
                 'title_en' => 'Verification and SMS',
                 'fields' => [
                     [
-                        'key' => 'otp.mode', 'type' => 'enum', 'default' => 'sms',
+                        // `public` because `GET /config` does publish it, through
+                        // {@see Otp::testMode()} — the flag and the payload had drifted
+                        // apart, and `is_public` is written onto the row from this
+                        // declaration, so the row was calling a published key private.
+                        'key' => 'otp.mode', 'type' => 'enum', 'default' => 'sms', 'public' => true,
                         'label_ar' => 'رموز التحقق', 'label_en' => 'Verification codes',
                         'options' => [
                             ['value' => 'sms', 'label_ar' => 'رسالة SMS برمز عشوائي', 'label_en' => 'SMS with a random code'],
@@ -271,7 +275,10 @@ final class SettingsCatalog
                         'warning_ar' => 'في وضع التجربة يستطيع أي شخص يعرف الرمز إنشاء حساب أو استعادة كلمة مرور أي عميل أو كابتن أو مكان. لا يسري على كلمة مرور الإدارة.',
                         'warning_en' => "In test mode anyone who knows the code can sign up or reset any customer's, captain's or place's password. It never applies to an admin's password.",
                     ],
-                    ['key' => 'otp.test_code', 'type' => 'digits', 'default' => '123456', 'min' => 6, 'max' => 6,
+                    // Published as `auth.static_otp`, but only while `otp.mode = test` —
+                    // and then the server has already decided the code is public
+                    // knowledge. `public` here records that the payload can carry it.
+                    ['key' => 'otp.test_code', 'type' => 'digits', 'default' => '123456', 'min' => 6, 'max' => 6, 'public' => true,
                         'label_ar' => 'رمز وضع التجربة', 'label_en' => 'Test-mode code'],
                     ['key' => 'auth.register_requires_otp', 'type' => 'bool', 'default' => true, 'public' => true,
                         'label_ar' => 'التحقق من رقم الهاتف عند إنشاء حساب', 'label_en' => 'Verify the phone number at sign-up',
@@ -358,13 +365,29 @@ final class SettingsCatalog
                         'label_ar' => 'بريد الدعم', 'label_en' => 'Support email'],
                     ['key' => 'support.hours_note', 'type' => 'string', 'default' => null, 'nullable' => true, 'max' => 120, 'public' => true,
                         'label_ar' => 'مواعيد الدعم', 'label_en' => 'Support hours'],
+                    // 🔴 batch 65 — these three are saved and published on `GET /config`,
+                    // and **nothing enforces them**. No middleware answers `503
+                    // maintenance` or `force_update`, which is the only thing the app's
+                    // blocker screens react to, and no client reads the `maintenance` or
+                    // `force_update` blocks. The maintenance warning used to promise «يوقف
+                    // التطبيق لكل العملاء والكباتن» — so an operator who switched it on
+                    // for an emergency would have believed the platform was closed while
+                    // every order kept flowing. The panel says what is true until the
+                    // enforcement is built (doc 65).
                     ['key' => 'app.force_update.android_min_version', 'type' => 'version', 'default' => '1.0.0', 'public' => true,
-                        'label_ar' => 'أقل إصدار مسموح — أندرويد', 'label_en' => 'Minimum version — Android'],
+                        'label_ar' => 'أقل إصدار مسموح — أندرويد', 'label_en' => 'Minimum version — Android',
+                        'helper_ar' => 'لا يُطبَّق بعد: لا يُطلب من الإصدارات الأقدم التحديث حاليًا.',
+                        'helper_en' => 'Not enforced yet: older versions are not asked to update today.'],
                     ['key' => 'app.force_update.ios_min_version', 'type' => 'version', 'default' => '1.0.0', 'public' => true,
-                        'label_ar' => 'أقل إصدار مسموح — iOS', 'label_en' => 'Minimum version — iOS'],
+                        'label_ar' => 'أقل إصدار مسموح — iOS', 'label_en' => 'Minimum version — iOS',
+                        'helper_ar' => 'لا يُطبَّق بعد: لا يُطلب من الإصدارات الأقدم التحديث حاليًا.',
+                        'helper_en' => 'Not enforced yet: older versions are not asked to update today.'],
                     ['key' => 'app.maintenance_mode', 'type' => 'bool', 'default' => false, 'public' => true,
                         'label_ar' => 'وضع الصيانة', 'label_en' => 'Maintenance mode',
-                        'warning_ar' => 'يوقف التطبيق لكل العملاء والكباتن حتى يُطفأ.', 'warning_en' => 'Stops the app for every customer and captain until it is switched off.'],
+                        'helper_ar' => 'لا يُطبَّق بعد: تشغيله لا يوقف التطبيق ولا الطلبات حاليًا.',
+                        'helper_en' => 'Not enforced yet: switching it on does not stop the app or orders today.',
+                        'warning_ar' => 'وضع الصيانة لا يُطبَّق بعد — الطلبات مستمرة كالمعتاد.',
+                        'warning_en' => 'Maintenance mode is not enforced yet — orders are still flowing as usual.'],
                 ],
             ],
         ];

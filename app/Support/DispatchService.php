@@ -51,7 +51,7 @@ class DispatchService
         $settings = Setting::query()->whereIn('key', [
             'dispatch.batch_size', 'dispatch.radius_km', 'dispatch.radius_expand_km',
             'dispatch.max_rounds',
-            'dispatch.location_stale_seconds', 'driver.location_stale_seconds',
+            ...DriverLiveness::keys(),
             'dispatch.last_call_all_drivers', 'dispatch.offer_to_all_online',
             'dispatch.allow_neighbour_zones',
         ])->pluck('value', 'key');
@@ -313,7 +313,7 @@ class DispatchService
     {
         $staleSeconds = self::staleSeconds(
             Setting::query()
-                ->whereIn('key', ['dispatch.location_stale_seconds', 'driver.location_stale_seconds'])
+                ->whereIn('key', DriverLiveness::keys())
                 ->pluck('value', 'key')
         );
 
@@ -847,19 +847,14 @@ class DispatchService
     /**
      * D-56 — a captain counts as live while the last ping is younger than this.
      *
-     * `SettingsSeeder` writes the number twice: `dispatch.location_stale_seconds` (90,
-     * the decision, and what both dashboards and `Driver::isLive()` use) and
-     * `driver.location_stale_seconds` (60). Dispatch read the 60 and nothing read the
-     * 90, so a captain quiet for 70 seconds was «متصل ومتفرغ» on `ADM-19`, «متصل» on the
-     * fleet map, and invisible to dispatch — one captain, three answers. The 90 wins;
-     * the older key stays readable so an operator who edited it is not overruled.
+     * The rule — and the fact that there are two keys for one number — lives in
+     * {@see DriverLiveness}. Only the lookup is here, because a round reads its settings
+     * once rather than once per captain.
      *
      * @param  Collection<string, mixed>  $settings
      */
     private static function staleSeconds(Collection $settings): int
     {
-        return (int) ($settings['dispatch.location_stale_seconds']
-            ?? $settings['driver.location_stale_seconds']
-            ?? 90);
+        return DriverLiveness::staleSecondsFrom($settings);
     }
 }

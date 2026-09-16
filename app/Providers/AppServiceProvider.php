@@ -18,11 +18,13 @@ use App\Models\PromoCode;
 use App\Models\Restaurant;
 use App\Models\Role;
 use App\Models\ServiceZone;
+use App\Models\Setting;
 use App\Models\StaticPage;
 use App\Models\User;
 use App\Observers\AuditableObserver;
 use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
+use App\Observers\SettingObserver;
 use App\Services\Maps\ChainGeocoder;
 use App\Services\Maps\Geocoder;
 use App\Services\Maps\LocalGazetteerGeocoder;
@@ -219,6 +221,12 @@ class AppServiceProvider extends ServiceProvider
         // moved from here — see App\Observers\OrderObserver for why the model event
         // is the hook rather than the nineteen call sites that write `status`.
         Order::observe(OrderObserver::class);
+
+        // batch 65 — «مش بتغير». A settings row that changes by any path at all clears
+        // its own `rememberForever` memo; the model event is the hook for the same reason
+        // it is above, and it covers the seeder, `tinker` and the controller nobody has
+        // written yet. See App\Observers\SettingObserver.
+        Setting::observe(SettingObserver::class);
 
         // D-52 — «every admin action on a row writes an `audit_logs` row». Sixteen admin
         // controllers mutate these models and none of them said so; the model event is the

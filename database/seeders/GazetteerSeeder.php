@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Services\Maps\LocalGazetteerGeocoder;
+use App\Support\ArabicSearch;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -54,23 +56,70 @@ class GazetteerSeeder extends Seeder
         // {@see \App\Services\Maps\LocalGazetteerGeocoder::isConfigured()} caches
         // «are there rows» for an hour. Without this, a seed on a warm server is
         // invisible to the geocoder until the hour is out.
-        Cache::forget('geo:gazetteer:ready');
+        Cache::forget(LocalGazetteerGeocoder::READY_KEY);
+        // Every cached forward-search answer is keyed on this stamp, so dropping
+        // it is how a re-seed invalidates them. There is no pattern-delete that
+        // works on every cache store, and a search answered out of the old rows
+        // would outlive the reload by a week.
+        Cache::forget(LocalGazetteerGeocoder::STAMP_KEY);
+    }
+
+    /**
+     * The folded columns only exist after `2026_09_25_090000`.
+     *
+     * `2026_09_12_100000` calls this seeder from inside its own `up()`, so on a
+     * fresh install it runs against the table as that migration created it —
+     * three columns short. Writing them unconditionally would make every new
+     * database fail to migrate, and the later migration re-runs the seeder once
+     * the columns exist.
+     */
+    private function searchable(string $table): bool
+    {
+        return Schema::hasColumn($table, $table === 'gazetteer_points' ? 'label_normalized' : 'name_normalized');
+    }
+
+    /**
+     * What a door is found by: «‪145‬ شارع إسماعيل فريد، منطقة الكرنك».
+     *
+     * All three parts, because all three are how somebody gives this address.
+     * In the planned districts — «منطقة ‪6أ‬», ‪4 182‬ buildings, almost no named
+     * internal roads — the building number *is* the address, and the only other
+     * thing the door carries is its area.
+     *
+     * No LTR isolates here. They are invisible characters in the middle of a
+     * string that is about to be matched character by character, and the display
+     * line is composed separately at read time where they belong.
+     */
+    private static function label(?string $houseNumber, ?string $street, ?string $area): ?string
+    {
+        $line = trim(implode(' ', array_filter([$houseNumber, $street])));
+        $parts = array_values(array_filter([$line === '' ? null : $line, $area]));
+
+        return $parts === [] ? null : implode('، ', $parts);
     }
 
     /** @param array<string, mixed> $data */
     private function seedAreas(array $data): void
     {
+        $searchable = $this->searchable('gazetteer_areas');
         $rows = [];
 
         foreach ($data['areas'] ?? [] as $area) {
-            $rows[] = [
+            $row = [
                 'name' => $area['name'],
+                'name_normalized' => ArabicSearch::normalize((string) $area['name']),
                 'name_en' => $area['name_en'] ?? null,
                 'lat' => $area['lat'],
                 'lng' => $area['lng'],
                 'city' => null,
                 'source' => $area['osm'] ?? null,
             ];
+
+            if (! $searchable) {
+                unset($row['name_normalized']);
+            }
+
+            $rows[] = $row;
         }
 
         foreach (array_chunk($rows, 500) as $chunk) {
@@ -81,11 +130,13 @@ class GazetteerSeeder extends Seeder
     /** @param array<string, mixed> $data */
     private function seedStreets(array $data): void
     {
+        $searchable = $this->searchable('gazetteer_streets');
         $rows = [];
 
         foreach ($data['streets'] ?? [] as $street) {
-            $rows[] = [
+            $row = [
                 'name' => $street['name'],
+                'name_normalized' => ArabicSearch::normalize((string) $street['name']),
                 'kind' => $street['kind'] ?? null,
                 'min_lat' => $street['min_lat'],
                 'max_lat' => $street['max_lat'],
@@ -94,6 +145,12 @@ class GazetteerSeeder extends Seeder
                 'geom' => json_encode($street['geom'], JSON_UNESCAPED_UNICODE),
                 'source' => $street['osm'] ?? null,
             ];
+
+            if (! $searchable) {
+                unset($row['name_normalized']);
+            }
+
+            $rows[] = $row;
         }
 
         foreach (array_chunk($rows, 200) as $chunk) {
@@ -114,20 +171,37 @@ class GazetteerSeeder extends Seeder
         // and the rest carry an area and no street.
         $at = static fn (array $table, int $index): ?string => $index < 0 ? null : ($table[$index] ?? null);
 
+        $searchable = $this->searchable('gazetteer_points');
         $rows = [];
 
         foreach ($data['points'] ?? [] as $point) {
             [$lat, $lng, $houseNumber, $streetIx, $areaIx, $districtIx, $cityIx] = $point;
 
-            $rows[] = [
+            $street = $at($streets, (int) $streetIx);
+            $area = $at($areas, (int) $areaIx);
+            $label = self::label(
+                $houseNumber === null ? null : (string) $houseNumber,
+                $street,
+                $area,
+            );
+
+            $row = [
                 'lat' => $lat,
                 'lng' => $lng,
                 'house_number' => $houseNumber,
-                'street' => $at($streets, (int) $streetIx),
-                'area' => $at($areas, (int) $areaIx),
+                'street' => $street,
+                'area' => $area,
                 'district' => $at($districts, (int) $districtIx),
                 'city' => $at($cities, (int) $cityIx),
+                'label' => $label,
+                'label_normalized' => $label === null ? null : ArabicSearch::normalize($label),
             ];
+
+            if (! $searchable) {
+                unset($row['label'], $row['label_normalized']);
+            }
+
+            $rows[] = $row;
         }
 
         foreach (array_chunk($rows, 1000) as $chunk) {

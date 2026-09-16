@@ -50,16 +50,71 @@ final class MapStyles
         $cartoKey = config('maps.carto.api_key');
         $language = self::language($locale ?? app()->getLocale());
 
-        return match (true) {
+        $payload = match (true) {
             $provider === 'osm' => self::osm(),
             $provider === 'carto' && filled($cartoKey) => self::carto((string) $cartoKey),
             $provider === 'mapbox' && filled($mapboxToken) => self::mapbox((string) $mapboxToken, $language),
-            // The named provider cannot answer. Prefer whichever key does exist
-            // over degrading straight to the plainest map we have.
+            // The named provider cannot answer — or it is `openfreemap`, which
+            // is not a raster provider at all and still needs a raster fallback
+            // published underneath it. Prefer whichever key does exist over
+            // degrading straight to the plainest map we have.
             filled($mapboxToken) => self::mapbox((string) $mapboxToken, $language),
             filled($cartoKey) => self::carto((string) $cartoKey),
             default => self::osm(),
         } + ['language' => $language];
+
+        if ($provider === 'openfreemap') {
+            // Every raster key above stays exactly as it was and keeps its
+            // meaning — this names what a client that *can* draw vector tiles
+            // should be drawing, and leaves the rest as the fallback.
+            $payload['provider'] = 'openfreemap';
+        }
+
+        return $payload + ['vector' => self::vector($language)];
+    }
+
+    /**
+     * D-126 — the vector basemap, and the three things a client needs to draw it
+     * in Arabic.
+     *
+     * Additive, always published, and ignorable: a client that cannot draw
+     * vector tiles — a 1.0.5 app, for one — reads nothing here and keeps drawing
+     * the raster template beside it. `enabled: false` is the switch back for
+     * everybody, with no release on either side.
+     *
+     * `label_language` follows `Accept-Language` exactly as `language` does,
+     * because the Arabic labels are not a server-side switch: the style's
+     * `text-field` is rewritten on the client, on every `symbol` layer that has
+     * one, to `['coalesce', ['get','name:ar'], ['get','name:latin'],
+     * ['get','name']]`. What the server can do is say which language to ask for.
+     *
+     * `rtl_plugin_url` is not optional and is published rather than hard-coded
+     * in three clients. MapLibre without `setRTLTextPlugin` renders «جمصة» as
+     * «ةمصج» — reversed glyphs that read like a broken font and are not.
+     *
+     * @return array<string, mixed>
+     */
+    private static function vector(string $language): array
+    {
+        $host = rtrim((string) config('maps.openfreemap.host', 'https://tiles.openfreemap.org'), '/');
+
+        $style = static fn (string $half, string $default): string => $host.'/styles/'.trim(
+            (string) config("maps.openfreemap.style_{$half}", $default),
+            '/',
+        );
+
+        return [
+            'enabled' => (bool) config('maps.vector.enabled', true),
+            'provider' => 'openfreemap',
+            'style_url_light' => $style('light', 'liberty'),
+            'style_url_dark' => $style('dark', 'dark'),
+            'label_language' => $language,
+            'rtl_plugin_url' => (string) config('maps.vector.rtl_plugin_url'),
+            'max_zoom' => (int) config('maps.openfreemap.max_zoom', 20),
+            // MIT tiles over ODbL data: the attribution is the licence term, and
+            // there is no key to lose if it is dropped — only the right to use it.
+            'attribution' => (string) config('maps.openfreemap.attribution'),
+        ];
     }
 
     /** The two languages the product speaks; anything that is not English is Arabic. */

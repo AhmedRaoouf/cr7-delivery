@@ -16,8 +16,14 @@ class NullGeocoder implements Geocoder
         return null;
     }
 
-    public function search(string $query, ?float $lat = null, ?float $lng = null, string $language = 'ar'): array
-    {
+    public function search(
+        string $query,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $language = 'ar',
+        ?string $country = null,
+        int $limit = 10,
+    ): array {
         return [];
     }
 

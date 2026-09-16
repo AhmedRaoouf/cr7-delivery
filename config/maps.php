@@ -20,7 +20,69 @@ return [
 
     // Which provider to prefer. One whose credential is missing is skipped, not
     // served broken — see `MapStyles::payload()`. `osm` always works.
-    'provider' => env('MAPS_PROVIDER', 'mapbox'),
+    //
+    // `openfreemap` is the default since D-126: it is the only one of the four
+    // that can print Arabic labels, because it is the only one that is not
+    // raster. The raster block is published beside it exactly as before and is
+    // the fallback for any client that cannot draw vector tiles — a 1.0.5 app,
+    // for one — so naming it here changes the `provider` string and nothing
+    // else about what a raster client is handed.
+    'provider' => env('MAPS_PROVIDER', 'openfreemap'),
+
+    /**
+     * D-126 — the vector basemap, drawn in Arabic.
+     *
+     * Measured in Brave over جمصة on 2026-09-16: Mapbox **raster** tiles ignore
+     * `?language=ar` — a byte-different tile with identical English labels —
+     * which is D-123 and is not fixable at this end. A raster tile is a picture
+     * of somebody else's labels.
+     *
+     * OpenFreeMap serves OpenMapTiles vector tiles whose features carry
+     * `name:ar`: tile `14/9627/6683` over this town holds ‪74‬ Arabic strings,
+     * «جمصة», «مصيف جمصة», «شارع الحرية», «صيدليه الدكتوره شيماء العياضي». MIT,
+     * **no API key, no request cap, commercial use allowed**, attribution
+     * required. There is no SLA, which is exactly why the raster block above it
+     * stays published.
+     *
+     * Two things are the client's and are published so it cannot get them wrong:
+     * the Arabic label expression is applied on the client, per `symbol` layer
+     * (`['coalesce', ['get','name:ar'], ['get','name:latin'], ['get','name']]`),
+     * and **the RTL text plugin must be loaded first** — without it MapLibre
+     * renders «جمصة» as «ةمصج», which is the one failure that looks like a font
+     * problem and is not.
+     */
+    'openfreemap' => [
+        'host' => rtrim((string) env('OPENFREEMAP_HOST', 'https://tiles.openfreemap.org'), '/'),
+        'style_light' => env('OPENFREEMAP_STYLE_LIGHT', 'liberty'),
+        'style_dark' => env('OPENFREEMAP_STYLE_DARK', 'dark'),
+        'max_zoom' => (int) env('OPENFREEMAP_MAX_ZOOM', 20),
+        // Required by the licence of the data underneath, not a nicety.
+        'attribution' => 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap',
+    ],
+
+    'vector' => [
+        // False means every client draws the raster block and nothing else — the
+        // switch back, with no release, if OpenFreeMap is ever unavailable.
+        'enabled' => (bool) env('MAPS_VECTOR', true),
+        'rtl_plugin_url' => env(
+            'MAPS_RTL_PLUGIN_URL',
+            'https://cdn.jsdelivr.net/npm/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
+        ),
+    ],
+
+    /**
+     * D-127 — forward search.
+     *
+     * `local_is_enough` is how many rows the free sources — this platform's own
+     * shops and the launch city's address book — must produce before the billed
+     * providers are skipped for that query. It is the balance the operator asked
+     * for: «خلي ال requests بتاعه الخريطه مقتصده», without going back to the
+     * rule that a single weak local substring hit suppressed Mapbox and
+     * Nominatim entirely.
+     */
+    'search' => [
+        'local_is_enough' => (int) env('MAPS_SEARCH_LOCAL_IS_ENOUGH', 5),
+    ],
 
     /**
      * CARTO's raster basemaps — the densest labels of the three, and the only
@@ -140,6 +202,11 @@ return [
         // dragged pin from spending a geocoding request every 11 metres.
         'reverse_days' => (int) env('MAPS_CACHE_REVERSE_DAYS', 30),
         'search_days' => (int) env('MAPS_CACHE_SEARCH_DAYS', 7),
+        // Our own shops, cached far more briefly than a street name: a place can
+        // be renamed, moved or deactivated from the dashboard this afternoon,
+        // and a geocoding answer that outlives that sends a captain to an empty
+        // unit.
+        'places_minutes' => (int) env('MAPS_CACHE_PLACES_MINUTES', 30),
         // A route is cached far more briefly than a street name: roads do not
         // move, but traffic does, and Mapbox's duration is the useful half of
         // the answer. Ten minutes is long enough that a captain riding one

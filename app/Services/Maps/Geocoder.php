@@ -22,9 +22,29 @@ interface Geocoder
     /**
      * Free text -> candidate places, nearest-to-جمصة first.
      *
-     * @return list<array{name: string, address: string, lat: float, lng: float}>
+     * D-127 — every row says what it is and where it came from:
+     *
+     * - `kind` — `place|street|area|city|address|poi`. It drives the row's icon, and a
+     *   source that cannot tell says `poi`.
+     * - `source` — `places|local|mapbox|osm`. For us, not for the screen: it is how a
+     *   thin answer is told from a dead provider after the fact.
+     * - `place_id` — only on `kind: place`, and it is a `restaurants.id`. A row that
+     *   carries one is a shop this platform delivers from, so the client can open it
+     *   rather than merely drop a pin on it.
+     *
+     * `$country` is an ISO-3166-1 alpha-2 filter for the providers that take one;
+     * `$limit` is how many rows the caller can use, so a source need not compose more.
+     *
+     * @return list<array{name: string, address: string, lat: float, lng: float, kind?: string, source?: string, place_id?: int}>
      */
-    public function search(string $query, ?float $lat = null, ?float $lng = null, string $language = 'ar'): array;
+    public function search(
+        string $query,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $language = 'ar',
+        ?string $country = null,
+        int $limit = 10,
+    ): array;
 
     public function isConfigured(): bool;
 }

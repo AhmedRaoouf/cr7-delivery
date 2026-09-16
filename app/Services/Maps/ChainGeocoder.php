@@ -20,9 +20,21 @@ namespace App\Services\Maps;
  * «Answered» means a non-empty line, not merely a non-null return: a provider
  * that hands back an empty `address` has told us nothing, and the next one is
  * still worth asking.
+ *
+ * **Search does not work that way any more (D-127).** First-wins is right for a
+ * reverse lookup, where the question has one answer and the best source for it
+ * is known in advance. It is wrong for a search, where the question has many
+ * answers and they live in different places: the local address book is first in
+ * the chain, «شارع» matches ‪173‬ of its ‪224‬ street rows, and that one weak
+ * substring hit suppressed Mapbox and Nominatim **entirely** — including for a
+ * customer searching a place ‪200‬ km from here. So a search merges its sources
+ * instead of stopping at the first; {@see PlaceResults} decides the order.
  */
-class ChainGeocoder implements Geocoder
+class ChainGeocoder implements Geocoder, ReportsFailure
 {
+    /** @var bool set by the last {@see search()} */
+    private bool $degraded = false;
+
     /** @param list<Geocoder> $geocoders in preference order */
     public function __construct(private readonly array $geocoders) {}
 
@@ -54,20 +66,77 @@ class ChainGeocoder implements Geocoder
         return null;
     }
 
-    public function search(string $query, ?float $lat = null, ?float $lng = null, string $language = 'ar'): array
-    {
+    public function search(
+        string $query,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $language = 'ar',
+        ?string $country = null,
+        int $limit = 10,
+    ): array {
+        $rows = [];
+        $asked = 0;
+        $failed = 0;
+
         foreach ($this->geocoders as $geocoder) {
             if (! $geocoder->isConfigured()) {
                 continue;
             }
 
-            $rows = $geocoder->search($query, $lat, $lng, $language);
+            $costsARequest = $geocoder instanceof ReportsFailure;
 
-            if ($rows !== []) {
-                return $rows;
+            // «خلي ال requests بتاعه الخريطه مقتصده». Merging every source on
+            // every keystroke would spend two billed lookups on a question our
+            // own rows have already answered well. A provider is asked only when
+            // what is already in hand is thin — which is precisely the case the
+            // old first-wins rule got wrong, because one weak local hit is thin
+            // and it used to count as a complete answer.
+            // Never more than the caller asked for: a picker that wants three rows
+            // and already holds three has nothing to spend a request on.
+            if ($costsARequest && count($rows) >= min(self::enough(), $limit)) {
+                continue;
+            }
+
+            if ($costsARequest) {
+                $asked++;
+            }
+
+            $rows = array_merge($rows, $geocoder->search($query, $lat, $lng, $language, $country, $limit));
+
+            if ($costsARequest && $geocoder->lastCallFailed()) {
+                $failed++;
             }
         }
 
-        return [];
+        // «Nothing matched» and «everything we asked is down» are different
+        // sentences on the screen, and the difference is only knowable here.
+        $this->degraded = $rows === [] && $asked > 0 && $failed === $asked;
+
+        $centre = config('maps.default_center');
+
+        return PlaceResults::merge(
+            $rows,
+            $query,
+            $lat ?? (float) $centre['lat'],
+            $lng ?? (float) $centre['lng'],
+            $limit,
+        );
+    }
+
+    public function lastCallFailed(): bool
+    {
+        return $this->degraded;
+    }
+
+    /**
+     * How many rows make the network unnecessary.
+     *
+     * Low enough that a thin local answer still reaches the providers — which is
+     * the whole defect this replaces — and high enough that a customer typing a
+     * street in the launch city spends no billed request at all.
+     */
+    private static function enough(): int
+    {
+        return max(1, (int) config('maps.search.local_is_enough', 5));
     }
 }

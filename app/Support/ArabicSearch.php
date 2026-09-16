@@ -36,6 +36,12 @@ abstract class ArabicSearch
         "\u{064B}", "\u{064C}", "\u{064D}", "\u{064E}", "\u{064F}", "\u{0650}",
         "\u{0651}", "\u{0652}", "\u{0653}", "\u{0654}", "\u{0655}", "\u{0670}",
         "\u{200C}", "\u{200D}", "\u{200E}", "\u{200F}",
+        // The embeddings and isolates. Every number inside an Arabic string on this
+        // platform is wrapped in `U+202A … U+202C` so it renders the right way round
+        // (doc 13 §4) — «مبنى ‪6175‬», «‪145‬ شارع إسماعيل فريد». Nobody types them,
+        // so a name that carries one never started with what was typed.
+        "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}",
+        "\u{2066}", "\u{2067}", "\u{2068}", "\u{2069}",
     ];
 
     /** Letters that differ only by how carefully someone typed them. */
@@ -126,6 +132,80 @@ abstract class ArabicSearch
                 }
             });
         }
+    }
+
+    /**
+     * The same `WHERE`, against columns that are **already** folded on disk.
+     *
+     * {@see apply()} wraps every column in a nested `REPLACE` per folded or stripped
+     * character — over thirty of them — which no index
+     * can be used for and which every row pays on every keystroke. That is the right
+     * trade on a catalogue of a few hundred dishes, and the wrong one on the launch
+     * city's gazetteer: ‪6 128‬ building points, ‪224‬ streets and ‪32‬ areas, all of them
+     * scanned per character typed into the address picker.
+     *
+     * So those tables carry a stored `*_normalized` column, written by the seeder
+     * through {@see normalize()} and indexed. Same folding, same escape, computed once
+     * at seed time instead of once per query. The needle still has to be folded here —
+     * both sides or neither.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<*>|\Illuminate\Database\Query\Builder  $query
+     * @param  list<string>  $columns  columns already holding {@see normalize()}d text
+     * @param  list<string>  $tokens  from {@see tokens()}, so already folded
+     */
+    public static function applyNormalized($query, array $columns, array $tokens): void
+    {
+        foreach ($tokens as $token) {
+            $needle = '%'.self::escapeLike($token).'%';
+
+            $query->where(function ($group) use ($columns, $needle): void {
+                foreach ($columns as $column) {
+                    $group->orWhereRaw($column.' LIKE ? ESCAPE '.self::ESCAPE_SQL, [$needle]);
+                }
+            });
+        }
+    }
+
+    /**
+     * `SELECT`-able rank against an already-folded column: exact 0, prefix 1, else 2.
+     *
+     * {@see rank()} for a raw column; this is its counterpart for the stored ones. It is
+     * what decides which of the matches survive a `LIMIT`: «شارع الكورنيش» starts with
+     * the needle «شارع الكورنيش» and the ‪40‬ door numbers along it do not, so the street
+     * is kept and the doors are what gets cut.
+     */
+    public static function rankNormalized(string $column, string $needle): Expression
+    {
+        $normalized = self::normalize($needle);
+        $prefix = self::escapeLike($normalized).'%';
+
+        return DB::raw(
+            "CASE WHEN {$column} = ".self::quote($normalized).' THEN 0'
+            ." WHEN {$column} LIKE ".self::quote($prefix).' ESCAPE '.self::ESCAPE_SQL.' THEN 1'
+            .' ELSE 2 END'
+        );
+    }
+
+    /**
+     * The same three tiers, decided in PHP on a row that is already in memory.
+     *
+     * Rows merged from four sources cannot be ordered by SQL — only two of them come
+     * from this database at all.
+     */
+    public static function tier(string $haystack, string $needle): int
+    {
+        $haystack = self::normalize($haystack);
+        $needle = self::normalize($needle);
+
+        if ($needle === '') {
+            return 2;
+        }
+
+        return match (true) {
+            $haystack === $needle => 0,
+            str_starts_with($haystack, $needle) => 1,
+            default => 2,
+        };
     }
 
     /**

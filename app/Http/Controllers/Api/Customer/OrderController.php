@@ -18,6 +18,7 @@ use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
 use App\Models\Product;
 use App\Support\ApiResponse;
+use App\Support\DriverLiveness;
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\Notifications\NotificationDispatcher;
@@ -82,7 +83,7 @@ class OrderController extends Controller
 
         // How old a fix may be before the map says so — the same rule `OrderParties` gives
         // the place and the office, so the three screens agree on one captain.
-        $staleSeconds = (int) (SettingsCatalog::get('dispatch.location_stale_seconds') ?? 90);
+        $staleSeconds = DriverLiveness::staleSeconds();
 
         $subOrders = $orders->map(function ($order) use ($locale, $staleSeconds) {
             $etaMinutes = $order->serviceZone?->avg_delivery_minutes ?? 30;

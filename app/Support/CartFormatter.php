@@ -5,7 +5,6 @@ namespace App\Support;
 use App\Models\Cart;
 use App\Models\City;
 use App\Models\ServiceZone;
-use App\Models\Setting;
 use Illuminate\Http\Request;
 
 /** doc 08 §4 — GET /cart response shape: always grouped by restaurant, even for one restaurant. */
@@ -14,7 +13,12 @@ class CartFormatter
     public static function format(Cart $cart, Request $request): array
     {
         $locale = Locale::current($request);
-        $maxRestaurants = (int) (Setting::query()->where('key', 'cart.max_restaurants')->value('value') ?? 3);
+        // D-114 — through {@see BasketLimit}, which is the one reader of the limit. This
+        // line used to query the row itself and fall back to **3** where the catalogue,
+        // the seeder and `BasketLimit` all say **2**, so a deployment that had never
+        // written the row let a basket hold three places here while every other screen
+        // refused the third. A raw read with its own literal is a second source of truth.
+        $maxRestaurants = BasketLimit::maxRestaurants();
 
         $items = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get();
         $itemsByRestaurant = $items->groupBy('restaurant_id');
@@ -125,7 +129,9 @@ class CartFormatter
      */
     private static function deliveryEstimate(Cart $cart): array
     {
-        $extraStopFee = (float) (Setting::query()->where('key', 'delivery.extra_stop_fee')->value('value') ?? 10);
+        // Through the catalogue, so a stored `0` reads as zero rather than as «unset», and
+        // the fallback is the declared default rather than a second copy of it here.
+        $extraStopFee = SettingsCatalog::float('delivery.extra_stop_fee');
 
         $address = $cart->user->defaultAddress()->with('serviceZone')->first()
             ?? $cart->user->addresses()->with('serviceZone')->latest()->first();

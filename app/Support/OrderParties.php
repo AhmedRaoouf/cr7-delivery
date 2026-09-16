@@ -210,7 +210,7 @@ final class OrderParties
             return null;
         }
 
-        $stale = (int) (SettingsCatalog::get('dispatch.location_stale_seconds') ?? 90);
+        $stale = DriverLiveness::staleSeconds();
         $fix = $driver->hasFix();
 
         return [

@@ -7,7 +7,6 @@ use App\Enums\ErrandStatus;
 use App\Enums\UserType;
 use App\Models\Driver;
 use App\Models\ErrandRequest;
-use App\Models\Setting;
 use App\Models\User;
 use App\Support\Notifications\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Collection;
@@ -25,15 +24,14 @@ use Illuminate\Database\Eloquent\Collection;
  * told once, the request sits on their board until somebody takes it, and the first
  * accept wins under a row lock.
  *
- * The one timed behaviour is the escalation: after [ESCALATE_AFTER_MINUTES] with no
+ * The one timed behaviour is the escalation: after `errands.escalate_after_minutes`
+ * — the panel's, like every other number here — with no
  * taker, the operators are notified. That does **not** close the request — an errand the
  * admin has been told about is still open and still takeable, and `admin_notified_at`
  * exists so the sweeper says it once rather than every minute.
  */
 class ErrandDispatcher
 {
-    public const ESCALATE_AFTER_MINUTES = 5;
-
     public function __construct(private readonly NotificationDispatcher $notifications) {}
 
     /**
@@ -174,7 +172,7 @@ class ErrandDispatcher
      */
     private function availableDrivers()
     {
-        $staleSeconds = (int) (Setting::query()->where('key', 'dispatch.location_stale_seconds')->value('value') ?? 90);
+        $staleSeconds = DriverLiveness::staleSeconds();
 
         return Driver::query()
             ->with('user')
@@ -195,17 +193,19 @@ class ErrandDispatcher
         return number_format((float) $amount, 2).' ج.م';
     }
 
+    /**
+     * Both intervals come from the catalogue, which already declares their floors — ‪1‬
+     * minute each — and already reads the declared default for a row outside them. The
+     * `max(1, …)` these carried was a second floor with no screen behind it, and the
+     * literal `1` beside it a second copy of the default.
+     */
     private static function republishIntervalMinutes(): int
     {
-        $value = Setting::query()->where('key', 'errands.republish_interval_minutes')->value('value');
-
-        return is_numeric($value) ? max(1, (int) $value) : 1;
+        return SettingsCatalog::int('errands.republish_interval_minutes');
     }
 
     private static function escalateAfterMinutes(): int
     {
-        $value = Setting::query()->where('key', 'errands.escalate_after_minutes')->value('value');
-
-        return is_numeric($value) ? max(1, (int) $value) : self::ESCALATE_AFTER_MINUTES;
+        return SettingsCatalog::int('errands.escalate_after_minutes');
     }
 }

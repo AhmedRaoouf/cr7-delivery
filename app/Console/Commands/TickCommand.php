@@ -8,7 +8,6 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Enums\UserType;
 use App\Models\Order;
-use App\Models\Setting;
 use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\DispatchService;
@@ -259,7 +258,7 @@ class TickCommand extends Command
      */
     private function widenSearches(DispatchService $dispatch): int
     {
-        $seconds = self::seconds('dispatch.rebroadcast_interval_seconds', 120);
+        $seconds = self::seconds('dispatch.rebroadcast_interval_seconds');
 
         $orders = Order::query()
             ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
@@ -295,7 +294,7 @@ class TickCommand extends Command
      */
     private function escalateUnclaimed(): int
     {
-        $seconds = self::seconds('dispatch.escalate_after_seconds', 120);
+        $seconds = self::seconds('dispatch.escalate_after_seconds');
 
         $orders = Order::query()
             ->whereIn('status', [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
@@ -315,7 +314,10 @@ class TickCommand extends Command
         $admins = User::query()->where('type', UserType::Admin)->where('is_active', true)->get();
         $notifications = app(NotificationDispatcher::class);
         $minutes = (int) ceil($seconds / 60);
-        $supportPhone = (string) (Setting::query()->where('key', 'support.phone')->value('value') ?? '');
+        // Through the catalogue: `support.phone` is nullable and its declared default is
+        // `null`, but this reader's own literal was `''`, so an unset number rendered as
+        // an empty phone inside the escalation copy instead of being left out.
+        $supportPhone = (string) (SettingsCatalog::get('support.phone') ?? '');
 
         foreach ($orders as $order) {
             /*
@@ -359,11 +361,19 @@ class TickCommand extends Command
         return $orders->count();
     }
 
-    private static function seconds(string $key, int $fallback): int
+    /**
+     * A schedule interval in seconds, from the catalogue.
+     *
+     * This used to query the row itself, carry its own literal fallback, and then clamp
+     * the **stored** value to a floor of ‪15‬ — a third rule, below the `min` of ‪30‬ the
+     * catalogue declares and the panel enforces, and applied to the row but not to the
+     * fallback. {@see SettingsCatalog::int} already refuses an out-of-range row and reads
+     * the declared default instead, which is the same protection with one definition of
+     * what «out of range» means.
+     */
+    private static function seconds(string $key): int
     {
-        $value = Setting::query()->where('key', $key)->value('value');
-
-        return is_numeric($value) ? max(15, (int) $value) : $fallback;
+        return SettingsCatalog::int($key);
     }
 
     /*

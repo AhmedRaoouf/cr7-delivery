@@ -21,6 +21,11 @@ use App\Providers\AppServiceProvider;
  * different zoom scale from a 256 px one, and a client that guesses draws the
  * whole town one level out. `max_zoom` rides along because it is the level the
  * map stops resolving street detail at, and every provider has a different one.
+ *
+ * `language` is the locale the block was built for — `ar` or `en`, from the
+ * request's `Accept-Language`. It is published because the block now depends on
+ * it (an Arabic Mapbox style, when one is configured), so a client holding a
+ * cached `/config` can tell a block built for the other language and fetch again.
  */
 final class MapStyles
 {
@@ -38,22 +43,29 @@ final class MapStyles
      *
      * @return array<string, mixed>
      */
-    public static function payload(): array
+    public static function payload(?string $locale = null): array
     {
         $provider = (string) config('maps.provider', 'osm');
         $mapboxToken = config('maps.mapbox.token');
         $cartoKey = config('maps.carto.api_key');
+        $language = self::language($locale ?? app()->getLocale());
 
         return match (true) {
             $provider === 'osm' => self::osm(),
             $provider === 'carto' && filled($cartoKey) => self::carto((string) $cartoKey),
-            $provider === 'mapbox' && filled($mapboxToken) => self::mapbox((string) $mapboxToken),
+            $provider === 'mapbox' && filled($mapboxToken) => self::mapbox((string) $mapboxToken, $language),
             // The named provider cannot answer. Prefer whichever key does exist
             // over degrading straight to the plainest map we have.
-            filled($mapboxToken) => self::mapbox((string) $mapboxToken),
+            filled($mapboxToken) => self::mapbox((string) $mapboxToken, $language),
             filled($cartoKey) => self::carto((string) $cartoKey),
             default => self::osm(),
-        };
+        } + ['language' => $language];
+    }
+
+    /** The two languages the product speaks; anything that is not English is Arabic. */
+    private static function language(string $locale): string
+    {
+        return str_starts_with(strtolower($locale), 'en') ? 'en' : 'ar';
     }
 
     /**
@@ -95,13 +107,27 @@ final class MapStyles
         ];
     }
 
-    /** @return array<string, mixed> */
-    private static function mapbox(string $token): array
+    /**
+     * The Arabic style is chosen per half: `style_light_ar` for light and
+     * `style_dark_ar` for dark, each falling back to the default on its own when
+     * it is not configured.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mapbox(string $token, string $language): array
     {
+        $style = static function (string $half) use ($language): string {
+            $arabic = (string) config("maps.mapbox.style_{$half}_ar");
+
+            return $language === 'ar' && filled($arabic)
+                ? $arabic
+                : (string) config("maps.mapbox.style_{$half}");
+        };
+
         return [
             'provider' => 'mapbox',
-            'tile_url_light' => self::mapboxTiles((string) config('maps.mapbox.style_light'), $token),
-            'tile_url_dark' => self::mapboxTiles((string) config('maps.mapbox.style_dark'), $token),
+            'tile_url_light' => self::mapboxTiles($style('light'), $token),
+            'tile_url_dark' => self::mapboxTiles($style('dark'), $token),
             'subdomains' => [],
             'tile_size' => (int) config('maps.mapbox.tile_size', 512),
             'zoom_offset' => (int) config('maps.mapbox.zoom_offset', -1),

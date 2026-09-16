@@ -5,6 +5,8 @@ namespace App\Actions\Auth;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\User;
+use App\Support\Auth\SessionClient;
+use App\Support\Auth\SessionIssuer;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -18,11 +20,15 @@ use Illuminate\Support\Facades\Hash;
  */
 class PasswordLoginAction
 {
+    public function __construct(private readonly SessionIssuer $sessions) {}
+
     /**
+     * `session` is merged into the response's `data` — see {@see SessionIssuer::signIn()}.
+     *
      * @param  UserType|list<UserType>  $expected
-     * @return array{user: User, token: string}
+     * @return array{user: User, session: array<string, mixed>}
      */
-    public function execute(string $identifier, string $password, UserType|array $expected): array
+    public function execute(string $identifier, string $password, UserType|array $expected, SessionClient $client = new SessionClient): array
     {
         $allowed = is_array($expected) ? $expected : [$expected];
         // `whereLogin` normalises: `+20 109 000 9599` and `01090009599` are the same
@@ -54,8 +60,6 @@ class PasswordLoginAction
 
         $user->forceFill(['last_login_at' => now()])->save();
 
-        $token = $user->createToken($user->type->value, [$user->type->value])->plainTextToken;
-
-        return ['user' => $user, 'token' => $token];
+        return ['user' => $user, 'session' => $this->sessions->signIn($user, $client)];
     }
 }

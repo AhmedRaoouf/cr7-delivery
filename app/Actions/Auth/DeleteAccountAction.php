@@ -3,6 +3,7 @@
 namespace App\Actions\Auth;
 
 use App\Models\User;
+use App\Support\Auth\Sessions;
 use Illuminate\Support\Str;
 
 /** doc 08 §3 — DELETE /auth/account: soft delete + PII anonymization. */
@@ -23,7 +24,7 @@ class DeleteAccountAction
         // A soft delete never fires the cascade, so the device rows outlived the account
         // and kept its pushes arriving on a phone somebody else now signs in on.
         $user->deviceTokens()->delete();
-        $user->tokens()->delete();
+        Sessions::revokeAll($user);
         $user->delete();
     }
 }

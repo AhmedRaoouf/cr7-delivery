@@ -14,6 +14,7 @@ use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Auth\Sessions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -174,6 +175,13 @@ class RestaurantController extends Controller
     public function destroy(Request $request, Restaurant $restaurant): JsonResponse
     {
         $this->ensureInScope($request, $restaurant);
+
+        // D-120 — the place is gone, so the sessions its owner signed in with go with it:
+        // the board, the tablet, the phone. Only the sign-ins end; the owner's account row
+        // is left exactly as it was.
+        if ($restaurant->owner !== null) {
+            Sessions::revokeAll($restaurant->owner);
+        }
 
         $restaurant->delete();
 

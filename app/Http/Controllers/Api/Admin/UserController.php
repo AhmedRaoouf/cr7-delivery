@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\StoreAdminUserRequest;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Auth\Sessions;
 use App\Support\PermissionEscalationGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,7 +153,7 @@ class UserController extends Controller
 
         $user->update(['is_active' => false]);
         $user->adminProfile()->update(['suspended_at' => now(), 'suspended_by' => $request->user()->id, 'suspend_reason' => $validated['reason']]);
-        $user->tokens()->delete();
+        Sessions::revokeAll($user);
 
         AuditLogger::record($request->user(), 'users.suspend', $user, $validated);
 
@@ -187,6 +188,9 @@ class UserController extends Controller
         PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'حذف');
         $this->assertNotLastSuperAdmin($user);
 
+        // A soft-deleted account cannot authenticate, but its sessions would sit in the
+        // tables as live credentials for a row that an undelete would bring back.
+        Sessions::revokeAll($user);
         $user->delete();
         AuditLogger::record($request->user(), 'users.manage', $user, ['action' => 'delete']);
 

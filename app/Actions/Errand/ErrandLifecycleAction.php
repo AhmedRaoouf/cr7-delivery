@@ -144,7 +144,7 @@ class ErrandLifecycleAction
             if ($previousDriver !== null && $previousDriver->id !== $driver->id) {
                 $this->notifications->send($previousDriver->user, 'errand.cancelled_driver', [
                     'reference' => $locked->reference,
-                ]);
+                ], data: self::routing($locked));
             }
 
             return $locked;
@@ -159,7 +159,7 @@ class ErrandLifecycleAction
             'reference' => $fresh->reference,
             'pickup' => $fresh->pickup_address_text,
             'fee' => number_format((float) $fresh->offered_fee, 2).' ج.م',
-        ], deepLink: 'cr7://errands/offer/'.$fresh->id);
+        ], deepLink: 'cr7://errands/offer/'.$fresh->id, data: self::routing($fresh));
 
         return $fresh;
     }
@@ -205,7 +205,7 @@ class ErrandLifecycleAction
             $this->notifications->send($operator, 'errand.offer_declined', [
                 'reference' => $fresh->reference,
                 'driver' => $driver->user?->name ?? 'الكابتن',
-            ], deepLink: 'cr7://errands/'.$fresh->id);
+            ], deepLink: 'cr7://errands/'.$fresh->id, data: self::routing($fresh));
         }
 
         return $fresh;
@@ -224,7 +224,7 @@ class ErrandLifecycleAction
 
         $this->notifications->send($errand->customer, 'errand.picked_up_customer', [
             'total' => number_format((float) $errand->total_due, 2).' ج.م',
-        ], deepLink: 'cr7://errands/'.$errand->id, orderId: null);
+        ], deepLink: 'cr7://errands/'.$errand->id, orderId: null, data: self::routing($errand));
 
         return $errand->fresh(['driver.user']);
     }
@@ -256,7 +256,7 @@ class ErrandLifecycleAction
         DriverLedger::recordErrand($driver, $errand->reference, $driverEarning, $fee, $errand->id);
 
         $this->notifications->send($errand->customer, 'errand.delivered_customer', [],
-            deepLink: 'cr7://errands/'.$errand->id);
+            deepLink: 'cr7://errands/'.$errand->id, data: self::routing($errand));
 
         // Off the errand, back in the order pool — and handed the backlog now rather
         // than at the next two-minute sweep (doc 63 gate 4).
@@ -301,7 +301,7 @@ class ErrandLifecycleAction
         if ($driver !== null && $driver->user_id !== $actor->id) {
             $this->notifications->send($driver->user, 'errand.cancelled_driver', [
                 'reference' => $errand->reference,
-            ]);
+            ], data: self::routing($errand));
         }
 
         if ($driver !== null) {
@@ -346,11 +346,32 @@ class ErrandLifecycleAction
         $this->notifications->send($driver->user, 'errand.taken', [
             'pickup' => $errand->pickup_address_text,
             'reference' => $errand->reference,
-        ], deepLink: 'cr7://errands/'.$errand->id);
+        ], deepLink: 'cr7://errands/'.$errand->id, data: self::routing($errand));
 
         $this->notifications->send($errand->customer, 'errand.assigned_customer', [
             'driver' => $driver->user?->name ?? 'الكابتن',
             'pickup' => $errand->pickup_address_text,
-        ], deepLink: 'cr7://errands/'.$errand->id);
+        ], deepLink: 'cr7://errands/'.$errand->id, data: self::routing($errand));
+    }
+
+    /**
+     * What a **tapped** push needs to land anywhere.
+     *
+     * The notification row carries `deep_link` and the centre routes from it, so these
+     * notifications always opened the right screen when they were read in `CUS-43` /
+     * `DRV-32`. A push tapped in the system tray has no row in its hand — only `data` —
+     * and `PushRoutes` reads `errand_id` there, exactly as the order pushes are read from
+     * `order_id`. Without it the tap resolved to nothing and merely opened the app.
+     * `errand.new` was the only errand push that carried it.
+     *
+     * `type` travels in `data` too ({@see NotificationDispatcher::send()}), which is what
+     * tells the three destinations of one `errand_id` apart: the board for `errand.new`,
+     * the captain's own job or the customer's tracking screen for the rest.
+     *
+     * @return array<string, string>
+     */
+    public static function routing(ErrandRequest $errand): array
+    {
+        return ['errand_id' => (string) $errand->id, 'kind' => 'errand'];
     }
 }

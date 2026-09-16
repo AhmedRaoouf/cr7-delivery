@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Support\Auth\Sessions;
 use App\Support\PhoneNumber;
 use App\Support\TempPassword;
 use Illuminate\Console\Command;
@@ -24,6 +25,11 @@ use Illuminate\Support\Facades\Hash;
  * `must_change_password` would drop the admin on a screen they cannot finish.
  * `--no-change-required` leaves the flag off; the admin changes the password by SMS once
  * the gateway delivers. An admin is found by email as well as by phone.
+ *
+ * D-120 — and every session the account held ends with the old password, access and
+ * refresh tokens alike, legacy ones included. A password replaced from a terminal is
+ * replaced because the old one is lost or leaked; a session made with it is exactly
+ * what must not survive.
  */
 class ResetPasswordCommand extends Command
 {
@@ -55,7 +61,10 @@ class ResetPasswordCommand extends Command
             'must_change_password' => ! $this->option('no-change-required'),
         ])->save();
 
+        Sessions::revokeAll($user);
+
         $this->info("{$user->name} · {$user->type->value} · {$user->phone}");
+        $this->line('every session this account held is signed out');
         $this->line('new password: '.$password);
 
         if (TempPassword::isShared()) {

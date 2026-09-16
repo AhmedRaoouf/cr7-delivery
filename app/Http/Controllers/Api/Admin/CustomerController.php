@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Auth\Sessions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,7 @@ class CustomerController extends Controller
         $customer->update($validated);
 
         if (! $validated['is_active']) {
-            $customer->tokens()->delete();
+            Sessions::revokeAll($customer);
         }
 
         AuditLogger::record($request->user(), 'customers.toggle_status', $customer, $validated);

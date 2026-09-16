@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\Auth\Sessions;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,17 +38,24 @@ class EnsureAccountIsActive
             // Any token that reaches here belongs to an account that may no longer
             // hold one. Revoking on the way past means a blocked account cannot keep
             // knocking, and costs one delete per blocked request rather than a sweep.
-            $user->tokens()->delete();
+            // Refresh tokens included (D-120) — or the next renewal would bring the
+            // session straight back the moment the account is unblocked.
+            Sessions::revokeAll($user);
 
-            return ApiResponse::error(
-                'account_suspended',
-                $user->blocked_reason
-                    ? 'تم إيقاف حسابك — السبب: '.$user->blocked_reason
-                    : 'تم إيقاف حسابك — يرجى التواصل مع الدعم',
-                423,
-            );
+            return ApiResponse::error('account_suspended', self::sentence($user), 423);
         }
 
         return $next($request);
+    }
+
+    /**
+     * What a blocked account is told, here and by `POST /auth/refresh` — the one route a
+     * blocked account still reaches without passing through this middleware.
+     */
+    public static function sentence(User $user): string
+    {
+        return $user->blocked_reason
+            ? 'تم إيقاف حسابك — السبب: '.$user->blocked_reason
+            : 'تم إيقاف حسابك — يرجى التواصل مع الدعم';
     }
 }

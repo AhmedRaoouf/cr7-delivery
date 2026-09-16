@@ -58,3 +58,21 @@ if (class_exists(Telescope::class) && config('telescope.enabled') === true) {
  * not outlast it by more than a tick, or the belt becomes the failure mode.
  */
 Schedule::command('cr7:tick')->everyMinute()->withoutOverlapping(2);
+
+/*
+ * D-120 — the session tables. Both are cleanup: nothing they delete can authenticate, so
+ * a pass that never runs costs disk, not correctness.
+ *
+ * `sanctum:prune-expired` deletes access tokens a day past their `expires_at` — an hour-
+ * long token leaves a row behind every hour a session is used. `cr7:prune-sessions` deletes
+ * refresh tokens dead for a week and legacy tokens a week past their idle window, and
+ * scrubs the successor pairs held for the ‪120‬-second grace window. That last part is why
+ * it runs hourly rather than daily: a scrubbed pair is a live session no longer sitting
+ * in the table in a form that can be read back.
+ *
+ * Both carry an explicit `withoutOverlapping` expiry — see the paragraph above `cr7:tick`
+ * for what the default of ‪1440‬ minutes did. Each pass is a handful of indexed deletes;
+ * the numbers only have to outlast one.
+ */
+Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlapping(30);
+Schedule::command('cr7:prune-sessions')->hourly()->withoutOverlapping(30);

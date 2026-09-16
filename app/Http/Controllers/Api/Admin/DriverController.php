@@ -12,6 +12,7 @@ use App\Models\Driver;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Auth\Sessions;
 use App\Support\DriverTrip;
 use App\Support\FileUploader;
 use Illuminate\Http\JsonResponse;
@@ -175,6 +176,14 @@ class DriverController extends Controller
     public function destroy(Request $request, Driver $driver): JsonResponse
     {
         $this->ensureInScope($request, $driver);
+
+        // D-120 — the captain is gone, so the sessions that opened the captain's app go
+        // with it. The account row is left exactly as it was; only its sign-ins end, so a
+        // phone that kept a token cannot keep calling the API as somebody the office has
+        // just removed, and nothing a renewal holds can bring it back.
+        if ($driver->user !== null) {
+            Sessions::revokeAll($driver->user);
+        }
 
         $driver->delete();
 

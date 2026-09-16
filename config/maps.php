@@ -66,6 +66,23 @@ return [
         'style_light' => env('MAPBOX_STYLE_LIGHT', 'mapbox/streets-v12'),
         'style_dark' => env('MAPBOX_STYLE_DARK', 'mapbox/dark-v11'),
 
+        /**
+         * The same two, drawn in Arabic — published instead of the pair above when the
+         * request's locale is Arabic (`Accept-Language`, which is Arabic unless it says
+         * `en`). Empty means «no Arabic style», and the pair above is published for
+         * everybody, exactly as before.
+         *
+         * They are separate styles because they have to be. The raster Static Tiles API
+         * takes no `language` parameter: a style's labels are whatever the style was
+         * built to print, and `streets-v12` / `dark-v11` print English. An Arabic basemap
+         * is a copy of each made in Mapbox Studio with the label layers set to `name_ar`
+         * (falling back to `name`), published under this account — `owner/style-id`, the
+         * same form as the defaults. Each light/dark half falls back on its own, so an
+         * operator can publish the light one first.
+         */
+        'style_light_ar' => env('MAPBOX_STYLE_LIGHT_AR', ''),
+        'style_dark_ar' => env('MAPBOX_STYLE_DARK_AR', ''),
+
         // 512 px tiles cover four times the area of 256 px ones for the same
         // single billed request, so the free 200k/month goes four times as far.
         // `zoom_offset` is what keeps the zoom levels lining up at that size.

@@ -5,6 +5,7 @@ namespace App\Actions\Auth;
 use App\Enums\OtpPurpose;
 use App\Exceptions\ApiException;
 use App\Models\User;
+use App\Support\Auth\Sessions;
 use App\Support\OtpVerifier;
 use Illuminate\Support\Facades\Hash;
 
@@ -57,5 +58,10 @@ class ChangePasswordAction
             'password' => Hash::make($newPassword),
             'must_change_password' => false,
         ])->save();
+
+        // D-120 — every other session ends; this one stays. It revoked nothing before, so
+        // a password changed because it had leaked left every session made with the leaked
+        // one working. The sign-in that typed the new password is the one known to hold it.
+        Sessions::revokeOthers($user);
     }
 }

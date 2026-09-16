@@ -6,6 +6,7 @@ use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\Auth\Sessions;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\TempPassword;
 use Illuminate\Support\Facades\DB;
@@ -71,7 +72,9 @@ class ModerateAccountAction
             // for good. It means «carries nothing» now, derived by `DriverTrip` (doc 63 §7).
             $target->driver?->update(['is_online' => false]);
 
-            $target->tokens()->delete();
+            // Refresh tokens too (D-120), or unblocking would hand back every session the
+            // block was meant to end.
+            Sessions::revokeAll($target);
             // The phone stops receiving this platform's pushes the moment it stops
             // being this platform's user.
             $target->deviceTokens()->delete();
@@ -139,7 +142,7 @@ class ModerateAccountAction
             ]);
 
             $target->addresses()->delete();
-            $target->tokens()->delete();
+            Sessions::revokeAll($target);
             $target->deviceTokens()->delete();
         });
 
@@ -163,7 +166,7 @@ class ModerateAccountAction
                 'email' => null,
             ]);
 
-            $target->tokens()->delete();
+            Sessions::revokeAll($target);
             $target->deviceTokens()->delete();
             $target->delete();
         });

@@ -19,6 +19,7 @@ use App\Http\Requests\Auth\UpdateMeRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\Auth\Sessions;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,7 +102,9 @@ class AuthController extends Controller
             $request->string('token')->value(),
         );
 
-        $request->user()->currentAccessToken()->delete();
+        // This sign-in, both halves (D-120): the access token and every refresh token
+        // descended from the same sign-in, so no renewal can bring it back.
+        Sessions::endCurrent($request->user());
 
         return ApiResponse::success(message: 'تم تسجيل الخروج');
     }
@@ -110,7 +113,7 @@ class AuthController extends Controller
     {
         self::endCaptainShift($request->user());
         $request->user()->deviceTokens()->delete();
-        $request->user()->tokens()->delete();
+        Sessions::revokeAll($request->user());
 
         return ApiResponse::success(message: 'تم تسجيل الخروج من كل الأجهزة');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Actions\Errand\ErrandLifecycleAction;
 use App\Enums\ErrandStatus;
 use App\Enums\UserType;
 use App\Models\Driver;
@@ -67,7 +68,7 @@ class ErrandDispatcher
                     'fee' => self::money($errand->offered_fee),
                 ],
                 deepLink: 'cr7://errands/'.$errand->id,
-                data: ['errand_id' => (string) $errand->id, 'kind' => 'errand'],
+                data: ErrandLifecycleAction::routing($errand),
                 channel: 'offers',
             );
         }
@@ -155,7 +156,7 @@ class ErrandDispatcher
                     'pickup' => $errand->pickup_address_text,
                     'dropoff' => $errand->dropoff_address_text,
                     'fee' => self::money($errand->offered_fee),
-                ], deepLink: '/errands/'.$errand->id);
+                ], deepLink: '/errands/'.$errand->id, data: ErrandLifecycleAction::routing($errand));
             }
 
             // Stamped whether or not any admin existed to tell, so a deployment with no

@@ -158,9 +158,14 @@ class OsmGeocoder implements Geocoder, ReportsFailure
     private static function kindOf(array $row, array $composed): string
     {
         $type = (string) ($row['addresstype'] ?? $row['type'] ?? '');
+        // jsonv2's `category` is the OSM key. A way under `highway` is a road
+        // whatever `addresstype` says, and a road filed as a POI would escape the
+        // wide dedupe a road gets and be listed once per OSM way.
+        $category = (string) ($row['category'] ?? $row['class'] ?? '');
 
         return match (true) {
-            in_array($type, ['city', 'town', 'village', 'municipality', 'hamlet'], true) => 'city',
+            $category === 'highway' => 'street',
+            in_array($type, ['city', 'town', 'village', 'municipality', 'hamlet', 'county', 'state', 'province', 'region'], true) => 'city',
             in_array($type, ['neighbourhood', 'suburb', 'quarter', 'city_district', 'residential'], true) => 'area',
             in_array($type, ['road', 'street', 'pedestrian', 'footway'], true) => 'street',
             $type === 'house' || ($composed['house_number'] ?? null) !== null => 'address',

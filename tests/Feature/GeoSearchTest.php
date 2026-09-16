@@ -278,16 +278,17 @@ class GeoSearchTest extends TestCase
         // row and never asked anybody else.
         config(['maps.mapbox.token' => 'pk.test-token']);
         Http::fake(['api.mapbox.com/*' => Http::response(['features' => [[
-            'text' => 'معبد أبو سمبل',
-            'place_name' => 'معبد أبو سمبل، أسوان',
+            'text' => 'كافيه أبو سمبل',
+            'place_name' => 'كافيه أبو سمبل، جمصة',
             'place_type' => ['poi'],
-            'center' => [31.6256, 22.3372],
+            'center' => [31.5600, 31.4700],
         ]]])]);
 
         $rows = (new ChainGeocoder([new LocalGazetteerGeocoder, new MapboxGeocoder]))
             ->search('ابو سمبل', ...self::GAMASA);
 
-        $this->assertSame(['منطقة أبو سمبل', 'معبد أبو سمبل'], array_column($rows, 'name'));
+        $this->assertSame(['منطقة أبو سمبل', 'كافيه أبو سمبل'], array_column($rows, 'name'));
+        Http::assertSentCount(1);
     }
 
     public function test_a_well_answered_local_query_spends_no_billed_request(): void

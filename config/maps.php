@@ -82,6 +82,46 @@ return [
      */
     'search' => [
         'local_is_enough' => (int) env('MAPS_SEARCH_LOCAL_IS_ENOUGH', 5),
+
+        /*
+         * Near beats far, first — see `PlaceResults`. Measured 2026-09-16 from the
+         * middle of جمصة: «صيدلية» opened on three OpenStreetMap nodes named
+         * exactly «صيدلية» in Cairo, ‪150‬ km away, above the four pharmacies this
+         * platform delivers from at ‪2‬ km.
+         *
+         * `near_km` — a row this close outranks every row further out, whatever
+         * its match. ‪15‬ holds the whole launch city and the villages around it,
+         * and stops short of رأس البر and دمياط.
+         *
+         * `far_km` — when anything is near, a provider row further than this is
+         * dropped rather than listed. When nothing is near nothing is dropped:
+         * «المنصورة» from جمصة is ‪47‬ km and must keep working.
+         *
+         * `same_extent_km` — how far apart two rows of the same name may be and
+         * still be one street, area or city. A road comes back from Nominatim once
+         * per OSM way; ‪50‬ m, right for a shop, listed «شارع الكورنيش» five times.
+         */
+        'near_km' => (float) env('MAPS_SEARCH_NEAR_KM', 15),
+        'far_km' => (float) env('MAPS_SEARCH_FAR_KM', 60),
+        'same_extent_km' => (float) env('MAPS_SEARCH_SAME_EXTENT_KM', 3),
+
+        /*
+         * A POI named for what it is and nothing else — an OpenStreetMap node
+         * called «صيدلية». Useless as a destination unless it is near, where its
+         * address line tells it apart; far away it is dropped, and near it no
+         * longer counts as an exact match for the word. Compared folded (ة/ه, أ/ا,
+         * ى/ي) and without «ال», so each word is listed once.
+         */
+        'generic_names' => [
+            'صيدلية', 'مسجد', 'جامع', 'زاوية', 'كنيسة', 'مدرسة', 'معهد', 'حضانة', 'كلية', 'جامعة',
+            'مستشفى', 'مستوصف', 'عيادة', 'مركز طبي', 'معمل', 'معمل تحاليل', 'مخبز', 'فرن',
+            'مطعم', 'كافيه', 'مقهى', 'قهوة', 'كافتيريا', 'سوبر ماركت', 'سوبرماركت', 'ماركت',
+            'بقالة', 'محل', 'كشك', 'بنك', 'صراف آلي', 'ماكينة صراف', 'محطة وقود', 'محطة بنزين',
+            'بنزينة', 'فندق', 'موقف', 'جراج', 'ملعب', 'نادي', 'حديقة', 'مول', 'مكتبة', 'ورشة',
+            'مغسلة', 'حلاق', 'كوافير', 'جزارة', 'جزار', 'مكتب بريد', 'بريد', 'قسم شرطة', 'شرطة',
+            'pharmacy', 'mosque', 'church', 'school', 'hospital', 'clinic', 'bakery', 'restaurant',
+            'cafe', 'supermarket', 'bank', 'atm', 'fuel', 'hotel', 'parking',
+        ],
     ],
 
     /**

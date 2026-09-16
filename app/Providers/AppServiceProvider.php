@@ -158,12 +158,15 @@ class AppServiceProvider extends ServiceProvider
         // that for this town; these are our own rows. See
         // {@see PlatformPlaceGeocoder}.
         $this->app->singleton(Geocoder::class, function (): Geocoder {
+            // `configured()` rather than `isConfigured()`: the local tables answer
+            // it with a query, and a query that throws here would be a ‪500‬ on
+            // every geocoding route before any source had been asked anything.
             $chain = array_values(array_filter([
                 new PlatformPlaceGeocoder,
                 new LocalGazetteerGeocoder,
                 filled(config('maps.mapbox.token')) ? new MapboxGeocoder : null,
                 new OsmGeocoder,
-            ], fn (?Geocoder $g) => $g?->isConfigured() === true));
+            ], fn (?Geocoder $g) => $g !== null && ChainGeocoder::configured($g)));
 
             return $chain === [] ? new NullGeocoder : new ChainGeocoder($chain);
         });

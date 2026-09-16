@@ -17,11 +17,27 @@ use Throwable;
  *
  * @see https://docs.mapbox.com/api/search/geocoding-v5/
  */
-class MapboxGeocoder implements Geocoder
+class MapboxGeocoder implements Geocoder, ReportsFailure
 {
     use SortsByProximity;
+    use TracksFailure;
 
     private const ENDPOINT = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
+
+    /**
+     * The feature types a forward search asks for.
+     *
+     * `region` and `district` were missing, and they are what a governorate and
+     * a markaz come back as: «الدقهلية» and «مركز جمصة» answered nothing at all
+     * while every one of their streets answered. `postcode` is left out on
+     * purpose — nobody in this town has ever given one as an address.
+     *
+     * The **reverse** list is deliberately not this one and must not be widened
+     * to match it: Mapbox refuses a reverse lookup carrying `limit` beside more
+     * than one type, and that pair is what answered `null` for every pin on
+     * 2026-09-11. See {@see reverse()}.
+     */
+    private const SEARCH_TYPES = 'address,poi,neighborhood,locality,place,district,region';
 
     public function isConfigured(): bool
     {
@@ -101,9 +117,17 @@ class MapboxGeocoder implements Geocoder
         });
     }
 
-    public function search(string $query, ?float $lat = null, ?float $lng = null, string $language = 'ar'): array
-    {
+    public function search(
+        string $query,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $language = 'ar',
+        ?string $country = null,
+        int $limit = 10,
+    ): array {
+        $this->callFailed = false;
         $query = trim($query);
+
         if (! $this->isConfigured() || mb_strlen($query) < 2) {
             return [];
         }
@@ -111,36 +135,88 @@ class MapboxGeocoder implements Geocoder
         $centre = config('maps.default_center');
         $proximityLat = $lat ?? (float) $centre['lat'];
         $proximityLng = $lng ?? (float) $centre['lng'];
+        $country = $country ?: (string) config('maps.country', 'eg');
 
-        $key = sprintf('geo:fwd:%s:%s:%.2f,%.2f', $language, md5(mb_strtolower($query)), $proximityLat, $proximityLng);
+        $key = sprintf(
+            'geo:fwd:%s:%s:%s:%.2f,%.2f',
+            $language,
+            $country,
+            md5(mb_strtolower($query)),
+            $proximityLat,
+            $proximityLng,
+        );
 
-        return Cache::remember($key, now()->addDays((int) config('maps.cache.search_days', 7)), function () use ($query, $proximityLat, $proximityLng, $language) {
-            $features = $this->call(rawurlencode($query), [
-                'language' => $language,
-                // Bias to where the customer is standing. Without it "الكورنيش"
-                // returns Alexandria's before جمصة's, every time.
-                'proximity' => "{$proximityLng},{$proximityLat}",
-                'country' => config('maps.country', 'eg'),
-                'types' => 'address,poi,neighborhood,locality,place',
-                'limit' => 6,
-            ]);
+        $cached = Cache::get($key);
 
-            $rows = collect($features)
-                ->map(fn (array $feature) => [
-                    'name' => (string) ($feature['text'] ?? ''),
-                    'address' => (string) ($feature['place_name'] ?? ''),
-                    'lat' => (float) ($feature['center'][1] ?? 0),
-                    'lng' => (float) ($feature['center'][0] ?? 0),
-                ])
-                ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
-                ->values()
-                ->all();
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-            // `proximity` is a hint Mapbox lets name prominence outrank, so the
-            // street the customer is standing on can land third behind two in
-            // other governorates. See {@see SortsByProximity}.
-            return self::nearestFirst($rows, $proximityLat, $proximityLng);
-        });
+        $features = $this->call(rawurlencode($query), [
+            'language' => $language,
+            // Bias to where the customer is standing. Without it "الكورنيش"
+            // returns Alexandria's before جمصة's, every time.
+            'proximity' => "{$proximityLng},{$proximityLat}",
+            'country' => $country,
+            'types' => self::SEARCH_TYPES,
+            // One more than the caller can use: the merge above drops duplicates
+            // of rows our own tables already hold, so a list cut to exactly the
+            // limit can arrive short.
+            'limit' => min(10, max(5, $limit)),
+        ]);
+
+        // A refused query, an expired token, a timeout. Caching the `[]` that
+        // comes back would turn a ten-second outage into a week of «لا توجد
+        // نتائج» for every customer who typed that word during it.
+        if ($this->callFailed) {
+            return [];
+        }
+
+        $rows = collect($features)
+            ->map(fn (array $feature) => [
+                'name' => (string) ($feature['text'] ?? ''),
+                'address' => (string) ($feature['place_name'] ?? ''),
+                'lat' => (float) ($feature['center'][1] ?? 0),
+                'lng' => (float) ($feature['center'][0] ?? 0),
+                'kind' => self::kindOf($feature),
+                'source' => 'mapbox',
+            ])
+            ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
+            ->values()
+            ->all();
+
+        // `proximity` is a hint Mapbox lets name prominence outrank, so the
+        // street the customer is standing on can land third behind two in
+        // other governorates. See {@see SortsByProximity}.
+        $rows = self::nearestFirst($rows, $proximityLat, $proximityLng);
+
+        Cache::put($key, $rows, now()->addDays((int) config('maps.cache.search_days', 7)));
+
+        return $rows;
+    }
+
+    /**
+     * Mapbox's `place_type` -> the row's icon.
+     *
+     * @param  array<string, mixed>  $feature
+     */
+    private static function kindOf(array $feature): string
+    {
+        foreach ((array) ($feature['place_type'] ?? []) as $type) {
+            $kind = match ($type) {
+                'poi' => 'poi',
+                'address' => 'address',
+                'neighborhood', 'locality', 'postcode' => 'area',
+                'place', 'district', 'region', 'country' => 'city',
+                default => null,
+            };
+
+            if ($kind !== null) {
+                return $kind;
+            }
+        }
+
+        return 'poi';
     }
 
     /**
@@ -158,14 +234,18 @@ class MapboxGeocoder implements Geocoder
 
             if ($response->failed()) {
                 Log::warning('[MAPBOX] geocoding failed', ['status' => $response->status(), 'body' => $response->body()]);
+                $this->callFailed = true;
 
                 return [];
             }
 
             return $response->json('features') ?? [];
         } catch (Throwable $e) {
-            // Never rethrow. The caller's contract is "a label or nothing".
+            // Never rethrow. The caller's contract is "a label or nothing" —
+            // but the caller is also told *which* of the two it got, so a dead
+            // provider does not read to the customer as an empty town.
             Log::warning('[MAPBOX] geocoding threw', ['message' => $e->getMessage()]);
+            $this->callFailed = true;
 
             return [];
         }

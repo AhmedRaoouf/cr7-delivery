@@ -8,6 +8,8 @@ use App\Http\Resources\Shared\ServiceZoneResource;
 use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Services\Maps\Geocoder;
+use App\Services\Maps\PlaceResults;
+use App\Services\Maps\ReportsFailure;
 use App\Services\Maps\Router;
 use App\Support\ApiResponse;
 use App\Support\Geo;
@@ -133,8 +135,26 @@ class GeoController extends Controller
     }
 
     /**
-     * `GET /geo/search?q=&lat=&lng=` — free-text place lookup, biased to where
-     * the customer is standing so «الكورنيش» means this town's.
+     * `GET /geo/search?q=&lat=&lng=&limit=&country=` — free-text place lookup,
+     * biased to where the customer is standing so «الكورنيش» means this town's.
+     *
+     * D-127. The row shape gained four fields and lost none:
+     *
+     * - `kind` — what the row is, so the list can draw a shop, a street, an area
+     *   and a door as four different things instead of ten identical pins.
+     * - `source` — which of the four sources answered. For us, not the screen.
+     * - `distance_m` — from the point the caller sent, and `null` when it sent
+     *   none. There is no honest distance from «wherever جمصة is».
+     * - `place_id` — on a `kind: place` row only, so tapping a shop this
+     *   platform delivers from opens it.
+     *
+     * And the envelope gained `degraded`. Every geocoder in this application
+     * logs a failure and returns `[]`, so until now a refused query, an expired
+     * token and a Nominatim ‪403‬ all reached the customer as «لا توجد نتائج» —
+     * a sentence they believe, retype around, and give up on. `degraded: true`
+     * means every provider that was asked failed and the client should say
+     * «تعذّر البحث، حاول مرة أخرى»; `false` with an empty list really does mean
+     * nothing matched.
      */
     public function search(Request $request, Geocoder $geocoder): JsonResponse
     {
@@ -142,14 +162,41 @@ class GeoController extends Controller
             'q' => ['required', 'string', 'min:2', 'max:120'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'limit' => ['nullable', 'integer', 'between:1,25'],
+            // The provider filter, so this is not permanently an Egyptian-only
+            // search because one `config()` call said so in 2026. Two letters,
+            // ISO-3166-1 alpha-2, and the configured country when absent.
+            'country' => ['nullable', 'string', 'size:2', 'alpha'],
         ]);
 
-        return ApiResponse::success($geocoder->search(
+        $lat = isset($validated['lat']) ? (float) $validated['lat'] : null;
+        $lng = isset($validated['lng']) ? (float) $validated['lng'] : null;
+        $limit = (int) ($validated['limit'] ?? 10);
+
+        $rows = $geocoder->search(
             $validated['q'],
-            isset($validated['lat']) ? (float) $validated['lat'] : null,
-            isset($validated['lng']) ? (float) $validated['lng'] : null,
+            $lat,
+            $lng,
             $this->language($request),
-        ));
+            isset($validated['country']) ? strtolower((string) $validated['country']) : null,
+            $limit,
+        );
+
+        $rows = PlaceResults::withDistance(array_slice($rows, 0, $limit), $lat, $lng);
+
+        // Only a source that reaches a network can be *down*; a source that
+        // cannot fail never reports one, so this is false for the local tables
+        // and for {@see NullGeocoder} whatever they answered.
+        $degraded = $rows === []
+            && $geocoder instanceof ReportsFailure
+            && $geocoder->lastCallFailed();
+
+        $response = ApiResponse::success($rows, meta: ['count' => count($rows), 'degraded' => $degraded]);
+
+        // On the envelope as well as in `meta`: this is the one field a client
+        // has to read before it decides which sentence to show, and it must not
+        // depend on knowing that `meta` is where we put things.
+        return $response->setData(['degraded' => $degraded] + $response->getData(true));
     }
 
     /**

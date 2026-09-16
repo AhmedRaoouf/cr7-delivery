@@ -115,18 +115,28 @@ Route::prefix('v1')->group(function () {
     // before it signs in, and this is the same catalogue narrowed to a pin and a name.
     // Throttled generously — it is one indexed query behind a ten-minute cache.
     Route::middleware('throttle:120,1')->get('/geo/places', [GeoController::class, 'places']);
-    // Geocoding proxies. Throttled because every request behind them is a
-    // billed one at the provider, and an unthrottled public route is a free
-    // way for anyone to spend the account's monthly quota.
-    Route::middleware('throttle:60,1')->group(function () {
-        Route::get('/geo/reverse', [GeoController::class, 'reverse']);
-        Route::get('/geo/search', [GeoController::class, 'search']);
-        // Follows a shortened maps link to the URL that carries the coordinates. Not a
-        // provider call, but throttled with them: it is the one route here that makes
-        // the server fetch a URL a user chose, and the host allowlist inside is what
-        // keeps that from being an open proxy.
-        Route::get('/geo/expand-link', [GeoController::class, 'expandLink']);
-    });
+    /*
+     * Geocoding proxies. Throttled because every request behind them is a billed
+     * one at the provider, and an unthrottled public route is a free way for
+     * anyone to spend the account's monthly quota.
+     *
+     * D-127 — **one bucket each**, not one bucket between them. All three shared
+     * a single `throttle:60,1` keyed by IP, and the address picker's ‪700‬ ms
+     * reverse debounce alone can spend ~‪85‬ of those sixty in a minute: the
+     * customer dragged the pin, the reverse lookups took the whole allowance,
+     * and the search box then answered ‪429‬ — which the client showed as «لا
+     * توجد نتائج», so the screen said the street did not exist while the street
+     * was under the pin. Every customer behind one carrier NAT shared that
+     * bucket with every other. The limits are defined in `AppServiceProvider`,
+     * each with its own error code so a ‪429‬ is never silent again.
+     */
+    Route::middleware('throttle:geo-reverse')->get('/geo/reverse', [GeoController::class, 'reverse']);
+    Route::middleware('throttle:geo-search')->get('/geo/search', [GeoController::class, 'search']);
+    // Follows a shortened maps link to the URL that carries the coordinates. Not a
+    // provider call, and the tightest of the three: it is the one route here that
+    // makes the server fetch a URL a user chose, and the host allowlist inside is
+    // what keeps that from being an open proxy.
+    Route::middleware('throttle:geo-expand')->get('/geo/expand-link', [GeoController::class, 'expandLink']);
     Route::get('/cuisines', [SharedCuisineController::class, 'index']);
     // The home screen's top strip. Public — the app browses before it signs in.
     Route::get('/store-categories', [SharedStoreCategoryController::class, 'index']);

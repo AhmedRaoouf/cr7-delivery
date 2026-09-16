@@ -31,6 +31,7 @@ use App\Services\Maps\MapboxRouter;
 use App\Services\Maps\NullGeocoder;
 use App\Services\Maps\NullRouter;
 use App\Services\Maps\OsmGeocoder;
+use App\Services\Maps\PlatformPlaceGeocoder;
 use App\Services\Maps\Router;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
@@ -149,12 +150,23 @@ class AppServiceProvider extends ServiceProvider
         // answer: for the launch city we hold better data than either API
         // exposes, and {@see LocalGazetteerGeocoder} returns null the moment a
         // pin leaves its bbox.
+        //
+        // D-127 — the platform's own shops come before all of it. `GET
+        // /geo/places` has published them by name since 2026-09-07 and had zero
+        // callers in any repo, so a customer typing «سندوتش عمر» was asking
+        // Mapbox about a Gamasa sandwich shop. No tile provider will ever answer
+        // that for this town; these are our own rows. See
+        // {@see PlatformPlaceGeocoder}.
         $this->app->singleton(Geocoder::class, function (): Geocoder {
+            // `configured()` rather than `isConfigured()`: the local tables answer
+            // it with a query, and a query that throws here would be a ‪500‬ on
+            // every geocoding route before any source had been asked anything.
             $chain = array_values(array_filter([
+                new PlatformPlaceGeocoder,
                 new LocalGazetteerGeocoder,
                 filled(config('maps.mapbox.token')) ? new MapboxGeocoder : null,
                 new OsmGeocoder,
-            ], fn (?Geocoder $g) => $g?->isConfigured() === true));
+            ], fn (?Geocoder $g) => $g !== null && ChainGeocoder::configured($g)));
 
             return $chain === [] ? new NullGeocoder : new ChainGeocoder($chain);
         });
@@ -237,6 +249,78 @@ class AppServiceProvider extends ServiceProvider
                 429,
                 meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 3600)],
             )->withHeaders($headers)));
+
+        /*
+         * D-127 — one bucket per geocoding route, not one between them.
+         *
+         * `/geo/reverse`, `/geo/search` and `/geo/expand-link` shared a single
+         * `throttle:60,1` keyed by IP. The address picker's ‪700‬ ms reverse debounce can
+         * emit ~‪85‬ reverse lookups a minute on its own, so a customer who dragged the
+         * pin spent the whole allowance and the **search** box then answered ‪429‬ —
+         * shown on the screen as «لا توجد نتائج». The street was under the pin.
+         *
+         * Two buckets each, and both must pass. The per-token one is the real limit and
+         * is sized for what one screen can produce; the per-IP one is a ceiling on
+         * abuse and is deliberately wide, because Egyptian mobile networks put whole
+         * towns behind one address and a tight per-IP bucket is an outage for all of
+         * them. An unauthenticated caller — `CUS-04` runs before anyone has signed in —
+         * has only the IP bucket, so it cannot be tight enough to bite a real customer.
+         *
+         * Every one of them refuses in the house envelope with its own error code. A
+         * ‪429‬ the client cannot recognise is a ‪429‬ the client shows as «no results».
+         */
+        $refusedSearch = fn (string $code) => fn (Request $request, array $headers) => ApiResponse::error(
+            $code,
+            'البحث سريع جدًا، انتظر لحظة',
+            429,
+            meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+        )->withHeaders($headers);
+
+        // Keyed on the bearer token itself, not on `$request->user()`: these routes
+        // carry no `auth:sanctum`, so there is no resolved user to key on, and looking
+        // one up per request would put a token query in front of every map pan. A
+        // forged token only buys a new per-caller bucket; the per-IP ceiling still holds.
+        $byCaller = static function (Request $request, string $bucket): string {
+            $token = (string) $request->bearerToken();
+
+            return $bucket.':'.($token === '' ? 'ip:'.$request->ip() : 'token:'.hash('sha256', $token));
+        };
+
+        RateLimiter::for('geo-reverse', function (Request $request) use ($refusedSearch, $byCaller) {
+            $refused = $refusedSearch('geo_reverse_rate_limited');
+
+            return [
+                Limit::perMinute(240)->by($byCaller($request, 'geo-rev'))->response($refused),
+                Limit::perMinute(900)->by('geo-rev-ip:'.$request->ip())->response($refused),
+            ];
+        });
+
+        RateLimiter::for('geo-search', function (Request $request) use ($refusedSearch, $byCaller) {
+            $refused = $refusedSearch('geo_search_rate_limited');
+
+            // A person types; they do not type ninety distinct queries a minute. The
+            // client debounces on top of this, and every answer is cached server-side.
+            return [
+                Limit::perMinute(90)->by($byCaller($request, 'geo-search'))->response($refused),
+                Limit::perMinute(400)->by('geo-search-ip:'.$request->ip())->response($refused),
+            ];
+        });
+
+        RateLimiter::for('geo-expand', function (Request $request) use ($byCaller) {
+            $refused = fn (Request $request, array $headers) => ApiResponse::error(
+                'geo_expand_rate_limited',
+                'محاولات كثيرة جدًا، حاول لاحقًا',
+                429,
+                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+            )->withHeaders($headers);
+
+            // Pasting a link is a deliberate act, and this is the only route that makes
+            // the server fetch a URL somebody else chose.
+            return [
+                Limit::perMinute(20)->by($byCaller($request, 'geo-expand'))->response($refused),
+                Limit::perMinute(60)->by('geo-expand-ip:'.$request->ip())->response($refused),
+            ];
+        });
 
         /*
          * D-120 — the session. A legacy token (no `expires_at`) lives while it is used

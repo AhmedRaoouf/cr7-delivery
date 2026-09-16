@@ -29,9 +29,10 @@ use Throwable;
  *
  * @see https://operations.osmfoundation.org/policies/nominatim/
  */
-class OsmGeocoder implements Geocoder
+class OsmGeocoder implements Geocoder, ReportsFailure
 {
     use SortsByProximity;
+    use TracksFailure;
 
     public function isConfigured(): bool
     {
@@ -66,9 +67,17 @@ class OsmGeocoder implements Geocoder
         });
     }
 
-    public function search(string $query, ?float $lat = null, ?float $lng = null, string $language = 'ar'): array
-    {
+    public function search(
+        string $query,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $language = 'ar',
+        ?string $country = null,
+        int $limit = 10,
+    ): array {
+        $this->callFailed = false;
         $query = trim($query);
+
         if (! $this->isConfigured() || mb_strlen($query) < 2) {
             return [];
         }
@@ -76,47 +85,94 @@ class OsmGeocoder implements Geocoder
         $centre = config('maps.default_center');
         $biasLat = $lat ?? (float) $centre['lat'];
         $biasLng = $lng ?? (float) $centre['lng'];
+        $country = $country ?: (string) config('maps.country', 'eg');
 
-        $key = sprintf('geo:osm:fwd:%s:%s:%.2f,%.2f', $language, md5(mb_strtolower($query)), $biasLat, $biasLng);
+        $key = sprintf(
+            'geo:osm:fwd:%s:%s:%s:%.2f,%.2f',
+            $language,
+            $country,
+            md5(mb_strtolower($query)),
+            $biasLat,
+            $biasLng,
+        );
 
-        return Cache::remember($key, now()->addDays((int) config('maps.cache.search_days', 7)), function () use ($query, $biasLat, $biasLng, $language) {
-            $rows = $this->call('/search', [
-                'q' => $query,
-                'format' => 'jsonv2',
-                'addressdetails' => 1,
-                'limit' => 6,
-                'countrycodes' => (string) config('maps.country', 'eg'),
-                'accept-language' => $language,
-                // A box roughly ‪25‬ km on a side around where the customer is
-                // standing, un-bounded: results inside it come first, and
-                // «الكورنيش» still finds Alexandria's if this town has none.
-                'viewbox' => sprintf('%F,%F,%F,%F', $biasLng - 0.25, $biasLat + 0.25, $biasLng + 0.25, $biasLat - 0.25),
-            ]);
+        $cached = Cache::get($key);
 
-            if (! is_array($rows)) {
-                return [];
-            }
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-            $mapped = collect($rows)
-                ->map(function (array $row) use ($language) {
-                    $composed = self::compose($row, $language);
+        $rows = $this->call('/search', [
+            'q' => $query,
+            'format' => 'jsonv2',
+            'addressdetails' => 1,
+            'limit' => min(10, max(5, $limit)),
+            'countrycodes' => $country,
+            'accept-language' => $language,
+            // A box roughly ‪25‬ km on a side around where the customer is
+            // standing, un-bounded: results inside it come first, and
+            // «الكورنيش» still finds Alexandria's if this town has none.
+            'viewbox' => sprintf('%F,%F,%F,%F', $biasLng - 0.25, $biasLat + 0.25, $biasLng + 0.25, $biasLat - 0.25),
+        ]);
 
-                    return [
-                        'name' => $composed['place'] ?? $composed['street'] ?? (string) ($row['name'] ?? ''),
-                        'address' => $composed['address'],
-                        'lat' => (float) ($row['lat'] ?? 0),
-                        'lng' => (float) ($row['lon'] ?? 0),
-                    ];
-                })
-                ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
-                ->values()
-                ->all();
+        // A ‪403‬ for a missing `User-Agent` reads exactly like «no results», and
+        // caching it for a week would make an afternoon's misconfiguration
+        // outlive the fix.
+        if ($this->callFailed || ! is_array($rows)) {
+            return [];
+        }
 
-            // The viewbox above is un-bounded on purpose — it prefers, it does
-            // not restrict — so Nominatim can still rank a prominent match far
-            // outside it first. See {@see SortsByProximity}.
-            return self::nearestFirst($mapped, $biasLat, $biasLng);
-        });
+        $mapped = collect($rows)
+            ->map(function (array $row) use ($language) {
+                $composed = self::compose($row, $language);
+
+                return [
+                    'name' => $composed['place'] ?? $composed['street'] ?? (string) ($row['name'] ?? ''),
+                    'address' => $composed['address'],
+                    'lat' => (float) ($row['lat'] ?? 0),
+                    'lng' => (float) ($row['lon'] ?? 0),
+                    'kind' => self::kindOf($row, $composed),
+                    'source' => 'osm',
+                ];
+            })
+            ->filter(fn (array $row) => $row['lat'] !== 0.0 || $row['lng'] !== 0.0)
+            ->values()
+            ->all();
+
+        // The viewbox above is un-bounded on purpose — it prefers, it does
+        // not restrict — so Nominatim can still rank a prominent match far
+        // outside it first. See {@see SortsByProximity}.
+        $mapped = self::nearestFirst($mapped, $biasLat, $biasLng);
+
+        Cache::put($key, $mapped, now()->addDays((int) config('maps.cache.search_days', 7)));
+
+        return $mapped;
+    }
+
+    /**
+     * Nominatim's `addresstype` / `class` -> the row's icon.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $composed
+     */
+    private static function kindOf(array $row, array $composed): string
+    {
+        $type = (string) ($row['addresstype'] ?? $row['type'] ?? '');
+        // jsonv2's `category` is the OSM key. A way under `highway` is a road
+        // whatever `addresstype` says, and a road filed as a POI would escape the
+        // wide dedupe a road gets and be listed once per OSM way.
+        $category = (string) ($row['category'] ?? $row['class'] ?? '');
+
+        return match (true) {
+            $category === 'highway' => 'street',
+            in_array($type, ['city', 'town', 'village', 'municipality', 'hamlet', 'county', 'state', 'province', 'region'], true) => 'city',
+            in_array($type, ['neighbourhood', 'suburb', 'quarter', 'city_district', 'residential'], true) => 'area',
+            in_array($type, ['road', 'street', 'pedestrian', 'footway'], true) => 'street',
+            $type === 'house' || ($composed['house_number'] ?? null) !== null => 'address',
+            ($composed['place'] ?? null) !== null => 'poi',
+            ($composed['street'] ?? null) !== null => 'street',
+            default => 'poi',
+        };
     }
 
     /**
@@ -222,14 +278,17 @@ class OsmGeocoder implements Geocoder
 
             if ($response->failed()) {
                 Log::warning('[OSM] geocoding failed', ['status' => $response->status(), 'path' => $path]);
+                $this->callFailed = true;
 
                 return null;
             }
 
             return $response->json();
         } catch (Throwable $e) {
-            // Never rethrow. The caller's contract is «a label or nothing».
+            // Never rethrow. The caller's contract is «a label or nothing» —
+            // and, since D-127, which of the two this was.
             Log::warning('[OSM] geocoding threw', ['message' => $e->getMessage()]);
+            $this->callFailed = true;
 
             return null;
         }

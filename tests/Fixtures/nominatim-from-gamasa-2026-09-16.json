@@ -1,0 +1,357 @@
+{
+    "_about": "Nominatim /search answers, captured 2026-09-16 from the middle of جمصة (31.4388, 31.5442) with the exact parameters OsmGeocoder sends. Trimmed to the fields OsmGeocoder reads. Data © OpenStreetMap contributors, ODbL 1.0.",
+    "صيدلية": [
+        {
+            "name": "شارع الخواجه بيل",
+            "lat": "30.9642417",
+            "lon": "31.1639465",
+            "category": "highway",
+            "type": "residential",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الخواجه بيل",
+                "village": "مصطفى الاجرودى",
+                "state": "محافظة الغربية"
+            },
+            "display_name": "شارع الخواجه بيل, مصطفى الاجرودى, محافظة الغربية, 31961, مصر"
+        },
+        {
+            "name": "صيدلية",
+            "lat": "31.2511884",
+            "lon": "29.9753599",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع حسن امين",
+                "city": "الإسكندرية",
+                "state": "الإسكندرية"
+            },
+            "display_name": "صيدلية, شارع حسن امين, الإسكندرية, 21571, مصر"
+        },
+        {
+            "name": "صيدلية",
+            "lat": "30.1026073",
+            "lon": "31.2609597",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع علي حسن",
+                "neighbourhood": "مساكن الزاويه الحمراء",
+                "city": "القاهرة",
+                "state": "القاهرة"
+            },
+            "display_name": "صيدلية, شارع علي حسن, مساكن الزاويه الحمراء, القاهرة, 11659, مصر"
+        },
+        {
+            "name": "صيدلية",
+            "lat": "29.9912949",
+            "lon": "31.1384550",
+            "category": "shop",
+            "type": "yes",
+            "addresstype": "shop",
+            "address": {
+                "road": "شارع الملك فيصل",
+                "suburb": "كوم الأخضر",
+                "village": "كفرة نصار",
+                "state": "الجيزة"
+            },
+            "display_name": "صيدلية, شارع الملك فيصل, كوم الأخضر, كفرة نصار, الجيزة, 12512, مصر"
+        },
+        {
+            "name": "صيدلية دعوة الحق",
+            "lat": "31.5005326",
+            "lon": "31.8265367",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع 101",
+                "town": "رأس البر",
+                "state": "دمياط"
+            },
+            "display_name": "صيدلية دعوة الحق, شارع 101, رأس البر, دمياط, 34711, مصر"
+        },
+        {
+            "name": "صيدلية النيل",
+            "lat": "31.4209273",
+            "lon": "31.8094138",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع الملكه فريده",
+                "neighbourhood": "رابع",
+                "city": "دمياط",
+                "state": "دمياط"
+            },
+            "display_name": "صيدلية النيل, شارع الملكه فريده, رابع, دمياط, 34512, مصر"
+        },
+        {
+            "name": "صيدلية د. حمدى",
+            "lat": "31.0458166",
+            "lon": "31.3831573",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع الثورة",
+                "neighbourhood": "رابع النجار",
+                "city": "المنصورة",
+                "state": "الدقهلية"
+            },
+            "display_name": "صيدلية د. حمدى, شارع الثورة, رابع النجار, المنصورة, الدقهلية, 35512, مصر"
+        },
+        {
+            "name": "صيدلية البسطويسى",
+            "lat": "31.0456824",
+            "lon": "31.3712134",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع محمد بيك فتحي",
+                "neighbourhood": "اول ميت طلخا",
+                "city": "المنصورة",
+                "state": "الدقهلية"
+            },
+            "display_name": "صيدلية البسطويسى, شارع محمد بيك فتحي, اول ميت طلخا, المنصورة, الدقهلية, 35511, مصر"
+        },
+        {
+            "name": "صيدلية الشفاء",
+            "lat": "30.9425569",
+            "lon": "31.2926966",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع فهمي",
+                "town": "مدينه اجا",
+                "state": "الدقهلية"
+            },
+            "display_name": "صيدلية الشفاء, شارع فهمي, مدينه اجا, الدقهلية, 35764, مصر"
+        },
+        {
+            "name": "صيدلية وادى النيل",
+            "lat": "31.0454959",
+            "lon": "31.3596525",
+            "category": "amenity",
+            "type": "pharmacy",
+            "addresstype": "amenity",
+            "address": {
+                "road": "شارع الجمهورية",
+                "neighbourhood": "اول ميت طلخا",
+                "town": "طلخا",
+                "state": "الدقهلية"
+            },
+            "display_name": "صيدلية وادى النيل, شارع الجمهورية, اول ميت طلخا, طلخا, الدقهلية, 35516, مصر"
+        }
+    ],
+    "الاندلس": [
+        {
+            "name": "منطقة الاندلس",
+            "lat": "31.4418350",
+            "lon": "31.5398271",
+            "category": "place",
+            "type": "neighbourhood",
+            "addresstype": "neighbourhood",
+            "address": {
+                "neighbourhood": "منطقة الاندلس",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "منطقة الاندلس, جمصة, الدقهلية, مصر"
+        },
+        {
+            "name": "شارع الاندلس",
+            "lat": "31.4432484",
+            "lon": "31.5463257",
+            "category": "highway",
+            "type": "residential",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الاندلس",
+                "neighbourhood": "منطقة ابن لقمان",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الاندلس, منطقة ابن لقمان, جمصة, الدقهلية, 35712, مصر"
+        },
+        {
+            "name": "شارع الاندلس",
+            "lat": "31.2884035",
+            "lon": "31.6780547",
+            "category": "highway",
+            "type": "residential",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الاندلس",
+                "city": "دمياط",
+                "state": "دمياط"
+            },
+            "display_name": "شارع الاندلس, دمياط, 34716, مصر"
+        },
+        {
+            "name": "الاندلس",
+            "lat": "31.5099210",
+            "lon": "31.8309545",
+            "category": "tourism",
+            "type": "hotel",
+            "addresstype": "tourism",
+            "address": {
+                "road": "شارع 45",
+                "town": "رأس البر",
+                "state": "دمياط"
+            },
+            "display_name": "الاندلس, شارع 45, رأس البر, دمياط, 34711, مصر"
+        }
+    ],
+    "الكورنيش": [
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.3882438",
+            "lon": "31.7474199",
+            "category": "highway",
+            "type": "tertiary",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "city": "دمياط",
+                "state": "دمياط"
+            },
+            "display_name": "شارع الكورنيش, دمياط, 34715, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.2810241",
+            "lon": "31.6778412",
+            "category": "highway",
+            "type": "tertiary",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "city": "دمياط",
+                "state": "دمياط"
+            },
+            "display_name": "شارع الكورنيش, دمياط, 34716, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.4463361",
+            "lon": "31.5365794",
+            "category": "highway",
+            "type": "residential",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "neighbourhood": "منطقة امون",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الكورنيش, منطقة امون, جمصة, الدقهلية, 35712, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.4431284",
+            "lon": "31.5376182",
+            "category": "highway",
+            "type": "secondary",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "neighbourhood": "منطقة امون",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الكورنيش, منطقة امون, جمصة, الدقهلية, 35712, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.3623066",
+            "lon": "31.7176319",
+            "category": "highway",
+            "type": "tertiary",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "city": "دمياط الجديدة",
+                "state": "دمياط"
+            },
+            "display_name": "شارع الكورنيش, دمياط الجديدة, دمياط, 34611, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.4511068",
+            "lon": "31.5192328",
+            "category": "highway",
+            "type": "residential",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "neighbourhood": "منطقة العاشر من رمضان",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الكورنيش, منطقة العاشر من رمضان, جمصة, الدقهلية, 35712, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.4410640",
+            "lon": "31.5529454",
+            "category": "highway",
+            "type": "unclassified",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "neighbourhood": "منطقة صلاح الدين",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الكورنيش, منطقة صلاح الدين, جمصة, الدقهلية, 35712, مصر"
+        },
+        {
+            "name": "شارع الكورنيش",
+            "lat": "31.4409571",
+            "lon": "31.5540574",
+            "category": "highway",
+            "type": "unclassified",
+            "addresstype": "road",
+            "address": {
+                "road": "شارع الكورنيش",
+                "city": "جمصة",
+                "state": "الدقهلية"
+            },
+            "display_name": "شارع الكورنيش, جمصة, الدقهلية, 35712, مصر"
+        }
+    ],
+    "دمياط": [
+        {
+            "name": "دمياط",
+            "lat": "31.4113331",
+            "lon": "31.7557072",
+            "category": "boundary",
+            "type": "administrative",
+            "addresstype": "state",
+            "address": {
+                "state": "دمياط"
+            },
+            "display_name": "دمياط, مصر"
+        }
+    ],
+    "المنصورة": [
+        {
+            "name": "المنصورة",
+            "lat": "31.0375660",
+            "lon": "31.3864900",
+            "category": "place",
+            "type": "city",
+            "addresstype": "city",
+            "address": {
+                "city": "المنصورة",
+                "state": "الدقهلية"
+            },
+            "display_name": "المنصورة, الدقهلية, 35517, مصر"
+        }
+    ]
+}

@@ -104,7 +104,10 @@ class ConfigController extends Controller
                 'static_otp' => Otp::publishedTestCode(),
                 'otp_test_mode' => Otp::testMode(),
                 'register_requires_otp' => SettingsCatalog::bool('auth.register_requires_otp'),
-                'admin_login_by_email' => true,
+                // Operator 2026-09-17: «مفيش تسجيل بايميل خالص كله برقم الموبايل». Kept and
+                // published `false` rather than deleted — an installed app reads it, and a
+                // missing key and `false` must mean the same thing to it.
+                'admin_login_by_email' => false,
             ],
             // D-111 / D-112 — what an address must carry before it can be ordered to
             // (the pin and the area always, so never listed), and what the phone

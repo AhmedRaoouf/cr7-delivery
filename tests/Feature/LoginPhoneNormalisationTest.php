@@ -64,10 +64,10 @@ class LoginPhoneNormalisationTest extends TestCase
     }
 
     /**
-     * D-78, operator 2026-09-11: «شيل تسجيل الدخول بالايميل» — and D-107 brought the email
-     * back for admins only. A place's email is still no way into the place's dashboard:
-     * it is refused like a wrong password, because the lookup reaches admins and nobody
-     * else (`AdminEmailSignInTest` has the admin's half).
+     * D-78, operator 2026-09-11: «شيل تسجيل الدخول بالايميل» — and 2026-09-17 took back the
+     * admin's email D-107 had restored: «مفيش تسجيل بايميل خالص كله برقم الموبايل». A place's
+     * email is refused by the field, before any lookup, exactly as an admin's is
+     * (`AdminPhoneSignInTest` has the admin's half).
      */
     public function test_an_email_is_no_login_for_a_place(): void
     {
@@ -79,15 +79,16 @@ class LoginPhoneNormalisationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->withHeaders(['X-App' => 'restaurant'])
+        $this->withHeaders(['X-App' => 'restaurant', 'Accept-Language' => 'ar'])
             ->postJson('/api/v1/auth/login', [
                 'login' => ' owner@cr7-delivery.com ',
                 'password' => 'Cr7Delivery#2026',
             ])
             ->assertStatus(422)
-            ->assertJsonPath('error', 'invalid_credentials');
+            ->assertJsonPath('error', 'validation_failed')
+            ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح');
 
-        // Neither a phone nor an email is still refused by the field, with the field named.
+        // Something that is not a phone at all is refused by the field, with the field named.
         $this->withHeaders(['X-App' => 'restaurant', 'Accept-Language' => 'ar'])
             ->postJson('/api/v1/auth/login', [
                 'login' => '12-ab',

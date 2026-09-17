@@ -195,19 +195,10 @@ class User extends Authenticatable
      */
     public function scopeWhereLogin(Builder $query, string $login): void
     {
-        // D-107 — an email reaches an **admin** and nobody else. The email sign-in went for
-        // every account on 2026-09-11 and came back in doc 62 for the panel only, so a
-        // captain's or a place's email on the row is still not a way in: the lookup below
-        // cannot find one. Compared lower-cased on both sides, whatever the column's
-        // collation happens to be on a given server.
-        if (PhoneNumber::isEmail($login)) {
-            $query->where('type', UserType::Admin->value)
-                ->whereNotNull('email')
-                ->whereRaw('LOWER(email) = ?', [PhoneNumber::normaliseLogin($login)]);
-
-            return;
-        }
-
+        // A phone and nothing else, for every type. D-107 let an email reach an admin here;
+        // operator 2026-09-17 removed it — «مفيش تسجيل بايميل خالص كله برقم الموبايل» — so
+        // an `email` on any row, an admin's included, is no way in. `LoginRequest` refuses
+        // an email before it gets this far; this is the lookup that could not find one anyway.
         $query->where('phone', PhoneNumber::normaliseLogin($login));
     }
 }

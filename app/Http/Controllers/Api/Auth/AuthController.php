@@ -140,17 +140,14 @@ class AuthController extends Controller
     }
 
     /**
-     * The same sentence whether or not the account exists (doc 08 §1). An admin who asked
-     * by email is also told which phone to look at — see {@see ForgotPasswordAction}.
+     * The same sentence, and no `data`, whether or not the account exists (doc 08 §1). The
+     * `masked_phone` an admin's email login used to be answered with went with the email.
      */
     public function forgotPassword(ForgotPasswordRequest $request, ForgotPasswordAction $action): JsonResponse
     {
-        $masked = $action->execute($request->string('login')->value());
+        $action->execute($request->string('login')->value());
 
-        return ApiResponse::success(
-            $masked === null ? null : ['masked_phone' => $masked],
-            'إذا كان الحساب موجودًا، سيصلك رمز التحقق',
-        );
+        return ApiResponse::success(message: 'إذا كان الحساب موجودًا، سيصلك رمز التحقق');
     }
 
     public function resetPassword(ResetPasswordRequest $request, ResetPasswordAction $action): JsonResponse

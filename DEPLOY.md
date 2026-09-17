@@ -207,7 +207,7 @@ the server stops publishing a code, and stops prefilling the field.
 
 While `OTP_CHANNEL` is not `sms_misr` in production, the app boots a warning into
 the log: no SMS leaves, and an admin cannot change a password by SMS —
-`php artisan cr7:reset-password <email or phone> --no-change-required` is the door.
+`php artisan cr7:reset-password <phone> --no-change-required` is the door.
 
 ---
 

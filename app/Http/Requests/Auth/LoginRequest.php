@@ -15,11 +15,12 @@ class LoginRequest extends FormRequest
     }
 
     /**
-     * `login` is a phone number — or an admin's email (D-107).
+     * `login` is a phone number, for every account type — an admin's included since the
+     * operator removed D-107's email sign-in on 2026-09-17.
      *
      * It is normalised before the rule runs, so `+20 109 000 9599`, `0020…`, `109…` and
-     * `01090009599` are one account. Something that is neither a phone nor an email is
-     * refused here rather than three layers down as «بيانات الدخول غير صحيحة», which
+     * `01090009599` are one account. Something that is not a phone — an email included —
+     * is refused here rather than three layers down as «بيانات الدخول غير صحيحة», which
      * reads like a wrong password.
      */
     protected function prepareForValidation(): void

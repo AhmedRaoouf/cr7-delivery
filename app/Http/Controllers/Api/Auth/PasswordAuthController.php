@@ -13,7 +13,8 @@ use App\Support\Auth\SessionClient;
 use Illuminate\Http\JsonResponse;
 
 /**
- * FR-AUTH-04/05 — driver, restaurant and admin: Admin-created accounts, phone/email + password.
+ * FR-AUTH-04/05 — driver, restaurant and admin: Admin-created accounts, phone + password.
+ * No email for anyone, an admin included (operator 2026-09-17, reversing D-107's email).
  * doc 08 §3 — one `/auth/login` endpoint; `X-App` says which shell is calling and therefore
  * which `users.type` is expected (doc 12 §1.1).
  */

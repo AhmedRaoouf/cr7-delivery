@@ -28,7 +28,8 @@ class ConfigPublishesThePanelTest extends TestCase
         $this->assertNull($data['auth']['static_otp']);
         $this->assertFalse($data['auth']['otp_test_mode']);
         $this->assertTrue($data['auth']['register_requires_otp']);
-        $this->assertTrue($data['auth']['admin_login_by_email']);
+        // Operator 2026-09-17 — no email sign-in for anyone, an admin included.
+        $this->assertFalse($data['auth']['admin_login_by_email']);
 
         $this->assertSame([['field' => 'street', 'label' => 'الشارع', 'label_en' => 'Street']], $data['addresses']['required_fields']);
         $this->assertTrue($data['addresses']['alternate_phone_allowed']);

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 
 /**
  * doc 08 §3 — POST /auth/password/reset. Consumes the `reset`-purpose OTP sent to the
- * account's phone — for an admin reached by email (D-107), the phone on the admin's row.
+ * account's phone, which is also the `login` it was asked with.
  */
 class ResetPasswordAction
 {

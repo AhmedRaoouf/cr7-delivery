@@ -14,7 +14,7 @@ class ResetPasswordRequest extends FormRequest
         return true;
     }
 
-    /** A phone, or an admin's email (D-107) — the same login «نسيت كلمة المرور» was given. */
+    /** A phone — the same login «نسيت كلمة المرور» was given. An email is refused (operator 2026-09-17). */
     protected function prepareForValidation(): void
     {
         $this->normaliseLoginField();

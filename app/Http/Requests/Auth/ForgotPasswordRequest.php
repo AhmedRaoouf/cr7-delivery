@@ -14,7 +14,7 @@ class ForgotPasswordRequest extends FormRequest
         return true;
     }
 
-    /** A phone, or an admin's email (D-107) — the code goes to the phone on the row either way. */
+    /** A phone, for every account type — an email is refused (operator 2026-09-17). */
     protected function prepareForValidation(): void
     {
         $this->normaliseLoginField();

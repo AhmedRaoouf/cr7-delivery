@@ -24,7 +24,8 @@ use Illuminate\Support\Facades\Hash;
  * password only with an SMS code, the forced first change included, so a reset that sets
  * `must_change_password` would drop the admin on a screen they cannot finish.
  * `--no-change-required` leaves the flag off; the admin changes the password by SMS once
- * the gateway delivers. An admin is found by email as well as by phone.
+ * the gateway delivers. Every account is found by its phone — an email is no login anywhere
+ * since the operator removed D-107's admin email on 2026-09-17.
  *
  * D-120 — and every session the account held ends with the old password, access and
  * refresh tokens alike, legacy ones included. A password replaced from a terminal is
@@ -34,7 +35,7 @@ use Illuminate\Support\Facades\Hash;
 class ResetPasswordCommand extends Command
 {
     protected $signature = 'cr7:reset-password
-        {login : phone, or an admin\'s email}
+        {login : the account\'s phone}
         {--password= : use this instead of the configured first password}
         {--no-change-required : do not force a change at first sign-in — for an admin while SMS cannot be delivered}';
 

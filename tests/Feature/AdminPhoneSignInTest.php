@@ -12,13 +12,16 @@ use Tests\Concerns\RecordingOtpChannel;
 use Tests\TestCase;
 
 /**
- * D-107 — «هو المفروض الادمن اصلا بيبقا بايميل وباسوورد لو عايز يغير كلمه السر بقا تبقا
- * ب sms تمام ويبقا دا الوحيد اللي مفيش فيه غير sms في اي حاله حتي لو هو ثابت للكل».
+ * An admin signs in by phone, like every other account — operator 2026-09-17: «مفيش تسجيل
+ * بايميل خالص كله برقم الموبايل». D-107 had let an email open the panel; that half is gone,
+ * and an email typed into `login` is refused by the field as a phone that is not one, on
+ * every shell and on «نسيت كلمة المرور» and the reset that follows it.
  *
- * An email opens the panel and nothing else; a password on the panel changes only with
- * an SMS to the admin's own phone — in test mode too.
+ * D-107's other half stands: «لو عايز يغير كلمه السر بقا تبقا ب sms … ويبقا دا الوحيد اللي
+ * مفيش فيه غير sms في اي حاله حتي لو هو ثابت للكل» — a password on the panel changes only
+ * with an SMS to the admin's own phone, in test mode too.
  */
-class AdminEmailSignInTest extends TestCase
+class AdminPhoneSignInTest extends TestCase
 {
     use FakesOtpChannel;
     use RefreshDatabase;
@@ -49,83 +52,70 @@ class AdminEmailSignInTest extends TestCase
 
     // --------------------------------------------------------------- sign-in
 
-    public function test_an_admin_signs_in_with_an_email_however_it_is_typed(): void
+    public function test_an_admin_signs_in_with_the_phone_however_it_is_typed(): void
     {
         $this->admin();
 
-        $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/login', ['login' => '  Ops@CR7-Delivery.com ', 'password' => self::PASSWORD])
-            ->assertOk()
-            ->assertJsonPath('data.user.type', 'admin');
+        foreach (['01000000099', '+20 100 000 0099', ' 0100-000-0099 '] as $typed) {
+            $this->withHeader('X-App', 'admin')
+                ->postJson('/api/v1/auth/login', ['login' => $typed, 'password' => self::PASSWORD])
+                ->assertOk()
+                ->assertJsonPath('data.user.type', 'admin');
+        }
 
-        // The phone keeps working — an admin row with no email must not be locked out.
-        $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/login', ['login' => '+20 100 000 0099', 'password' => self::PASSWORD])
-            ->assertOk();
-
-        // And the one app, which opens every shell, opens the admin's by email too.
+        // The one app, which opens every shell, opens the admin's by the same phone.
         $this->withHeader('X-App', 'app')
-            ->postJson('/api/v1/auth/login', ['login' => 'ops@cr7-delivery.com', 'password' => self::PASSWORD])
+            ->postJson('/api/v1/auth/login', ['login' => '01000000099', 'password' => self::PASSWORD])
             ->assertOk()
             ->assertJsonPath('data.user.type', 'admin');
     }
 
-    public function test_an_email_opens_no_other_account(): void
+    public function test_an_admins_email_is_refused_as_a_phone_that_is_not_one_on_every_shell(): void
     {
         $this->admin();
 
-        User::factory()->create([
-            'type' => 'restaurant', 'email' => 'owner@cr7-delivery.com',
-            'password' => Hash::make(self::PASSWORD),
-        ]);
-        User::factory()->create([
-            'type' => 'customer', 'email' => 'customer@cr7-delivery.com',
-            'password' => Hash::make(self::PASSWORD),
-        ]);
-
-        // A place's own email on its own dashboard — the same refusal as a wrong password.
-        $this->withHeader('X-App', 'restaurant')
-            ->postJson('/api/v1/auth/login', ['login' => 'owner@cr7-delivery.com', 'password' => self::PASSWORD])
-            ->assertStatus(422)
-            ->assertJsonPath('error', 'invalid_credentials');
-
-        $this->withHeader('X-App', 'app')
-            ->postJson('/api/v1/auth/login', ['login' => 'customer@cr7-delivery.com', 'password' => self::PASSWORD])
-            ->assertStatus(422)
-            ->assertJsonPath('error', 'invalid_credentials');
-
-        // The admin's email on the place's dashboard is the wrong shell, and says nothing more.
-        $this->withHeader('X-App', 'restaurant')
-            ->postJson('/api/v1/auth/login', ['login' => 'ops@cr7-delivery.com', 'password' => self::PASSWORD])
-            ->assertStatus(422)
-            ->assertJsonPath('error', 'invalid_credentials')
-            ->assertJsonMissingPath('meta.account_type');
+        foreach (['admin', 'app', 'restaurant'] as $shell) {
+            foreach (['ops@cr7-delivery.com', '  Ops@CR7-Delivery.com ', 'ops@', 'ops@example.com'] as $typed) {
+                $this->withHeader('X-App', $shell)
+                    ->postJson('/api/v1/auth/login', ['login' => $typed, 'password' => self::PASSWORD])
+                    ->assertStatus(422)
+                    ->assertJsonPath('error', 'validation_failed')
+                    ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح')
+                    ->assertJsonMissingPath('data.user');
+            }
+        }
     }
 
-    public function test_something_that_is_neither_is_refused_by_the_field(): void
+    public function test_an_email_wrapped_around_the_admins_digits_is_not_the_admins_phone(): void
     {
-        $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/login', ['login' => 'ops@', 'password' => self::PASSWORD])
-            ->assertStatus(422)
-            ->assertJsonPath('error', 'validation_failed')
-            ->assertJsonPath('errors.login.0', 'أدخل بريدًا إلكترونيًا صحيحًا');
+        $this->admin();
 
         $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/login', ['login' => '', 'password' => self::PASSWORD])
+            ->postJson('/api/v1/auth/login', ['login' => '01000000099@cr7-delivery.com', 'password' => self::PASSWORD])
             ->assertStatus(422)
-            ->assertJsonPath('errors.login.0', 'أدخل البريد الإلكتروني أو رقم الهاتف');
+            ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح');
+    }
+
+    public function test_the_empty_field_asks_for_the_phone_on_the_panel_too(): void
+    {
+        foreach (['admin', 'restaurant', 'app'] as $shell) {
+            $this->withHeader('X-App', $shell)
+                ->postJson('/api/v1/auth/login', ['login' => '', 'password' => self::PASSWORD])
+                ->assertStatus(422)
+                ->assertJsonPath('errors.login.0', 'أدخل رقم الهاتف');
+        }
     }
 
     // --------------------------------------------------------- forgot / reset
 
-    public function test_forgot_by_email_sends_a_real_sms_to_the_admins_phone_and_says_which(): void
+    public function test_forgot_by_phone_sends_a_real_sms_to_the_admin_and_masks_nothing(): void
     {
         $admin = $this->admin();
 
         $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/password/forgot', ['login' => 'ops@cr7-delivery.com'])
+            ->postJson('/api/v1/auth/password/forgot', ['login' => '+20 100 000 0099'])
             ->assertOk()
-            ->assertJsonPath('data.masked_phone', '010•••••99');
+            ->assertJsonPath('data', null);
 
         $this->assertCount(1, $this->channel->sent);
         $code = $this->channel->lastCodeFor($admin->phone);
@@ -133,31 +123,49 @@ class AdminEmailSignInTest extends TestCase
 
         $this->withHeader('X-App', 'admin')
             ->postJson('/api/v1/auth/password/reset', [
-                'login' => 'ops@cr7-delivery.com',
+                'login' => '01000000099',
                 'code' => $code,
                 'password' => 'Brand#New2026',
                 'password_confirmation' => 'Brand#New2026',
             ])->assertOk();
 
         $this->withHeader('X-App', 'admin')
-            ->postJson('/api/v1/auth/login', ['login' => 'ops@cr7-delivery.com', 'password' => 'Brand#New2026'])
+            ->postJson('/api/v1/auth/login', ['login' => '01000000099', 'password' => 'Brand#New2026'])
             ->assertOk();
     }
 
-    public function test_forgot_for_an_unknown_email_answers_the_same_and_sends_nothing(): void
+    public function test_forgot_and_reset_refuse_an_email_and_send_nothing(): void
     {
-        $this->admin();
-        User::factory()->create(['type' => 'restaurant', 'email' => 'owner@cr7-delivery.com']);
+        $admin = $this->admin();
 
-        foreach (['nobody@cr7-delivery.com', 'owner@cr7-delivery.com'] as $login) {
+        foreach (['ops@cr7-delivery.com', 'nobody@cr7-delivery.com'] as $login) {
             $this->withHeader('X-App', 'admin')
                 ->postJson('/api/v1/auth/password/forgot', ['login' => $login])
-                ->assertOk()
-                ->assertJsonMissingPath('data.masked_phone');
+                ->assertStatus(422)
+                ->assertJsonPath('error', 'validation_failed')
+                ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح');
         }
 
         $this->assertSame([], $this->channel->sent);
         $this->assertSame(0, OtpCode::query()->count());
+
+        // A code that did reach the phone does not reset the password by the email either.
+        $this->withHeader('X-App', 'admin')
+            ->postJson('/api/v1/auth/password/forgot', ['login' => '01000000099'])
+            ->assertOk();
+        $code = $this->channel->lastCodeFor($admin->phone);
+
+        $this->withHeader('X-App', 'admin')
+            ->postJson('/api/v1/auth/password/reset', [
+                'login' => 'ops@cr7-delivery.com',
+                'code' => $code,
+                'password' => 'Brand#New2026',
+                'password_confirmation' => 'Brand#New2026',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.login.0', 'أدخل رقم هاتف صحيح');
+
+        $this->assertTrue(Hash::check(self::PASSWORD, $admin->fresh()->password));
     }
 
     // -------------------------------------------------------- password change
@@ -224,12 +232,12 @@ class AdminEmailSignInTest extends TestCase
     }
 
     /** The door when the gateway is down: a reset that does not strand the admin on a change screen. */
-    public function test_the_console_reset_reaches_an_admin_by_email_and_can_skip_the_forced_change(): void
+    public function test_the_console_reset_reaches_an_admin_by_phone_and_can_skip_the_forced_change(): void
     {
         $admin = $this->admin();
 
         $this->artisan('cr7:reset-password', [
-            'login' => 'OPS@cr7-delivery.com',
+            'login' => '+20 100 000 0099',
             '--password' => 'Console#Door2026',
             '--no-change-required' => true,
         ])->assertSuccessful();
@@ -237,5 +245,17 @@ class AdminEmailSignInTest extends TestCase
         $admin->refresh();
         $this->assertTrue(Hash::check('Console#Door2026', $admin->password));
         $this->assertFalse($admin->must_change_password);
+    }
+
+    public function test_the_console_reset_finds_nobody_by_email(): void
+    {
+        $admin = $this->admin();
+
+        $this->artisan('cr7:reset-password', [
+            'login' => 'ops@cr7-delivery.com',
+            '--password' => 'Console#Door2026',
+        ])->assertFailed();
+
+        $this->assertTrue(Hash::check(self::PASSWORD, $admin->fresh()->password));
     }
 }

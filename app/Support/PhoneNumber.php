@@ -2,8 +2,6 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Str;
-
 /**
  * D-62 — a stored Egyptian mobile is eleven digits, no separators, no country code.
  *
@@ -50,29 +48,31 @@ final class PhoneNumber
     /** The stored shape: eleven digits, `01` plus one of the four network digits. */
     public const PATTERN = '/^01[0125][0-9]{8}$/';
 
-    /** True when the identifier is an email rather than a phone. */
-    public static function isEmail(string $login): bool
-    {
-        return Str::contains($login, '@');
-    }
-
     /**
-     * A `login` is a phone — or, since D-107, an admin's email.
+     * A `login` is a phone, for every account type — the email D-107 gave an admin is gone.
      *
-     * Operator ruling 2026-09-11 removed the email sign-in for everybody; doc 62 brought it
-     * back for the one account type whose operator asked for it: «هو المفروض الادمن اصلا
-     * بيبقا بايميل وباسوورد». An email is trimmed and lower-cased, so ` Admin@CR7.com ` and
-     * `admin@cr7.com` are one login; everything else is normalised as a phone. Who may be
-     * reached by an email is `User::scopeWhereLogin`'s decision, not this one's.
+     * Operator 2026-09-17: «مفيش تسجيل بايميل خالص كله برقم الموبايل». Normalised like any
+     * phone — except that something which plainly is not one (an `@`, a letter, or no digit
+     * at all) comes back as typed, trimmed, so the pattern refuses it as «أدخل رقم هاتف
+     * صحيح». Stripped to its digits, `ops@example.com` would read as an empty field, and
+     * `01000000099@x.com` as the admin's own number.
      */
     public static function normaliseLogin(string $login): string
     {
-        return self::isEmail($login) ? mb_strtolower(trim($login)) : self::normalise($login);
+        $trimmed = trim($login);
+
+        if (preg_match('/[@\p{L}]/u', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        $digits = self::normalise($login);
+
+        return $digits === '' ? $trimmed : $digits;
     }
 
     /**
      * D-107 — «أرسلنا الرمز إلى ‪010•••••99‬». Enough for an admin to recognise their own
-     * phone after signing in with an email; not enough for anyone else to dial it. The
+     * phone when a password change sends it a code; not enough for anyone else to dial it. The
      * first three digits name the network, the last two are what a person remembers, and
      * the run between them is always five dots, so the mask says nothing about length.
      */

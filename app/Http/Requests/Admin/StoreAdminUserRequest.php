@@ -23,7 +23,7 @@ class StoreAdminUserRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email'],
             'phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/', 'unique:users,phone'],
             'job_title' => ['nullable', 'string', 'max:255'],
             'role' => ['required', 'exists:roles,name'],

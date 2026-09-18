@@ -95,4 +95,18 @@ class ResponseHardeningTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.per_page', 1);
     }
+
+    public function test_the_app_links_proof_names_the_key_the_release_apk_is_signed_with(): void
+    {
+        // `apksigner verify --print-certs` on the 1.0.6 and 1.0.7 release APKs:
+        // CN=CR7 Delivery … L=Gamasa, SHA-256 2e27c1e7…31a7. The file carried a
+        // fingerprint no known build is signed with, so App Links never verified and a
+        // key nobody on the project holds was the one the domain vouched for.
+        $proof = json_decode((string) file_get_contents(public_path('.well-known/assetlinks.json')), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(
+            ['2E:27:C1:E7:B6:20:14:77:BE:31:AF:7A:FE:57:DA:AA:47:8A:41:6A:B4:A8:7A:61:B6:24:E4:B7:EF:7F:31:A7'],
+            $proof[0]['target']['sha256_cert_fingerprints'],
+        );
+    }
 }

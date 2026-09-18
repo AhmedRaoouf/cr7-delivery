@@ -63,7 +63,7 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'unique:users,email,'.$user->id],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email,'.$user->id],
             'job_title' => ['nullable', 'string', 'max:255'],
         ]);
 

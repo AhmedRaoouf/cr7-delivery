@@ -53,7 +53,7 @@ class StoreCaptainApplicationRequest extends FormRequest
                     }
                 },
             ],
-            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email'],
             'national_id' => ['nullable', 'string', 'max:20'],
             'city_id' => ['nullable', 'integer', 'exists:cities,id'],
             // The app sends the city as the name it printed on the picker; an id is

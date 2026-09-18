@@ -153,6 +153,8 @@ class AuthHardeningTest extends TestCase
 
     public function test_a_temporary_password_opens_the_change_and_nothing_else(): void
     {
+        $this->seedLocation();
+
         $user = User::factory()->create([
             'phone' => '01090009599',
             'type' => 'driver',
@@ -162,6 +164,7 @@ class AuthHardeningTest extends TestCase
         ]);
         Driver::query()->create([
             'user_id' => $user->id,
+            'city_id' => $this->city->id,
             'vehicle_type' => 'motorcycle',
             'earning_type' => 'fixed',
             'earning_value' => 15,
@@ -218,5 +221,40 @@ class AuthHardeningTest extends TestCase
         $wrongVerb->assertStatus(405);
         $this->assertSame('method_not_allowed', $wrongVerb->json('error'));
         $this->assertFalse($wrongVerb->json('success'));
+    }
+
+    public function test_an_email_carrying_a_line_break_is_refused_everywhere_an_email_is_accepted(): void
+    {
+        // GHSA-5vg9-5847-vvmq (CVE-2026-48019): Laravel 11's `email` rule lets CR/LF
+        // through, and the upstream fix exists only in 12.60+. This API sends no mail
+        // today, so it is not exploitable here — but an address with a header in it must
+        // never be stored for the day it does.
+        //
+        // Measured against the plain rule on 11.56.1: the unquoted form below is already
+        // refused, but a CR/LF inside a *quoted local part* or a *comment* passes it —
+        // those are the two that carry a header.
+        $injected = "\"a\r\nBcc: x@y.z\"@b.com";
+
+        $customer = User::factory()->create(['type' => 'customer', 'is_active' => true, 'email' => 'before@example.com']);
+        Sanctum::actingAs($customer);
+
+        foreach ([$injected, "(c\r\n )a@b.com", "a@b.com\r\nBcc: x@y.z"] as $email) {
+            $this->withHeaders(['X-App' => 'app'])
+                ->patchJson('/api/v1/auth/me', ['email' => $email])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('email', 'errors');
+        }
+
+        $this->assertSame('before@example.com', $customer->fresh()->email);
+
+        $this->postJson('/api/v1/captain-applications', [
+            'full_name' => 'كابتن',
+            'phone' => '01090009588',
+            'email' => $injected,
+        ])->assertStatus(422)->assertJsonValidationErrors('email', 'errors');
+
+        $this->withHeaders(['X-App' => 'app'])
+            ->patchJson('/api/v1/auth/me', ['email' => 'plain@example.com'])
+            ->assertOk();
     }
 }

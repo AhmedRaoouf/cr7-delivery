@@ -26,7 +26,7 @@ class StoreDriverRequest extends FormRequest
             'city_id' => ['required', 'exists:cities,id'],
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/', 'unique:users,phone'],
-            'email' => ['nullable', 'email', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email'],
             'national_id' => ['nullable', 'string'],
             // All four are optional and fall back to the platform defaults in
             // `CreateDriverAction`. The vehicle and the plate belong to the captain's

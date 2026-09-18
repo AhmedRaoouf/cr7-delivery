@@ -134,6 +134,22 @@ class BusinessRuleHardeningTest extends TestCase
     {
         (new TelescopeServiceProvider($this->app))->register();
 
+        // What the watcher actually writes for a sign-in answer — measured on
+        // production: 43 recorded requests held a live bearer and refresh token.
+        $watcher = new \Laravel\Telescope\Watchers\RequestWatcher(['size_limit' => 512]);
+        $record = (new \ReflectionMethod($watcher, 'response'))->invoke($watcher, response()->json([
+            'success' => true,
+            'data' => ['user' => ['id' => 1], 'token' => '1|plaintext-bearer', 'refresh_token' => 'plaintext-refresh', 'expires_in' => 3600],
+        ]));
+
+        $this->assertSame('********', $record['data']['token']);
+        $this->assertSame('********', $record['data']['refresh_token']);
+        $this->assertSame(3600, $record['data']['expires_in']);
+
+        $payload = (new \ReflectionMethod($watcher, 'payload'))->invoke($watcher, ['refresh_token' => 'plaintext-refresh', 'phone' => '010']);
+        $this->assertSame('********', $payload['refresh_token']);
+        $this->assertSame('010', $payload['phone']);
+
         foreach (['data.token', 'data.refresh_token', 'data.registration_token', 'data.static_otp', 'data.temp_password', 'data.pickup_otp'] as $key) {
             $this->assertContains($key, Telescope::$hiddenResponseParameters, $key);
         }

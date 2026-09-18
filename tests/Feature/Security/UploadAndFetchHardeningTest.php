@@ -57,7 +57,11 @@ class UploadAndFetchHardeningTest extends TestCase
 
     public function test_the_uploader_itself_refuses_what_is_not_a_safe_image(): void
     {
-        $svg = UploadedFile::fake()->createWithContent('x.png', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        // A real file on disk, not `UploadedFile::fake()`: a fake reports the MIME type of
+        // its *name*, and the whole point is that the name says PNG and the bytes do not.
+        $path = tempnam(sys_get_temp_dir(), 'cr7svg').'.png';
+        file_put_contents($path, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        $svg = new UploadedFile($path, 'x.png', 'image/png', null, true);
 
         try {
             FileUploader::storePublic($svg, 'complaints');
@@ -143,7 +147,7 @@ class UploadAndFetchHardeningTest extends TestCase
         $this->getJson('/api/v1/geo/expand-link?url='.urlencode('https://www.google.com/url?q=http://127.0.0.1:3306/'))
             ->assertStatus(422);
 
-        Http::assertNotSent(fn (ClientRequest $request) => str_contains($request->url(), '127.0.0.1'));
+        Http::assertNotSent(fn (ClientRequest $request) => parse_url($request->url(), PHP_URL_HOST) === '127.0.0.1');
         Http::assertSentCount(1);
     }
 

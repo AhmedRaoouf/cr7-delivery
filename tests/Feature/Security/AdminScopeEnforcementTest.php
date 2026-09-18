@@ -171,7 +171,7 @@ class AdminScopeEnforcementTest extends TestCase
             + (int) $this->getJson('/api/v1/admin/complaints/sla')->json('data.due_soon'));
 
         // Nothing moved.
-        $this->assertSame('open', $complaint->fresh()->status);
+        $this->assertSame('open', $complaint->fresh()->status->value);
         $this->assertSame('pending', $document->fresh()->status->value ?? $document->fresh()->status);
         $this->assertTrue((bool) $customer->fresh()->is_active);
     }

@@ -40,7 +40,7 @@ class StoreRestaurantRequest extends FormRequest
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
             'owner_phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/', 'unique:users,phone'],
-            'owner_email' => ['nullable', 'email', 'unique:users,email'],
+            'owner_email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email'],
             'phone' => ['required', 'string'],
             'whatsapp' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],

@@ -74,7 +74,7 @@ class ScheduleOrderAction
         ));
 
         if ($blockers !== []) {
-            throw new ApiException($blockers[0]['code'], $blockers[0]['message'], 422, meta: ['blockers' => $blockers]);
+            throw CheckoutPricer::refusal($blockers);
         }
 
         $lines = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get();

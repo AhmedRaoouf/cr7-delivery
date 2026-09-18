@@ -9,6 +9,7 @@ use App\Support\AddressCompleteness;
 use App\Support\AddressContactPhone;
 use App\Support\ApiResponse;
 use App\Support\BasketLimit;
+use App\Support\CashLimit;
 use App\Support\FirstOrderPerk;
 use App\Support\MapStyles;
 use App\Support\Otp;
@@ -59,6 +60,10 @@ class ConfigController extends Controller
             'payment' => [
                 'methods' => PaymentMethods::enabled(),
                 'cash_enabled' => SettingsCatalog::bool('payment.cash_enabled'),
+                // Operator 2026-09-18 — cash pays a basket up to this, 0 = no limit. The
+                // quote's `payment_methods[].available` is the answer for a real basket;
+                // this is for the screens that have no quote yet.
+                'cash_max_total' => CashLimit::max(),
                 'vodafone_cash_enabled' => SettingsCatalog::bool('payment.vodafone_cash_enabled'),
                 'instapay_enabled' => SettingsCatalog::bool('payment.instapay_enabled'),
                 'vodafone_cash_number' => SettingsCatalog::get('payment.vodafone_cash_number'),

@@ -51,8 +51,7 @@ class CreateOrderAction
         $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
 
         if ($quote['blockers'] !== []) {
-            $first = $quote['blockers'][0];
-            throw new ApiException($first['code'], $first['message'], 422, meta: ['blockers' => $quote['blockers']]);
+            throw CheckoutPricer::refusal($quote['blockers']);
         }
 
         $addressSnapshot = [

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
@@ -14,14 +15,15 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'menu_category_id' => ['required', 'exists:menu_categories,id'],
+            // Batch 67 — a category of the restaurant in the path, not of any restaurant.
+            'menu_category_id' => ['required', Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->route('restaurant')?->getKey())],
             'name_ar' => ['required', 'string', 'max:255'],
             'name_en' => ['required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'gallery' => ['nullable', 'array'],
-            'gallery.*' => ['image', 'max:5120'],
+            'gallery.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'price' => ['required', 'numeric', 'min:0'],
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],

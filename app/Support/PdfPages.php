@@ -65,6 +65,24 @@ class PdfPages
      */
     public static function rasterise(UploadedFile $pdf): array
     {
+        /*
+         * Batch 67 — only a PDF is ever handed to ImageMagick, and only as a PDF.
+         *
+         * ImageMagick chooses its decoder from the file's **bytes**, not its name: an MVG
+         * or MSL script uploaded as `menu.pdf` runs through the vector-drawing coders,
+         * which can read local files into the picture (`text:/path/.env` — the
+         * ImageTragick family). The `mimes:…,pdf` rule already sniffs the content; this
+         * is the second lock, at the only place the bytes meet ImageMagick: the file must
+         * start with a PDF header, and it is read through the `pdf:` coder explicitly so
+         * nothing else can claim it.
+         */
+        $path = (string) $pdf->getRealPath();
+        $head = @file_get_contents($path, false, null, 0, 1024);
+
+        if (! is_string($head) || ! str_contains($head, '%PDF-')) {
+            throw new RuntimeException('pdf_unreadable');
+        }
+
         if (! self::isSupported()) {
             throw new RuntimeException('pdf_unsupported');
         }
@@ -72,12 +90,18 @@ class PdfPages
         $imagick = new Imagick;
 
         try {
+            // A menu is a handful of pages; a crafted file must not be able to take the
+            // host's memory or its disk with it.
+            $imagick->setResourceLimit(Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024);
+            $imagick->setResourceLimit(Imagick::RESOURCETYPE_MAP, 512 * 1024 * 1024);
+            $imagick->setResourceLimit(Imagick::RESOURCETYPE_DISK, 1024 * 1024 * 1024);
+
             // Before readImage, not after: the resolution is what Ghostscript
             // rasterises *at*, so setting it afterwards only resamples an image
             // that was already rendered at the default ‪72‬ dpi and the pages come
             // out soft no matter what number is used.
             $imagick->setResolution(self::DPI, self::DPI);
-            $imagick->readImage($pdf->getRealPath());
+            $imagick->readImage('pdf:'.$path);
         } catch (Throwable $e) {
             $imagick->clear();
 

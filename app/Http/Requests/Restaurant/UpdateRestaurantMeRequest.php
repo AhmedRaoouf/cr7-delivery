@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Restaurant;
 
+use App\Support\PdfPages;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateRestaurantMeRequest extends FormRequest
@@ -18,8 +19,8 @@ class UpdateRestaurantMeRequest extends FormRequest
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
-            'logo' => ['nullable', 'image', 'max:5120'],
-            'cover' => ['nullable', 'image', 'max:5120'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'phone' => ['sometimes', 'required', 'string'],
             'whatsapp' => ['nullable', 'string'],
             'remove_logo' => ['nullable', 'boolean'],
@@ -33,13 +34,13 @@ class UpdateRestaurantMeRequest extends FormRequest
             // the pages swipe and zoom like any other picture. 10 MB rather than
             // the 5 MB the logo gets: a scanned four-page menu is a big file and
             // the operator has no way to shrink one.
-            'menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'menu_sheets.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'remove_menu_sheets' => ['nullable', 'boolean'],
             // Which already-stored pages the form still shows. An upload adds to
             // the gallery rather than replacing it, so removing one page has to
             // be said out loud — see `HandlesUploads::withPublicSheets()`.
-            'keep_menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'keep_menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'keep_menu_sheets.*' => ['string', 'max:2048'],
         ];
     }

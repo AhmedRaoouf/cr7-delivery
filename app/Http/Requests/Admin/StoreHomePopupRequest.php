@@ -28,7 +28,7 @@ class StoreHomePopupRequest extends FormRequest
             'title_en' => ['nullable', 'string', 'max:255'],
             'body_ar' => ['nullable', 'string', 'max:1000'],
             'body_en' => ['nullable', 'string', 'max:1000'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             // The sibling boolean — see `HandlesUploads`. A multipart body cannot
             // carry a JSON null, so «take the artwork off» has to be its own field;
             // without it the dashboard could replace a picture but never remove one.

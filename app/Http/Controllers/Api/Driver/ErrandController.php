@@ -156,11 +156,16 @@ class ErrandController extends Controller
      */
     public function purchases(Request $request, ErrandRequest $errand, ErrandLifecycleAction $action): JsonResponse
     {
+        // Batch 67 — ownership before anything is written: the receipts below are stored
+        // on the public disk *before* the action checks the captain, so any captain could
+        // park files on the server against any errand id and be told 404 afterwards.
+        abort_unless($errand->driver_id === $this->driver($request)->id, 404);
+
         $validated = $request->validate([
             'purchases_amount' => ['required', 'numeric', 'min:0', 'max:100000'],
             'purchases_note' => ['nullable', 'string', 'max:500'],
             'receipts' => ['nullable', 'array', 'max:3'],
-            'receipts.*' => ['image', 'max:5120'],
+            'receipts.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
         ]);
 
         return ApiResponse::success(

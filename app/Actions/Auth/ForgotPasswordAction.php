@@ -30,6 +30,10 @@ class ForgotPasswordAction
         // their first password. Only «no such account» is a reason to do nothing, and it
         // is still answered with the same success message either way (doc 08 §1).
         if (! $user) {
+            // Batch 67 — the same clocks as a real send, so the answer cannot tell a
+            // stranger's number from a registered one. See {@see SendOtpAction::shadow()}.
+            $this->sendOtp->shadow($login, OtpPurpose::Reset);
+
             return;
         }
 

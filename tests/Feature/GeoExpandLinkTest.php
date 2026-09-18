@@ -28,12 +28,13 @@ class GeoExpandLinkTest extends TestCase
 
     public function test_it_follows_a_short_link_to_the_point_behind_it(): void
     {
+        // Batch 67 — redirects are followed by `MapLinkFetcher`, one checked hop at a
+        // time, so the fake is a real 302 rather than Guzzle's redirect-history header.
         Http::fake([
-            '*' => Http::response('<html></html>', 200, [
-                'X-Guzzle-Redirect-History' => [
-                    'https://www.google.com/maps/place/CR7/@31.4400,31.5200,17z/data=!3d31.4456!4d31.5289',
-                ],
+            'https://maps.app.goo.gl/*' => Http::response('', 302, [
+                'Location' => 'https://www.google.com/maps/place/CR7/@31.4400,31.5200,17z/data=!3d31.4456!4d31.5289',
             ]),
+            '*' => Http::response('<html></html>', 200),
         ]);
 
         $this->getJson('/api/v1/geo/expand-link?url='.urlencode('https://maps.app.goo.gl/AbCdEfGh'))

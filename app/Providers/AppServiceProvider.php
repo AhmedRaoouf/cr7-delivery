@@ -40,6 +40,7 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -327,6 +328,90 @@ class AppServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute(20)->by($byCaller($request, 'geo-expand'))->response($refused),
                 Limit::perMinute(60)->by('geo-expand-ip:'.$request->ip())->response($refused),
+            ];
+        });
+
+        /*
+         * Batch 67 — the one password endpoint every captain, place and admin signs in
+         * through had no throttle at all.
+         *
+         * Three buckets, and all must pass:
+         *
+         *   * this number from this address — 5 a minute. A person mistyping gets five
+         *     tries; a script gets five guesses a minute.
+         *   * this number from anywhere — 30 an hour, so a password list spread over many
+         *     addresses still cannot grind one account. The cost is that someone who
+         *     knows a phone number can make that account wait out the hour; a lockout is
+         *     recoverable, a guessed admin password is not.
+         *   * this address — 60 a minute. Deliberately wide: both dashboards sign every
+         *     place and every operator in from their BFF's one server address.
+         *
+         * The number is normalised the way `LoginRequest` normalises it, or `+20 10…`
+         * and `010…` would be two buckets for one account.
+         */
+        $loginRefused = fn (Request $request, array $headers) => ApiResponse::error(
+            'login_rate_limited',
+            'محاولات دخول كثيرة جدًا، حاول بعد قليل',
+            429,
+            meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+        )->withHeaders($headers);
+
+        $loginKey = static function (Request $request): string {
+            $login = $request->input('login');
+
+            return hash('sha256', is_string($login) ? PhoneNumber::normaliseLogin($login) : '');
+        };
+
+        RateLimiter::for('auth-login', fn (Request $request) => [
+            Limit::perMinute(5)->by('login:'.$loginKey($request).'|'.$request->ip())->response($loginRefused),
+            Limit::perHour(30)->by('login-account:'.$loginKey($request))->response($loginRefused),
+            Limit::perMinute(60)->by('login-ip:'.$request->ip())->response($loginRefused),
+        ]);
+
+        /*
+         * Batch 67 — `/auth/otp/verify` and `/auth/password/reset` carry a six-digit code.
+         * `otp.max_attempts` caps guesses per issued code; this caps the endpoint itself
+         * per number and per address, so a code cannot be guessed at network speed across
+         * re-sends, and the difference between «wrong» and «expired» cannot be polled.
+         */
+        RateLimiter::for('otp-verify', function (Request $request) {
+            $refused = fn (Request $request, array $headers) => ApiResponse::error(
+                'otp_verify_rate_limited',
+                'محاولات كثيرة جدًا، حاول لاحقًا',
+                429,
+                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+            )->withHeaders($headers);
+
+            $phone = $request->input('phone', $request->input('login'));
+            $phone = is_string($phone) ? PhoneNumber::normaliseLogin($phone) : '';
+
+            return [
+                Limit::perMinute(10)->by('otp-verify:'.hash('sha256', $phone).'|'.$request->ip())->response($refused),
+                Limit::perHour(40)->by('otp-verify-phone:'.hash('sha256', $phone))->response($refused),
+                Limit::perMinute(60)->by('otp-verify-ip:'.$request->ip())->response($refused),
+            ];
+        });
+
+        // Batch 67 — the current password is checked on every change; a stolen session
+        // must not be able to grind it out. Keyed on the account.
+        RateLimiter::for('password-change', fn (Request $request) => Limit::perMinute(6)
+            ->by('password-change:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+            ->response(fn (Request $request, array $headers) => ApiResponse::error(
+                'rate_limited',
+                'محاولات كثيرة جدًا، حاول بعد قليل',
+                429,
+                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+            )->withHeaders($headers)));
+
+        // Batch 67 — the public captain application (doc 61 retired the screen): a
+        // handful an hour per address, three a day per phone number.
+        RateLimiter::for('captain-application', function (Request $request) {
+            $phone = $request->input('phone');
+            $phone = is_string($phone) ? PhoneNumber::normaliseLogin($phone) : '';
+
+            return [
+                Limit::perHour(5)->by('captain-application-ip:'.$request->ip()),
+                Limit::perDay(3)->by('captain-application-phone:'.hash('sha256', $phone)),
             ];
         });
 

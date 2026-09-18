@@ -6,6 +6,7 @@ use App\Enums\PaymentMethod;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\SubmitPaymentProofRequest;
+use App\Http\Resources\Customer\OrderGroupDetailResource;
 use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\OrderGroup;
 use App\Models\PaymentProof;
@@ -155,7 +156,14 @@ class PaymentController extends Controller
             ]);
         });
 
-        return ApiResponse::success($orderGroup->fresh(['orders', 'payment']), 'تم التحويل للدفع نقدًا بنجاح');
+        // Batch 67 — the customer's own resource, not the raw rows: the raw orders carried
+        // each place's commission (`commission_rate_snapshot`, `commission_amount`), the
+        // captain's earning and the platform's margin (doc 12 §5). The app reads nothing
+        // from this body; it re-fetches the order.
+        return ApiResponse::success(
+            new OrderGroupDetailResource($orderGroup->fresh()->load(['orders.restaurant', 'orders.driver.user', 'orders.items.options', 'orders.statusHistory'])),
+            'تم التحويل للدفع نقدًا بنجاح',
+        );
     }
 
     private function ensureOwned(Request $request, OrderGroup $orderGroup): void

@@ -6,6 +6,7 @@ use App\Actions\Admin\ModerateAccountAction;
 use App\Enums\UserType;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class AccountModerationController extends Controller
 {
     public function block(Request $request, User $user, ModerateAccountAction $action): JsonResponse
     {
-        $this->assertModerable($user);
+        $this->assertModerable($request, $user);
 
         $validated = $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
@@ -40,14 +41,14 @@ class AccountModerationController extends Controller
 
     public function unblock(Request $request, User $user, ModerateAccountAction $action): JsonResponse
     {
-        $this->assertModerable($user);
+        $this->assertModerable($request, $user);
 
         return ApiResponse::success($action->unblock($request->user(), $user), 'تم إعادة تفعيل الحساب');
     }
 
     public function reset(Request $request, User $user, ModerateAccountAction $action): JsonResponse
     {
-        $this->assertModerable($user);
+        $this->assertModerable($request, $user);
 
         $password = $action->reset($request->user(), $user);
 
@@ -59,7 +60,7 @@ class AccountModerationController extends Controller
 
     public function destroy(Request $request, User $user, ModerateAccountAction $action): JsonResponse
     {
-        $this->assertModerable($user);
+        $this->assertModerable($request, $user);
 
         $action->delete($request->user(), $user);
 
@@ -67,8 +68,12 @@ class AccountModerationController extends Controller
     }
 
     /** Admin accounts have their own route and their own guards; everything else lands here. */
-    private function assertModerable(User $user): void
+    private function assertModerable(Request $request, User $user): void
     {
         abort_if($user->type === UserType::Admin, 404);
+
+        // Batch 67 — a customer, a captain or a place outside the operator's scope does
+        // not exist for them (D-52); blocking, resetting or deleting it was allowed.
+        AdminScope::abortUnlessVisible(AdminScope::applyToAccounts(User::query(), $request->user()), $user);
     }
 }

@@ -17,8 +17,8 @@ class StoreStoreCategoryRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:120'],
             'name_ar' => ['required', 'string', 'max:120'],
             'name_en' => ['required', 'string', 'max:120'],
-            'image' => ['nullable', 'image', 'max:5120'],
-            'icon' => ['nullable', 'image', 'max:2048'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'icon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:2048'],
             // `#RRGGBB` or `#RRGGBBAA`. Free text here reaches the app as a colour it
             // has to parse, and a bad one is a crash on the home screen.
             'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/'],

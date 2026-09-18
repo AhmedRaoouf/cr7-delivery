@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Exceptions\ApiException;
+use App\Support\Security\ImageMetadata;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -73,8 +75,12 @@ class FileUploader
         // client, without any of them having to cooperate.
         $file = ImageOptimizer::optimise($file, ImageOptimizer::PUBLIC_MAX_EDGE);
 
-        $disk = self::disk();
+        // Batch 67 — refuse before anything is written; then take the camera's GPS block
+        // (and every other metadata block) out of the picture. See the two helpers.
         $name = self::filename($file, self::SAFE_IMAGE_EXTENSIONS);
+        $file = self::withoutMetadata($file);
+
+        $disk = self::disk();
 
         // `putFileAs` returns false on a failed write, and the `public` disk is
         // configured with `throw => false`. Without this check a storage failure is
@@ -97,8 +103,10 @@ class FileUploader
         // and everybody looks at a payment proof for a reference number. A PDF is not an
         // image and passes straight through.
         $file = ImageOptimizer::optimise($file, ImageOptimizer::PRIVATE_MAX_EDGE);
+        $name = self::filename($file, self::SAFE_DOCUMENT_EXTENSIONS);
+        $file = self::withoutMetadata($file);
 
-        return $file->storeAs($folder, self::filename($file, self::SAFE_DOCUMENT_EXTENSIONS), 'local');
+        return $file->storeAs($folder, $name, 'local');
     }
 
     /**
@@ -137,10 +145,52 @@ class FileUploader
         // is its Symfony name. Either can return null for a type PHP does not know.
         $extension = strtolower((string) $file->extension());
 
+        // Batch 67 — refused, not renamed. Anything outside the list used to be stored as
+        // `<uuid>.bin`: an SVG (which Laravel 11's `image` rule accepts, and which is a
+        // document that runs script), an HTML file, anything. On a host where LiteSpeed
+        // does not honour the `public/storage` symlink, `/storage/{path}` then served it
+        // with the type sniffed from its bytes — `image/svg+xml`, from the API's origin.
         if (! in_array($extension, $allowed, true)) {
-            $extension = 'bin';
+            throw new ApiException(
+                'unsupported_file_type',
+                'نوع الملف غير مدعوم — ارفع صورة JPG أو PNG أو WEBP',
+                422,
+                errors: ['file' => ['نوع الملف غير مدعوم']],
+            );
         }
 
         return Str::uuid()->toString().'.'.$extension;
+    }
+
+    /**
+     * Batch 67 — no picture leaves this server carrying where it was taken.
+     *
+     * {@see ImageMetadata} removes EXIF/XMP/IPTC blocks without touching the pixels. A
+     * JPEG whose EXIF says it is rotated is first redrawn upright
+     * ({@see ImageOptimizer::upright()}), because the rotation lives in the very block
+     * being removed. Anything that is not a JPEG, PNG or WebP (a PDF, a GIF) is returned
+     * as it came.
+     */
+    private static function withoutMetadata(UploadedFile $file): UploadedFile
+    {
+        $path = $file->getRealPath();
+
+        if ($path === false || ! is_writable($path)) {
+            return $file;
+        }
+
+        $result = ImageMetadata::strip($path);
+
+        if ($result['orientation'] !== 1) {
+            $upright = ImageOptimizer::upright($file, $result['orientation']);
+
+            if ($upright !== null) {
+                return $upright;
+            }
+
+            ImageMetadata::strip($path, force: true);
+        }
+
+        return $file;
     }
 }

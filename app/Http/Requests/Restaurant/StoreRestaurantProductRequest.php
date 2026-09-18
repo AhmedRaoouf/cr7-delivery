@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Restaurant;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRestaurantProductRequest extends FormRequest
 {
@@ -16,14 +17,16 @@ class StoreRestaurantProductRequest extends FormRequest
         $required = $this->isMethod('post') ? 'required' : 'sometimes';
 
         return [
-            'menu_category_id' => [$required, 'exists:menu_categories,id'],
+            // Batch 67 — the category must be this place's own. `exists:menu_categories,id`
+            // accepted any place's category, so a dish could be filed into a rival's menu.
+            'menu_category_id' => [$required, Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->user()?->restaurant?->id)],
             'name_ar' => [$required, 'string', 'max:255'],
             'name_en' => [$required, 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:5120'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'gallery' => ['nullable', 'array'],
-            'gallery.*' => ['image', 'max:5120'],
+            'gallery.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'price' => [$required, 'numeric', 'min:0'],
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],

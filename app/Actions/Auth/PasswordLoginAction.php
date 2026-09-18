@@ -35,7 +35,13 @@ class PasswordLoginAction
         // account, and comparing the raw string made the second one unreachable.
         $user = User::query()->whereLogin($identifier)->first();
 
-        if (! $user || ! $user->password || ! Hash::check($password, $user->password)) {
+        // Batch 67 — the same bcrypt work whether or not the number exists. Without it an
+        // unknown number was answered in about a millisecond and a known one after a
+        // full hash, which told a stopwatch which phones hold an account even though
+        // the two answers read identically.
+        $hash = $user?->password ?: self::dummyHash();
+
+        if (! Hash::check($password, $hash) || ! $user || ! $user->password) {
             throw new ApiException('invalid_credentials', 'بيانات الدخول غير صحيحة', 422);
         }
 
@@ -61,5 +67,13 @@ class PasswordLoginAction
         $user->forceFill(['last_login_at' => now()])->save();
 
         return ['user' => $user, 'session' => $this->sessions->signIn($user, $client)];
+    }
+
+    /** A real bcrypt hash of nothing anybody can type, made once per process. */
+    private static function dummyHash(): string
+    {
+        static $hash = null;
+
+        return $hash ??= Hash::make(bin2hex(random_bytes(16)));
     }
 }

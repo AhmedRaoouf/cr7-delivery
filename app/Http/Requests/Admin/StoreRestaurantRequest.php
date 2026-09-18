@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Http\Requests\Concerns\NormalisesPhone;
+use App\Support\PdfPages;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** FR-REST-01 — Admin creates a restaurant; the linked owner login is provisioned server-side. */
@@ -40,7 +41,7 @@ class StoreRestaurantRequest extends FormRequest
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
             'owner_phone' => ['required', 'string', 'regex:/^01[0125][0-9]{8}$/', 'unique:users,phone'],
-            'owner_email' => ['nullable', 'email', 'unique:users,email'],
+            'owner_email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email'],
             'phone' => ['required', 'string'],
             'whatsapp' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
@@ -59,8 +60,8 @@ class StoreRestaurantRequest extends FormRequest
             // `ADM-12` offered a logo picker the API had no rule for, so the file was
             // dropped and the response still answered 200 with `logo: null`. The
             // drawing and the contract agree now.
-            'logo' => ['nullable', 'image', 'max:5120'],
-            'cover' => ['nullable', 'image', 'max:5120'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_cover' => ['nullable', 'boolean'],
             // D-58 — the printed menu sheets, «المنيو», pill 0 of the tab strip.
@@ -72,13 +73,13 @@ class StoreRestaurantRequest extends FormRequest
             // the pages swipe and zoom like any other picture. 10 MB rather than
             // the 5 MB the logo gets: a scanned four-page menu is a big file and
             // the operator has no way to shrink one.
-            'menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'menu_sheets.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'remove_menu_sheets' => ['nullable', 'boolean'],
             // Which already-stored pages the form still shows. An upload adds to
             // the gallery rather than replacing it, so removing one page has to
             // be said out loud — see `HandlesUploads::withPublicSheets()`.
-            'keep_menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'keep_menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'keep_menu_sheets.*' => ['string', 'max:2048'],
         ];
     }

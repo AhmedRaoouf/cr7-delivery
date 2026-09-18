@@ -54,7 +54,10 @@ class ReportController extends Controller
 
     public function products(Request $request): JsonResponse
     {
+        // Batch 67 — every count below is the operator's scope, not the platform's
+        // (doc 12 §10.2 rules 4 and 5: scope is enforced in the query).
         $products = Product::query()
+            ->whereHas('restaurant', fn ($q) => AdminScope::applyToRestaurants($q, $request->user()))
             ->orderByDesc('sold_count')
             ->paginate($request->integer('per_page', 20), ['id', 'restaurant_id', 'name_ar', 'name_en', 'price', 'sold_count', 'rating_avg']);
 
@@ -120,17 +123,19 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->range($request);
 
+        $refunds = fn () => AdminScope::applyToRefunds(Refund::query(), $request->user());
+
         return ApiResponse::success([
-            'total_amount' => (float) Refund::query()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->sum('amount'),
-            'count' => Refund::query()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->count(),
-            'by_reason' => Refund::query()->whereBetween('created_at', [$from, $to])->selectRaw('reason_code, COUNT(*) as count')->groupBy('reason_code')->pluck('count', 'reason_code'),
+            'total_amount' => (float) $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->sum('amount'),
+            'count' => $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->count(),
+            'by_reason' => $refunds()->whereBetween('created_at', [$from, $to])->selectRaw('reason_code, COUNT(*) as count')->groupBy('reason_code')->pluck('count', 'reason_code'),
         ]);
     }
 
     public function complaints(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
-        $complaints = Complaint::query()->whereBetween('created_at', [$from, $to]);
+        $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 
         return ApiResponse::success([
             'total' => (clone $complaints)->count(),
@@ -144,7 +149,7 @@ class ReportController extends Controller
     {
         $segment = $request->string('filter.segment')->value();
 
-        $customers = User::query()->where('type', 'customer');
+        $customers = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user());
 
         $customers = match ($segment) {
             'new' => $customers->where('created_at', '>=', BusinessTime::startOfDaysAgo(30)),
@@ -164,10 +169,9 @@ class ReportController extends Controller
         ]);
     }
 
-    public function customerCohorts(): JsonResponse
+    public function customerCohorts(Request $request): JsonResponse
     {
-        $cohorts = User::query()
-            ->where('type', 'customer')
+        $cohorts = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user())
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as cohort_month, COUNT(*) as customers_count")
             ->groupBy('cohort_month')
             ->orderBy('cohort_month')
@@ -185,12 +189,12 @@ class ReportController extends Controller
             'orders_waiting_for_driver' => (clone $orders)->where('status', 'waiting_for_driver')->count(),
             'orders_restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'orders_delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
-            'payments_under_review' => Payment::query()->where('status', 'under_review')->count(),
+            'payments_under_review' => AdminScope::applyToPayments(Payment::query(), $request->user())->where('status', 'under_review')->count(),
             'stale_drivers_online' => AdminScope::applyToDrivers(Driver::query(), $request->user())
                 ->where('is_online', true)
                 ->where(fn ($q) => $q->whereNull('location_updated_at')->orWhere('location_updated_at', '<', now()->subSeconds(90)))
                 ->count(),
-            'complaints_breached_sla' => Complaint::query()->whereNotIn('status', ['resolved', 'rejected'])->where('due_at', '<', now())->count(),
+            'complaints_breached_sla' => AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereNotIn('status', ['resolved', 'rejected'])->where('due_at', '<', now())->count(),
             'orders_prep_overdue' => (clone $orders)->where('status', 'preparing')->whereNotNull('prep_due_at')->where('prep_due_at', '<', now())->count(),
         ]);
     }

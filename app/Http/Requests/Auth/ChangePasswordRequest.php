@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Support\Security\PasswordPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ChangePasswordRequest extends FormRequest
@@ -15,7 +16,7 @@ class ChangePasswordRequest extends FormRequest
     {
         return [
             'current_password' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => PasswordPolicy::rules(confirmed: true),
             // D-107 — required for an admin, and checked by `ChangePasswordAction`, which
             // knows who is asking; ignored for everyone else.
             'code' => ['nullable', 'digits:6'],

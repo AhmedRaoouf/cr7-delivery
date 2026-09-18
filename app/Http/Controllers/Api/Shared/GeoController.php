@@ -13,12 +13,12 @@ use App\Services\Maps\ReportsFailure;
 use App\Services\Maps\Router;
 use App\Support\ApiResponse;
 use App\Support\Geo;
+use App\Support\Security\MapLinkFetcher;
 use App\Support\ZoneLocator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 
 /**
  * doc 08 §2 — POST /geo/resolve, plus the two geocoding proxies.
@@ -222,10 +222,10 @@ class GeoController extends Controller
         ]);
 
         $url = $validated['url'];
-        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
-        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
 
-        if (! in_array($scheme, ['http', 'https'], true) || ! $this->isMapHost($host)) {
+        // Batch 67 — every hop, not only the first, must be a map host; see
+        // {@see MapLinkFetcher} for the open-redirect SSRF this closes.
+        if (! MapLinkFetcher::isAllowed($url)) {
             return ApiResponse::error('unsupported_map_link', 'هذا الرابط ليس رابط خريطة معروفًا.');
         }
 
@@ -237,27 +237,27 @@ class GeoController extends Controller
         }
 
         try {
-            $response = Http::withHeaders([
-                // Google answers a bare client with an interstitial that carries no
-                // coordinates; with a browser UA it answers the redirect.
-                'User-Agent' => 'Mozilla/5.0 (compatible; CR7Delivery/1.0)',
-                'Accept-Language' => 'ar,en;q=0.8',
-            ])
-                ->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])
-                ->timeout(8)
-                ->get($url);
+            $followed = MapLinkFetcher::follow($url);
         } catch (\Throwable) {
             return ApiResponse::error('map_link_unreachable', 'تعذّر فتح الرابط.');
         }
 
-        $history = $response->getHeader('X-Guzzle-Redirect-History');
-        $finalUrl = $history === [] ? $url : (string) end($history);
+        $finalUrl = $followed['final_url'];
 
-        $point = self::pointFromUrl($finalUrl)
-            // A link that redirects to a consent page keeps its target in `continue=`;
-            // and where the URL says nothing, the page itself still carries the pin.
-            ?? self::pointFromUrl(urldecode($finalUrl))
-            ?? self::pointFromUrl((string) $response->body());
+        // The last URL first (it is the one that names the place), then every hop the
+        // walk saw — a redirect that left the map hosts was never fetched, but its
+        // Location often *is* the pin — and only then the page itself.
+        $point = null;
+
+        foreach ([...array_reverse($followed['visited'])] as $seen) {
+            $point = self::pointFromUrl($seen) ?? self::pointFromUrl(urldecode($seen));
+
+            if ($point !== null) {
+                break;
+            }
+        }
+
+        $point ??= self::pointFromUrl($followed['body']);
 
         if ($point === null) {
             return ApiResponse::error('map_link_has_no_point', 'الرابط لا يحمل موقعًا يمكن قراءته.');
@@ -273,22 +273,6 @@ class GeoController extends Controller
      * Only the map services, and only by exact host or a `.`-anchored suffix — a
      * `str_contains` check here would accept `google.com.attacker.example`.
      */
-    private function isMapHost(string $host): bool
-    {
-        $allowed = [
-            'goo.gl', 'app.goo.gl', 'g.co', 'google.com', 'maps.google.com',
-            'apple.com', 'openstreetmap.org', 'osm.org', 'waze.com', 'bing.com',
-        ];
-
-        foreach ($allowed as $domain) {
-            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /**
      * The most specific point a maps URL or page carries, or `null`.
      *

@@ -31,7 +31,7 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         $order = $action->execute($driver, $order);
 
-        return ApiResponse::success($order);
+        return ApiResponse::success(self::forCaptain($order));
     }
 
     public function reject(Request $request, int $order, RejectOfferAction $action): JsonResponse
@@ -72,14 +72,14 @@ class OrderController extends Controller
     {
         $this->transition($request, $order, [OrderStatus::DriverAssigned], OrderStatus::ArrivedRestaurant, ['arrived_restaurant_at' => now()]);
 
-        return ApiResponse::success($order->fresh());
+        return ApiResponse::success(self::forCaptain($order->fresh()));
     }
 
     public function waiting(Request $request, Order $order): JsonResponse
     {
         $this->transition($request, $order, [OrderStatus::ArrivedRestaurant], OrderStatus::WaitingAtRestaurant, ['waiting_started_at' => now()]);
 
-        return ApiResponse::success($order->fresh());
+        return ApiResponse::success(self::forCaptain($order->fresh()));
     }
 
     public function pickup(PickupRequest $request, Order $order, PickupOrderAction $action): JsonResponse
@@ -87,21 +87,21 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         $order = $action->execute($driver, $order, $request->string('otp')->value() ?: null);
 
-        return ApiResponse::success($order);
+        return ApiResponse::success(self::forCaptain($order));
     }
 
     public function onTheWay(Request $request, Order $order): JsonResponse
     {
         $this->transition($request, $order, [OrderStatus::PickedUp], OrderStatus::OnTheWay, []);
 
-        return ApiResponse::success($order->fresh());
+        return ApiResponse::success(self::forCaptain($order->fresh()));
     }
 
     public function arrivedCustomer(Request $request, Order $order): JsonResponse
     {
         $this->transition($request, $order, [OrderStatus::OnTheWay], OrderStatus::ArrivedCustomer, ['arrived_customer_at' => now()]);
 
-        return ApiResponse::success($order->fresh());
+        return ApiResponse::success(self::forCaptain($order->fresh()));
     }
 
     public function deliver(DeliverRequest $request, Order $order, DeliverOrderAction $action): JsonResponse
@@ -109,7 +109,7 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         $order = $action->execute($driver, $order, $request->string('otp')->value() ?: null, $request->has('collected_amount') ? $request->float('collected_amount') : null);
 
-        return ApiResponse::success($order);
+        return ApiResponse::success(self::forCaptain($order));
     }
 
     public function cancel(CancelTripRequest $request, Order $order, CancelTripAction $action): JsonResponse
@@ -117,7 +117,7 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         $order = $action->execute($driver, $order, $request->string('reason_code')->value(), $request->string('note')->value() ?: null);
 
-        return ApiResponse::success($order, 'تم إلغاء الرحلة');
+        return ApiResponse::success(self::forCaptain($order), 'تم إلغاء الرحلة');
     }
 
     public function issue(Request $request, Order $order): JsonResponse
@@ -125,10 +125,20 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         abort_unless($order->driver_id === $driver->id, 404);
 
+        // Batch 67 — a finished order stays finished. This moved *any* order the captain
+        // had ever carried to `delivery_issue`: a delivered one reopened on every board,
+        // in the settlements and in the customer's history.
+        if ($order->status->isTerminal()) {
+            throw new ApiException('invalid_transition', 'لا يمكن الإبلاغ عن مشكلة في طلب منتهٍ', 422);
+        }
+
         $validated = $request->validate([
             'category' => ['required', 'in:customer_unreachable,wrong_address,accident,food_problem,driver_unresponsive,payment,handover,other'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'attachments' => ['nullable', 'array'],
+            // Batch 67 — was `array` of anything, stored verbatim and rendered as links on
+            // the operators' screens. Only https URLs now; the app sends none today.
+            'attachments' => ['nullable', 'array', 'max:5'],
+            'attachments.*' => ['string', 'max:2048', 'url:https'],
         ]);
 
         $issue = $order->deliveryIssues()->create([
@@ -206,7 +216,7 @@ class OrderController extends Controller
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
-        return ApiResponse::success($orders->items(), meta: [
+        return ApiResponse::success(array_map(self::forCaptain(...), $orders->items()), meta: [
             'current_page' => $orders->currentPage(),
             'per_page' => $orders->perPage(),
             'total' => $orders->total(),
@@ -235,5 +245,26 @@ class OrderController extends Controller
 
         $group = $order->orderGroup;
         $group->update(['rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status'))]);
+    }
+
+    /**
+     * Batch 67 — doc 12 §5: the place's commission is the platform's business and the
+     * place's, never the captain's. These endpoints answer the raw order row, which
+     * carried `commission_rate_snapshot` and `commission_amount` to every captain who
+     * touched an order. Nothing in the captain shell reads either.
+     */
+    private const PLACE_MONEY = ['commission_rate_snapshot', 'commission_amount'];
+
+    private static function forCaptain(mixed $order): mixed
+    {
+        if ($order instanceof Order) {
+            return $order->makeHidden(self::PLACE_MONEY);
+        }
+
+        if (is_array($order)) {
+            return array_diff_key($order, array_flip(self::PLACE_MONEY));
+        }
+
+        return $order;
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\OrderGroup;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\RollupStatus;
@@ -15,6 +16,9 @@ class OrderGroupController extends Controller
 {
     public function recalculate(Request $request, OrderGroup $orderGroup): JsonResponse
     {
+        // Batch 67 — a basket follows its orders' scope (D-52).
+        AdminScope::abortUnlessVisible(AdminScope::applyToOrderGroups(OrderGroup::query(), $request->user()), $orderGroup);
+
         $orders = $orderGroup->orders()->get();
         $surviving = $orders->reject(fn ($o) => $o->status->value === 'cancelled');
 

@@ -1,9 +1,41 @@
-<IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
+<IfModule mod_negotiation.c>
+    Options -MultiViews -Indexes
+</IfModule>
 
+# Batch 67 — every directive added here is inside an <IfModule> the host provides, and
+# none needs an override the shipped file did not already use: a directive the host
+# refuses in .htaccess is a 500 on every request, API included. `ServerSignature Off`
+# was considered and left out for exactly that reason (and LiteSpeed ignores it).
+
+<IfModule mod_headers.c>
+    # PHP adds `X-Powered-By: PHP/8.3.x` at the SAPI level while `expose_php` is on,
+    # and that cannot be switched off from `.user.ini`. The application also removes it
+    # (App\Http\Middleware\SecurityHeaders); this covers anything PHP answers before
+    # Laravel boots.
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+
+    # Static files (`/catalog/…`, `/img/…`, `/.well-known/…`) are served without PHP, so
+    # the application's middleware never sees them. The two headers that matter for a
+    # file download are set here; the rest are set by the application on everything it
+    # answers.
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+</IfModule>
+
+<IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Batch 67 — no dotfile or dot-directory is ever served (`.env`, `.git`, `.htaccess`,
+    # an editor's `.swp`), except `/.well-known/`, which Android App Links and iOS
+    # Universal Links read. The host already refuses `/.env` and `/.git`; this is the
+    # same answer from the application's own configuration, so it does not depend on
+    # the host's defaults.
+    RewriteRule "(^|/)\.(?!well-known(/|$))" - [F,L]
+
+    # Batch 67 — backups, logs and source files that should never be under the web root
+    # are refused by extension, should one ever be copied there by hand.
+    RewriteRule "\.(bak|backup|old|orig|swp|sql|gz|zip|tar|log|ini|env|sh|lock|md)$" - [F,L,NC]
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .

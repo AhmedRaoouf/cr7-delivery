@@ -97,4 +97,37 @@ class SendOtpAction
             'static_otp' => $testCode,
         ];
     }
+
+    /**
+     * Batch 67 — what a send looks like for a number that holds no account.
+     *
+     * `POST /auth/password/forgot` answered «إذا كان الحساب موجودًا…» either way, but
+     * only a real send started the resend cooldown and the hourly cap. So the second
+     * ask within a minute was `429 otp_resend_cooldown` for a registered number and
+     * `200` for a stranger — a free, silent oracle for «is this phone on the platform».
+     * This runs the same two clocks for the stranger, sends nothing and stores nothing.
+     *
+     * @throws ApiException otp_send_rate_limited · otp_resend_cooldown, exactly as a real send would
+     */
+    public function shadow(string $phone, OtpPurpose $purpose): void
+    {
+        $maxPerHour = max(1, SettingsCatalog::int('otp.max_per_hour'));
+        $resendSeconds = max(0, SettingsCatalog::int('otp.resend_seconds'));
+
+        $rateKey = "otp-send:{$phone}";
+        if (RateLimiter::tooManyAttempts($rateKey, $maxPerHour)) {
+            throw new ApiException('otp_send_rate_limited', 'محاولات كثيرة جدًا، حاول لاحقًا', 429, meta: ['retry_after' => RateLimiter::availableIn($rateKey)]);
+        }
+
+        $cooldownKey = "otp-shadow-cooldown:{$phone}:{$purpose->value}";
+        if ($resendSeconds > 0 && RateLimiter::tooManyAttempts($cooldownKey, 1)) {
+            throw new ApiException('otp_resend_cooldown', 'يرجى الانتظار قبل إعادة الإرسال', 429, meta: ['retry_after' => RateLimiter::availableIn($cooldownKey)]);
+        }
+
+        RateLimiter::hit($rateKey, 3600);
+
+        if ($resendSeconds > 0) {
+            RateLimiter::hit($cooldownKey, $resendSeconds);
+        }
+    }
 }

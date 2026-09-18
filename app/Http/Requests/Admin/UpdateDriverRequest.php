@@ -33,7 +33,7 @@ class UpdateDriverRequest extends FormRequest
                 'sometimes', 'required', 'string', 'regex:/^01[0125][0-9]{8}$/',
                 Rule::unique('users', 'phone')->ignore($userId),
             ],
-            'email' => ['nullable', 'email', Rule::unique('users', 'email')->ignore($userId)],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', Rule::unique('users', 'email')->ignore($userId)],
             'city_id' => ['sometimes', 'required', 'exists:cities,id'],
             'national_id' => ['nullable', 'string'],
             'vehicle_type' => ['sometimes', 'required', 'in:motorcycle,bicycle,car,scooter'],

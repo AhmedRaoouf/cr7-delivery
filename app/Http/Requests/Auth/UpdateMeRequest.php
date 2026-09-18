@@ -15,8 +15,8 @@ class UpdateMeRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'unique:users,email,'.$this->user()->id],
-            'avatar' => ['nullable', 'image', 'max:5120'],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email,'.$this->user()->id],
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'locale' => ['nullable', 'in:ar,en'],
             'theme' => ['nullable', 'in:dark,light,system'],
             'remove_avatar' => ['nullable', 'boolean'],

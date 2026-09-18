@@ -4,10 +4,10 @@ namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\NormalisesPhone;
 use App\Support\PhoneNumber;
+use App\Support\Security\PasswordPolicy;
 use App\Support\SettingsCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class RegisterCustomerRequest extends FormRequest
 {
@@ -42,7 +42,7 @@ class RegisterCustomerRequest extends FormRequest
             // `confirmed` is deliberately not required: the app shows one field with a
             // reveal toggle, which is the pattern every Egyptian delivery app uses and
             // is measurably better than two fields on a phone keyboard.
-            'password' => ['required', 'string', Password::min(8)->letters()->numbers()],
+            'password' => PasswordPolicy::rules(),
         ];
     }
 

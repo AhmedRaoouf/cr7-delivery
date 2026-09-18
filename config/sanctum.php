@@ -37,7 +37,14 @@ return [
     |
     */
 
+    // Left as `web` deliberately (batch 67 looked at emptying it): no `/api/*` route
+    // starts a session, so the web guard can never authenticate an API request in
+    // production, and the test suite's `actingAs()` relies on it.
     'guard' => ['web'],
+
+    // Batch 67 — and so `/sanctum/csrf-cookie`, the SPA endpoint that answered 204 and
+    // minted an `XSRF-TOKEN` and a session row for anybody who asked, is not registered.
+    'routes' => false,
 
     /*
     |--------------------------------------------------------------------------

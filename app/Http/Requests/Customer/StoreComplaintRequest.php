@@ -24,7 +24,7 @@ class StoreComplaintRequest extends FormRequest
             // ticket was read. The column keeps holding URLs; the transport is now a
             // multipart upload, so the URLs are ones this server wrote.
             'attachments' => ['nullable', 'array', 'max:3'],
-            'attachments.*' => ['image', 'max:5120'],
+            'attachments.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
         ];
     }
 }

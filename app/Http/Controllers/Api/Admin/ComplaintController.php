@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\UserType;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Complaint;
 use App\Models\Setting;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\ComplaintNotifier;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 /** doc 08 §7 / doc 24 §4 — the platform side of the two-sided complaints box. */
 class ComplaintController extends Controller
@@ -20,7 +24,7 @@ class ComplaintController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $complaints = Complaint::query()
+        $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())
             ->with(['user', 'restaurant', 'assignedTo'])
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
             ->when($request->string('filter.category')->isNotEmpty(), fn ($q) => $q->where('category', $request->string('filter.category')))
@@ -43,19 +47,30 @@ class ComplaintController extends Controller
         ]);
     }
 
-    public function show(Complaint $complaint): JsonResponse
+    public function show(Request $request, Complaint $complaint): JsonResponse
     {
+        $this->ensureInScope($request, $complaint);
+
         return ApiResponse::success($complaint->load(['user', 'restaurant', 'assignedTo', 'refund', 'messages.sender', 'order']));
     }
 
     public function addMessage(Request $request, Complaint $complaint): JsonResponse
     {
+        $this->ensureInScope($request, $complaint);
+
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
             'attachments' => ['nullable', 'array', 'max:3'],
-            'attachments.*' => ['image', 'max:5120'],
+            'attachments.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'visibility' => ['nullable', 'in:all,internal'],
         ]);
+
+        // Batch 67 — doc 12 §3: an internal note is `complaints.note_internal`, which
+        // `operations` does not hold. `complaints.reply` alone could write one.
+        abort_if(
+            ($validated['visibility'] ?? 'all') === 'internal' && ! $request->user()->can('complaints.note_internal'),
+            403,
+        );
 
         $message = $complaint->messages()->create([
             'sender_id' => $request->user()->id,
@@ -78,14 +93,23 @@ class ComplaintController extends Controller
 
     public function update(Request $request, Complaint $complaint): JsonResponse
     {
+        $this->ensureInScope($request, $complaint);
+
         $validated = $request->validate([
             'status' => ['nullable', 'in:open,in_progress,resolved,rejected'],
             'priority' => ['nullable', 'in:low,normal,high'],
-            'assigned_to' => ['nullable', 'exists:users,id'],
+            'assigned_to' => ['nullable', self::assignee()],
             'refund_id' => ['nullable', 'exists:refunds,id'],
             'visible_to_restaurant' => ['nullable', 'boolean'],
             'resolution_outcome' => ['nullable', 'in:refund,partial_refund,redelivery,warning_restaurant,warning_driver,no_action,rejected'],
         ]);
+
+        // Batch 67 — showing a ticket to the restaurant it concerns, or hiding it, is
+        // `complaints.mirror` (D-53, doc 12 §3), not `complaints.update`.
+        abort_if(
+            array_key_exists('visible_to_restaurant', $validated) && ! $request->user()->can('complaints.mirror'),
+            403,
+        );
 
         if (($validated['status'] ?? null) === 'resolved') {
             $validated['resolved_at'] = now();
@@ -103,7 +127,9 @@ class ComplaintController extends Controller
 
     public function assign(Request $request, Complaint $complaint): JsonResponse
     {
-        $validated = $request->validate(['assigned_to' => ['required', 'exists:users,id']]);
+        $this->ensureInScope($request, $complaint);
+
+        $validated = $request->validate(['assigned_to' => ['required', self::assignee()]]);
         $complaint->update($validated);
         AuditLogger::record($request->user(), 'complaints.assign', $complaint, $validated);
 
@@ -112,6 +138,8 @@ class ComplaintController extends Controller
 
     public function escalate(Request $request, Complaint $complaint): JsonResponse
     {
+        $this->ensureInScope($request, $complaint);
+
         $validated = $request->validate(['priority' => ['required', 'in:low,normal,high']]);
 
         $hours = (int) (Setting::query()->where('key', "support.resolution_hours.{$validated['priority']}")->value('value') ?? 24);
@@ -122,14 +150,27 @@ class ComplaintController extends Controller
         return ApiResponse::success($complaint->fresh(), 'تم تصعيد الشكوى');
     }
 
-    public function sla(): JsonResponse
+    public function sla(Request $request): JsonResponse
     {
         $now = now();
+        $open = fn () => AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereNotIn('status', ['resolved', 'rejected']);
 
         return ApiResponse::success([
-            'within' => Complaint::query()->whereNotIn('status', ['resolved', 'rejected'])->where('due_at', '>', $now->clone()->addHours(2))->count(),
-            'due_soon' => Complaint::query()->whereNotIn('status', ['resolved', 'rejected'])->whereBetween('due_at', [$now, $now->clone()->addHours(2)])->count(),
-            'breached' => Complaint::query()->whereNotIn('status', ['resolved', 'rejected'])->where('due_at', '<', $now)->count(),
+            'within' => $open()->where('due_at', '>', $now->clone()->addHours(2))->count(),
+            'due_soon' => $open()->whereBetween('due_at', [$now, $now->clone()->addHours(2)])->count(),
+            'breached' => $open()->where('due_at', '<', $now)->count(),
         ]);
+    }
+
+    /** Batch 67 — D-52: a scoped admin's complaint is in scope or it does not exist. */
+    private function ensureInScope(Request $request, Complaint $complaint): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToComplaints(Complaint::query(), $request->user()), $complaint);
+    }
+
+    /** Batch 67 — a ticket is assigned to an operator. `exists:users,id` accepted a customer. */
+    private static function assignee(): Exists
+    {
+        return Rule::exists('users', 'id')->where('type', UserType::Admin->value)->whereNull('deleted_at');
     }
 }

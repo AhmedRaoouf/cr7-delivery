@@ -59,10 +59,11 @@ class UserController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         abort_unless($user->type === UserType::Admin, 404);
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'unique:users,email,'.$user->id],
+            'email' => ['nullable', 'email', 'max:255', 'not_regex:/[\x00-\x1F\x7F]/', 'unique:users,email,'.$user->id],
             'job_title' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -79,6 +80,7 @@ class UserController extends Controller
     {
         abort_unless($user->type === UserType::Admin, 404);
         PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'تغيير دور');
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
 
         $validated = $request->validate(['roles' => ['required', 'array'], 'roles.*' => ['string', 'exists:roles,name']]);
 
@@ -101,7 +103,9 @@ class UserController extends Controller
             'revokes.*' => ['string', 'exists:permissions,name'],
         ]);
 
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
         PermissionEscalationGuard::assertCanGrantPermissions($request->user(), $validated['grants'] ?? []);
+        PermissionEscalationGuard::assertRevocable($user, $validated['revokes'] ?? []);
 
         $user->givePermissionTo($validated['grants'] ?? []);
         $user->revokePermissionTo($validated['revokes'] ?? []);
@@ -114,6 +118,10 @@ class UserController extends Controller
     public function updateScope(Request $request, User $user): JsonResponse
     {
         abort_unless($user->type === UserType::Admin, 404);
+        // Batch 67 — nobody moves their own scope (doc 12 §10.2 rule 2), and nobody moves
+        // the scope of an account that holds more than they do.
+        PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'تغيير نطاق');
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
 
         if ($user->hasRole('super_admin')) {
             throw new ApiException('super_admin_is_global', 'حساب super_admin دايمًا نطاقه عالمي', 422);
@@ -122,7 +130,9 @@ class UserController extends Controller
         $validated = $request->validate([
             'scope_type' => ['required', 'in:global,city,zone'],
             'city_ids' => ['nullable', 'array'],
+            'city_ids.*' => ['integer', 'exists:cities,id'],
             'zone_ids' => ['nullable', 'array'],
+            'zone_ids.*' => ['integer', 'exists:service_zones,id'],
         ]);
 
         $user->adminScopes()->delete();
@@ -147,6 +157,7 @@ class UserController extends Controller
     {
         abort_unless($user->type === UserType::Admin, 404);
         PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'إيقاف');
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
         $this->assertNotLastSuperAdmin($user);
 
         $validated = $request->validate(['reason' => ['required', 'string', 'max:500']]);
@@ -163,6 +174,7 @@ class UserController extends Controller
     public function restore(Request $request, User $user): JsonResponse
     {
         abort_unless($user->type === UserType::Admin, 404);
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
 
         $user->update(['is_active' => true]);
         $user->adminProfile()->update(['suspended_at' => null, 'suspended_by' => null, 'suspend_reason' => null]);
@@ -175,6 +187,11 @@ class UserController extends Controller
     public function resetPassword(Request $request, User $user, ResetUserPasswordAction $action): JsonResponse
     {
         abort_unless($user->type === UserType::Admin, 404);
+        // Batch 67 — the temporary password comes back in this response, so resetting an
+        // account is taking it over. Only over an account that holds no more than you;
+        // your own password is changed through `/auth/password/change`, with its code.
+        PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'إعادة تعيين كلمة مرور');
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
 
         $tempPassword = $action->execute($user);
         AuditLogger::record($request->user(), 'users.manage', $user, ['action' => 'reset_password']);
@@ -186,6 +203,7 @@ class UserController extends Controller
     {
         abort_unless($user->type === UserType::Admin, 404);
         PermissionEscalationGuard::assertNotSelf($request->user(), $user, 'حذف');
+        PermissionEscalationGuard::assertCanManage($request->user(), $user);
         $this->assertNotLastSuperAdmin($user);
 
         // A soft-deleted account cannot authenticate, but its sessions would sit in the

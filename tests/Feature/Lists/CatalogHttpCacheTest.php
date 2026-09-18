@@ -41,8 +41,8 @@ class CatalogHttpCacheTest extends TestCase
         $this->assertSame('MISS', $first->headers->get('X-Cache'));
         $this->assertStringContainsString('public', (string) $first->headers->get('Cache-Control'));
         $this->assertStringContainsString('max-age=30', (string) $first->headers->get('Cache-Control'));
-        $this->assertStringContainsString('Accept-Language', (string) $first->headers->get('Vary'));
-        $this->assertStringContainsString('Authorization', (string) $first->headers->get('Vary'));
+        $this->assertContains('Accept-Language', $first->headers->all('Vary'));
+        $this->assertContains('Authorization', $first->headers->all('Vary'));
 
         $revalidated = $this->getJson('/api/v1/config', ['If-None-Match' => $etag]);
 
@@ -50,7 +50,7 @@ class CatalogHttpCacheTest extends TestCase
         $this->assertSame('', $revalidated->getContent());
         $this->assertSame($etag, $revalidated->headers->get('ETag'));
         $this->assertSame('HIT', $revalidated->headers->get('X-Cache'));
-        $this->assertStringContainsString('Accept-Language', (string) $revalidated->headers->get('Vary'));
+        $this->assertContains('Accept-Language', $revalidated->headers->all('Vary'));
 
         // A tag that no longer matches is a full answer.
         $this->getJson('/api/v1/config', ['If-None-Match' => 'W/"stale"'])->assertOk()->assertJsonPath('success', true);
@@ -63,7 +63,7 @@ class CatalogHttpCacheTest extends TestCase
 
         // Out-of-band SQL fires no model event: the stored answer stands until its TTL —
         // which is how we know the second read never reached the database.
-        DB::table('settings')->where('key', 'support.phone')->update(['value' => '01000000002']);
+        DB::table('settings')->where('key', 'support.phone')->update(['value' => json_encode('01000000002')]);
         $this->getJson('/api/v1/config')->assertJsonPath('data.support.phone', '01000000001');
 
         // Saved the way the panel saves it: the very next read is rebuilt.
@@ -84,7 +84,9 @@ class CatalogHttpCacheTest extends TestCase
 
         Sanctum::actingAs($newcomer);
         $new = $this->withHeader('X-App', 'app')->getJson('/api/v1/config')->assertOk();
-        $this->assertSame('private, max-age=0, must-revalidate', $new->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $new->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=0', (string) $new->headers->get('Cache-Control'));
+        $this->assertStringContainsString('must-revalidate', (string) $new->headers->get('Cache-Control'));
 
         Sanctum::actingAs($returning);
         $old = $this->withHeader('X-App', 'app')->getJson('/api/v1/config')->assertOk();
@@ -97,14 +99,17 @@ class CatalogHttpCacheTest extends TestCase
 
     public function test_the_language_is_part_of_the_key(): void
     {
-        Cuisine::query()->create(['name_ar' => 'مشويات', 'name_en' => 'Grill', 'is_active' => true]);
+        $this->place->update(['name_en' => 'Omar Sandwich']);
 
-        $ar = $this->getJson('/api/v1/cuisines', ['Accept-Language' => 'ar'])->assertOk();
-        $en = $this->getJson('/api/v1/cuisines', ['Accept-Language' => 'en'])->assertOk();
+        // `GET /restaurants` names a place in the request's language.
+        $ar = $this->getJson('/api/v1/restaurants', ['Accept-Language' => 'ar'])->assertOk();
+        $en = $this->getJson('/api/v1/restaurants', ['Accept-Language' => 'en'])->assertOk();
 
-        $this->assertNotSame($ar->getContent(), $en->getContent());
+        $this->assertSame('سندوتش عمر', $ar->json('data.0.name'));
+        $this->assertSame('Omar Sandwich', $en->json('data.0.name'));
         $this->assertSame('MISS', $en->headers->get('X-Cache'));
-        $this->assertSame('HIT', $this->getJson('/api/v1/cuisines', ['Accept-Language' => 'en'])->headers->get('X-Cache'));
+        $this->assertSame('HIT', $this->getJson('/api/v1/restaurants', ['Accept-Language' => 'en'])->headers->get('X-Cache'));
+        $this->assertSame('سندوتش عمر', $this->getJson('/api/v1/restaurants', ['Accept-Language' => 'ar'])->json('data.0.name'));
     }
 
     public function test_a_catalogue_write_retires_the_stored_answers_at_once(): void

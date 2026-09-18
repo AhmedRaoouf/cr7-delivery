@@ -5,6 +5,7 @@ namespace App\Support\Lists;
 use App\Support\ArabicSearch;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * The search box of every list (ADMIN-LISTS.md §0.3): one term, many haystacks, OR-ed —
@@ -48,6 +49,13 @@ final class ListSearch
 
         return $query->where(function (Builder $group) use ($term, $spec): void {
             self::clauses($group, $term, $spec + ['id' => true]);
+
+            // A term none of the haystacks can take (a reference typed into a list that
+            // searches names only) matches nothing — never everything. An empty group
+            // would be dropped from the SQL and the box would answer the whole list.
+            if ($group->getQuery()->wheres === []) {
+                $group->whereRaw('1 = 0');
+            }
         });
     }
 
@@ -98,6 +106,14 @@ final class ListSearch
         $tokens = ArabicSearch::tokens($term);
         $names = array_map($qualify, $spec['names'] ?? []);
 
+        // A number or a reference — `0100001234`, `CR7-1045`, `104` — is not a name, and the
+        // folded name match is the one clause no index can serve: thirty nested `REPLACE`s
+        // on every row. Skipped for a term with a digit and no letter of any script beyond
+        // Latin (a ref's `CR`); an Arabic word with a digit in it is still a name.
+        if (self::looksLikeAReference($term)) {
+            $names = [];
+        }
+
         if ($names !== [] && $tokens !== []) {
             $query->orWhere(fn (Builder $n) => ArabicSearch::apply($n, $names, $tokens));
         }
@@ -124,9 +140,42 @@ final class ListSearch
         }
 
         foreach ($spec['relations'] ?? [] as $relation => $sub) {
+            $sub += ['id' => false];
+            $related = $query->getModel()->{$relation}();
+
+            // Nothing on the related row can take this term: no clause at all. Left in, an
+            // empty inner group reads «any related row exists» and matches every row.
+            $probe = $related->getRelated()->newQuery();
+            self::clauses($probe, $term, $sub);
+
+            if ($probe->getQuery()->wheres === []) {
+                continue;
+            }
+
+            // A parent row (the order's customer, the payment's basket): `IN (SELECT id …)`,
+            // which MySQL evaluates once, rather than `EXISTS (…)` correlated per row of the
+            // list — 200 000 orders searched by customer name took 2.6 s the other way.
+            if ($related instanceof BelongsTo) {
+                $matches = $related->getRelated()->newQuery()
+                    ->select($related->getQualifiedOwnerKeyName())
+                    ->where(fn (Builder $inner) => self::clauses($inner, $term, $sub));
+
+                $query->orWhereIn($related->getQualifiedForeignKeyName(), $matches);
+
+                continue;
+            }
+
             $query->orWhereHas($relation, function (Builder $related) use ($term, $sub): void {
-                $related->where(fn (Builder $inner) => self::clauses($inner, $term, $sub + ['id' => false]));
+                $related->where(fn (Builder $inner) => self::clauses($inner, $term, $sub));
             });
         }
+    }
+
+    /** Digits, and nothing but Latin letters and punctuation around them. */
+    public static function looksLikeAReference(string $term): bool
+    {
+        $term = strtr($term, self::ARABIC_INDIC);
+
+        return preg_match('/\d/', $term) === 1 && preg_match('/^[\dA-Za-z\s+\-_#\/.()]+$/', $term) === 1;
     }
 }

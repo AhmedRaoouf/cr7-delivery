@@ -167,5 +167,18 @@ class ListConventionsTest extends TestCase
         $this->assertContains($hers->id, $this->idsOf('/api/v1/admin/orders', ['filter' => ['search' => (string) $hers->id]]));
         // `%` and `_` typed are literals.
         $this->assertSame([], $this->idsOf('/api/v1/admin/orders', ['filter' => ['search' => '%']]));
+        // A reference that does not exist finds nothing — not «every order with a customer».
+        $this->assertSame([], $this->idsOf('/api/v1/admin/orders', ['filter' => ['search' => 'CR7-9999']]));
+        $this->assertSame([], $this->idsOf('/api/v1/admin/drivers', ['filter' => ['search' => 'CR7-9999']]));
+    }
+
+    public function test_a_term_no_haystack_can_take_matches_nothing(): void
+    {
+        $this->makeProduct($this->place, 'سندوتش فول', 15);
+
+        // The products report searches names only and not ids: a reference typed into it
+        // has no clause to meet, and must not be read as «no filter».
+        $this->assertSame([], $this->idsOf('/api/v1/admin/reports/products', ['filter' => ['search' => 'CR7-1']]));
+        $this->assertCount(1, $this->idsOf('/api/v1/admin/reports/products', ['filter' => ['search' => 'فول']]));
     }
 }

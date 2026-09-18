@@ -60,14 +60,17 @@ One box, many haystacks, OR-ed; each endpoint lists which of these it searches:
 `sort=<field>` ascending, `sort=-<field>` descending. Each endpoint has a whitelist and a
 default. **An unknown field is not an error: the default applies.** Ties always break on
 `id` in the sort's direction, so a page never repeats or drops a row. The applied sort is
-echoed as `meta.sort` on every paginated answer (new).
+echoed as `meta.sort` on every paginated list in §1–§3 and the customer's own lists in §4
+(new); the catalogue reads (`/restaurants`, a menu, reviews) do not echo it.
 
 ### 0.5 Paging
 
 - `page` (1-based), `per_page` **clamped to 1…100** (was 200) — non-numeric → the default,
   `0` → 1, `500` → 100. Default 20 unless the endpoint says otherwise.
 - Every paginated answer carries `meta.current_page`, `meta.per_page`, `meta.total`,
-  `meta.last_page` (and `meta.sort`). «total: yes» below means exactly this.
+  `meta.last_page` (and `meta.sort`, see §0.4). «total: yes» below means exactly this.
+  The 1…100 clamp is global (`ForceJsonResponse`, `security.max_per_page`), so it also holds
+  on any list this file does not name.
 - 🟡 `apps/admin/src/lib/queries.ts:209` asks `/admin/restaurants?per_page=200` for a
   picker — it now gets 100. Use **`GET /admin/lookups/restaurants`** (§1.27) for pickers.
 
@@ -379,7 +382,7 @@ scope. A filter naming an out-of-scope id (`filter[restaurant_id]=<not mine>`) r
 
 | Endpoint | search (new) | filters | sort (default first) |
 |---|---|---|---|
-| `GET /admin/reports/customers` | name / phone | `segment` (`new returning restricted`), `date_from/to` (the range the report counts) | `-created_at`, `name` |
+| `GET /admin/reports/customers` | name / phone | `segment` (`new returning restricted`, enum) | `-created_at`, `name` |
 | `GET /admin/reports/drivers` | name / phone | `city_id` (new), `date_from/to` | `-delivered_orders_count`, `earnings`, `name` |
 | `GET /admin/reports/products` | product name | `restaurant_id` (new) | `-sold_count`, `rating_avg`, `price`, `name` |
 | `GET /admin/reports/restaurants` | place name | `city_id` (new), `date_from/to` | `-gmv`, `delivered_orders_count`, `name` |
@@ -400,7 +403,7 @@ Light rows for dropdowns and typeaheads, scoped like the list they feed.
 | `zones` | `{id, name, name_en, city_id}` | `applyToZones` |
 | `store_categories` | `{id, name, name_en, slug}` | global |
 | `cuisines` | `{id, name, name_en}` | global |
-| `admins` | `{id, name}` — for `assigned_to` | global admins, or holders of `complaints.view` |
+| `admins` | `{id, name}` — active admin accounts, for `assigned_to` | caller must be global, or hold `complaints.view` or `users.view` (else 404) |
 
 `filter[search]` (names, phone for drivers), `filter[city_id]` (restaurants, drivers,
 zones), `filter[is_active]`, `limit` 1…200 (default 50). Sorted by name. **No paging, no
@@ -542,48 +545,69 @@ always the whole account.
 
 ## 5 · HTTP caching — `ETag`, `304`, `Cache-Control` (new)
 
-The catalogue the customer home opens on is built once and served from the server cache
-until something it depends on changes. Every answer below carries a weak `ETag`; a request
-whose `If-None-Match` matches gets **`304 Not Modified`** with no body and **without
-running the query**.
+The reads the customer home opens on are built once and served from the server cache
+until something they depend on changes (`CachePublicResponse`, route alias `http.cache`).
 
-| Endpoint | Server cache | `Cache-Control` | `Vary` |
+| Endpoint | Server cache | `Cache-Control` (signed out) | `Vary` |
 |---|---|---|---|
-| `GET /config` | 60 s | `private, max-age=0, must-revalidate` | `Accept-Language, Authorization` |
-| `GET /cuisines`, `GET /store-categories`, `GET /cities`, `GET /areas`, `GET /cities/{c}/zones`, `GET /faqs`, `GET /pages/{slug}` | 300 s | `public, max-age=60` | `Accept-Language` |
-| `GET /restaurants` (no `search`, pages 1–3) | 60 s | `public, max-age=30` | `Accept-Language` |
-| `GET /restaurants/{r}`, `/categories`, `/products` (no `search`), `/best-sellers` | 60 s | `public, max-age=30` | `Accept-Language` |
-| `GET /banners`, `GET /home-popups` | 60 s | signed-out: `public, max-age=30`; signed-in: `private, max-age=0, must-revalidate` | `Accept-Language, Authorization` |
+| `GET /config` | 60 s, **per audience** (guest · first order ahead · returning) | `public, max-age=30` | `Accept-Language, Authorization` |
+| `GET /banners`, `GET /home-popups` | 60 s, per audience | `public, max-age=30` | `Accept-Language, Authorization` |
+| `GET /cuisines`, `/store-categories`, `/cities`, `/cities/{c}/zones`, `/areas`, `/faqs`, `/pages/{slug}` | 300 s | `public, max-age=60` | `Accept-Language` |
+| `GET /restaurants`, `/restaurants/{r}`, `/restaurants/{r}/categories`, `/restaurants/{r}/products`, `/restaurants/{r}/best-sellers`, `/products/{p}`, `/cuisines/{c}/products` | 60 s | `public, max-age=30` | `Accept-Language` |
 
-- **Invalidation on write:** saving or deleting any `Restaurant`, `Product`, `MenuCategory`,
-  `ProductOptionGroup`, `ProductOption`, `RestaurantOpeningHour`, `Cuisine`, `StoreCategory`,
-  `Banner`, `HomePopup`, `City`, `ServiceZone`, `Faq`, `StaticPage` bumps the catalogue
-  version; saving a `Setting` bumps the config version. The next read rebuilds. Time-driven
-  facts (`is_open_now`, a banner's window) are at most one TTL late.
-- Search requests and pages past 3 are never cached (unbounded keys on a database cache store).
-- A `304` carries the same `ETag`, `Cache-Control` and `Vary`.
-- `/config`'s `first_order.free_delivery_eligible` still follows the token.
+- **Every `200` above carries a weak `ETag`** (`W/"<32 hex>"`). Send it back as
+  `If-None-Match`: a match is **`304 Not Modified` with an empty body**, and on a stored
+  answer the controller does not run at all. A `304` repeats `ETag`, `Cache-Control`, `Vary`.
+- **Signed in** (a bearer token): batch 67's rule still wins — every answer to a token is
+  `Cache-Control: no-store, private`. The `ETag` and the `304` work exactly the same, so a
+  client that keeps the tag itself (Dio interceptor, the BFF) still gets bodiless revalidation.
+  The audience routes (config, banners, popups) key the stored answer by audience, never by
+  account, and never hand one audience's body to another.
+- `X-Cache: HIT | MISS | BYPASS` on every answer — BYPASS = answered and tagged, not stored.
+- **Only bounded requests are stored**: query keys limited to `page`, `per_page`, `lat`,
+  `lng`, `city_id`, `zone_id`, `sort`, `category_id`, `selectable`, `active_only`,
+  `filter[store_category|store_category_id|cuisine_id|free_delivery|open_now|price_band]`;
+  `page` ≤ 3; `lat`/`lng` only when they are an area's own centre (what the app sends).
+  A `search`, a deeper page, a GPS point or any other key is answered (and tagged) but not stored.
+- **Invalidation on write:** saving or deleting a `Restaurant`, `RestaurantOpeningHour`,
+  `MenuCategory`, `Product`, `ProductOptionGroup`, `ProductOption`, `Cuisine`,
+  `StoreCategory`, `Banner`, `HomePopup`, `City`, `ServiceZone`, `Faq` or `StaticPage`
+  retires every stored catalogue answer (a new version, not a delete); saving a `Setting`
+  retires `/config` and the catalogue. So do the two bulk writes that fire no model event
+  (`POST /restaurant/products/bulk-availability`, `POST /admin/home-popups-reorder`, `POST /admin/store-categories-reorder`).
+  Not retired, bounded by the TTL: a pivot change (a place's cuisines or served zones),
+  counters moved with `increment()`, and time-driven facts (`is_open_now`, a banner's window).
+- `cr7:prune-cache` (every 10 min) deletes expired rows from the `cache` table in batches of
+  2 000 (`cache (expiration)` is indexed); it is a no-op on any store but `database`.
+- Switches, no deploy needed: `HTTP_CACHE_ENABLED=false` (build every read again),
+  `HTTP_CACHE_PUBLIC=false` (`private` instead of `public`, if a CDN ignores `Vary`).
 
 ## 6 · Throttles (new)
 
-Every authenticated group now has a per-account limiter, sized for polling every 15 s with
-room for navigation bursts. Refusal is the house envelope, `429`:
+Every signed-in route group carries `throttle.account` (`ThrottlePerAccount`): one bucket
+per account, keyed by the account id — never the IP (both dashboards share one BFF
+address; a carrier NAT puts a town behind a handful) — sized by account type, 60-second
+window. Refusal is the house envelope, `429`:
 
 ```json
 { "success": false, "error": "rate_limited", "message": "محاولات كثيرة جدًا، حاول لاحقًا",
   "meta": { "retry_after": 17 } }
 ```
 
-(plus `Retry-After` and `X-RateLimit-*` headers).
+plus `Retry-After`. Every allowed answer carries `X-RateLimit-Limit` / `X-RateLimit-Remaining`.
 
-One limiter, `api-user`, keyed by the account id; the limit follows the account type:
-
-| Account type | Limit | Applies to |
+| Account type | Per minute | Env |
 |---|---|---|
-| admin | 300 / min | `/admin/*` and the shared signed-in routes |
-| restaurant | 240 / min | `/restaurant/*` and the shared signed-in routes |
-| driver | 240 / min | `/driver/*` and the shared signed-in routes |
-| customer | 180 / min | the customer routes (`/cart`, `/orders`, `/addresses`, `/favorites`, `/customer/*`, `/complaints`, `/scheduled-orders`, …) and the shared signed-in routes (`/notifications`, `/devices`, …) |
-| `GET /search` (public, `public-search`) | 120 / min per account (signed in) · 300 / min per IP | |
+| admin | 300 | `THROTTLE_ADMIN_PER_MINUTE` |
+| restaurant | 240 | `THROTTLE_PLACE_PER_MINUTE` |
+| driver | 240 | `THROTTLE_CAPTAIN_PER_MINUTE` |
+| customer | 180 | `THROTTLE_CUSTOMER_PER_MINUTE` |
+| `GET /search` (public) | 120 per account when signed in · 300 per IP | `THROTTLE_SEARCH_PER_MINUTE`, `THROTTLE_SEARCH_PER_IP_PER_MINUTE` |
 
-Unchanged: the named limiters on sign-in, OTP, refresh, geo (owned elsewhere).
+The counters live in the **file** cache store (`THROTTLE_STORE`), not the default database
+store: counting every poll in the `cache` table would be a locked write per request. The
+route-level limiters that already existed (sign-in, OTP, refresh, geo, complaint create)
+are unchanged and still apply on top.
+
+A client that gets a `429` waits `meta.retry_after` seconds before that screen polls again;
+it never retries in a loop.

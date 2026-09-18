@@ -286,12 +286,51 @@ final class SettingsCatalog
                         'helper_en' => 'Off, a customer signs up with a number, a name and a password and no code.'],
                     ['key' => 'otp.ttl_minutes', 'type' => 'int', 'default' => 5, 'min' => 1, 'max' => 30,
                         'suffix_ar' => 'دقيقة', 'suffix_en' => 'min', 'label_ar' => 'صلاحية الرمز', 'label_en' => 'Code lifetime'],
-                    ['key' => 'otp.resend_seconds', 'type' => 'int', 'default' => 60, 'min' => 30, 'max' => 600,
-                        'suffix_ar' => 'ثانية', 'suffix_en' => 's', 'label_ar' => 'الانتظار قبل إعادة الإرسال', 'label_en' => 'Wait before resending'],
-                    ['key' => 'otp.max_attempts', 'type' => 'int', 'default' => 5, 'min' => 3, 'max' => 10,
+                    // Batch 68 — `public`: `GET /config` publishes both under `otp`, so a
+                    // client can draw the countdown and the attempts line before its
+                    // first send.
+                    ['key' => 'otp.resend_seconds', 'type' => 'int', 'default' => 60, 'min' => 30, 'max' => 600, 'public' => true,
+                        'suffix_ar' => 'ثانية', 'suffix_en' => 's', 'label_ar' => 'الانتظار قبل إعادة الإرسال', 'label_en' => 'Wait before resending',
+                        'helper_ar' => 'الانتظار بعد الرسالة الأولى. يتضاعف مع كل إعادة إرسال للرقم نفسه خلال ‪24‬ ساعة حتى الحد الأقصى أدناه، ويعود إلى البداية عند إدخال رمز صحيح.',
+                        'helper_en' => 'The wait after the first message. It doubles with every resend to the same number within 24 hours, up to the ceiling below, and starts over once a correct code is entered.'],
+                    ['key' => 'otp.resend_max_seconds', 'type' => 'int', 'default' => 900, 'min' => 60, 'max' => 3600,
+                        'suffix_ar' => 'ثانية', 'suffix_en' => 's', 'label_ar' => 'أطول انتظار قبل إعادة الإرسال', 'label_en' => 'Longest wait before resending',
+                        'helper_ar' => 'بالقيم الافتراضية: ‪60‬ ثم ‪120‬ ثم ‪240‬ ثم ‪480‬ ثم ‪900‬ ثانية.',
+                        'helper_en' => 'With the defaults: 60, then 120, 240, 480 and 900 seconds.'],
+                    ['key' => 'otp.max_attempts', 'type' => 'int', 'default' => 5, 'min' => 3, 'max' => 10, 'public' => true,
                         'label_ar' => 'المحاولات الخاطئة قبل قفل الرمز', 'label_en' => 'Wrong tries before a code locks'],
                     ['key' => 'otp.max_per_hour', 'type' => 'int', 'default' => 5, 'min' => 1, 'max' => 20,
                         'label_ar' => 'أقصى رسائل للرقم الواحد في الساعة', 'label_en' => 'Most messages to one number per hour'],
+                    ['key' => 'otp.max_per_day', 'type' => 'int', 'default' => 10, 'min' => 1, 'max' => 50,
+                        'label_ar' => 'أقصى رسائل للرقم الواحد في ‪24‬ ساعة', 'label_en' => 'Most messages to one number in 24 hours',
+                        'helper_ar' => 'لكل الأغراض معًا. الطلب الذي يتجاوزه يحظر الرقم للمدة أدناه.',
+                        'helper_en' => 'All purposes together. The request past it blocks the number for the period below.'],
+                    ['key' => 'otp.block_hours', 'type' => 'int', 'default' => 24, 'min' => 1, 'max' => 720,
+                        'suffix_ar' => 'ساعة', 'suffix_en' => 'h', 'label_ar' => 'مدة حظر الرقم', 'label_en' => 'How long a number is blocked',
+                        'helper_ar' => 'يمكن رفع الحظر يدويًا من صفحة رسائل التحقق.',
+                        'helper_en' => 'A block can be lifted by hand from the verification-messages page.'],
+                    ['key' => 'otp.max_failed_codes', 'type' => 'int', 'default' => 3, 'min' => 1, 'max' => 20,
+                        'label_ar' => 'الرموز المقفولة قبل حظر الرقم', 'label_en' => 'Locked codes before the number is blocked',
+                        'helper_ar' => 'رمز قُفل بعد المحاولات الخاطئة المسموح بها. يُعدّ خلال ‪24‬ ساعة.',
+                        'helper_en' => 'A code locked by its wrong tries. Counted over 24 hours.'],
+                    ['key' => 'otp.ip_max_per_hour', 'type' => 'int', 'default' => 20, 'min' => 1, 'max' => 1000,
+                        'label_ar' => 'أقصى رسائل من عنوان IP واحد في الساعة', 'label_en' => 'Most messages from one IP address per hour',
+                        'helper_ar' => 'تشترك مدينة كاملة أحيانًا في عنوان واحد لدى شركة الاتصالات، فلا تجعله ضيقًا.',
+                        'helper_en' => 'A whole town can share one carrier address, so keep this wide.'],
+                    ['key' => 'otp.ip_max_per_day', 'type' => 'int', 'default' => 100, 'min' => 1, 'max' => 10000,
+                        'label_ar' => 'أقصى رسائل من عنوان IP واحد في ‪24‬ ساعة', 'label_en' => 'Most messages from one IP address in 24 hours'],
+                    ['key' => 'otp.device_max_per_day', 'type' => 'int', 'default' => 10, 'min' => 1, 'max' => 100,
+                        'label_ar' => 'أقصى رسائل من جهاز واحد في ‪24‬ ساعة', 'label_en' => 'Most messages from one device in 24 hours',
+                        'helper_ar' => 'يسري على التطبيق فقط؛ لوحتا التحكم لا ترسلان معرّف جهاز.',
+                        'helper_en' => 'Applies to the app only; the two dashboards send no device id.'],
+                    ['key' => 'otp.hourly_budget', 'type' => 'int', 'default' => 100, 'min' => 0, 'max' => 10000,
+                        'label_ar' => 'حد المنصة من الرسائل المدفوعة في الساعة', 'label_en' => 'Platform limit on paid messages per hour',
+                        'helper_ar' => 'بعد بلوغه لا تُرسل رموز جديدة حتى تنقضي الساعة. رموز الإدارة مستثناة. الصفر يوقف الرسائل المدفوعة كلها.',
+                        'helper_en' => 'Past it no new codes are sent until the hour has passed. Admin codes are exempt. Zero stops every paid message.'],
+                    ['key' => 'otp.daily_budget', 'type' => 'int', 'default' => 500, 'min' => 0, 'max' => 100000,
+                        'label_ar' => 'حد المنصة من الرسائل المدفوعة في اليوم', 'label_en' => 'Platform limit on paid messages per day',
+                        'helper_ar' => 'يصلك تنبيه عند ‪80‬% وعند بلوغه، وبعده لا تُرسل رموز جديدة حتى اليوم التالي. رموز الإدارة مستثناة. الصفر يوقف الرسائل المدفوعة كلها.',
+                        'helper_en' => 'You are alerted at 80% and when it is reached; past it no new codes are sent until the next day. Admin codes are exempt. Zero stops every paid message.'],
                 ],
             ],
             // D-120 — how long a session may sit unused. There is no cap on a session that
@@ -545,6 +584,11 @@ final class SettingsCatalog
             if ($touches('payment.reminder_before_minutes', 'payment.transfer_deadline_minutes')
                 && (int) $after('payment.reminder_before_minutes') >= (int) $after('payment.transfer_deadline_minutes')) {
                 $errors['payment.reminder_before_minutes'] = ['يجب أن يأتي التذكير قبل انتهاء مهلة التحويل'];
+            }
+
+            if ($touches('otp.resend_seconds', 'otp.resend_max_seconds')
+                && (int) $after('otp.resend_max_seconds') < (int) $after('otp.resend_seconds')) {
+                $errors['otp.resend_max_seconds'] = ['يجب ألا يقل أطول انتظار عن الانتظار الأول'];
             }
 
             if ($touches('restaurant.prep_minutes_min', 'restaurant.prep_minutes_max')

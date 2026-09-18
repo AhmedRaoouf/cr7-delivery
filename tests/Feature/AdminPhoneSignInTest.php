@@ -115,7 +115,10 @@ class AdminPhoneSignInTest extends TestCase
         $this->withHeader('X-App', 'admin')
             ->postJson('/api/v1/auth/password/forgot', ['login' => '+20 100 000 0099'])
             ->assertOk()
-            ->assertJsonPath('data', null);
+            // Batch 68 — the send shape, the same for every number; never an echoed code.
+            ->assertJsonPath('data.static_otp', null)
+            ->assertJsonPath('data.code_length', 6)
+            ->assertJsonMissingPath('data.masked_phone');
 
         $this->assertCount(1, $this->channel->sent);
         $code = $this->channel->lastCodeFor($admin->phone);
@@ -196,7 +199,10 @@ class AdminPhoneSignInTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.masked_phone', '010•••••99')
             ->assertJsonPath('data.resend_in', 60)
-            ->assertJsonMissingPath('data.static_otp');
+            // Batch 68 — the send shape everywhere; a password-change code is never the
+            // test code, so the echo is always null.
+            ->assertJsonPath('data.static_otp', null)
+            ->assertJsonPath('data.max_attempts', 5);
 
         // A real SMS with a random code, test mode or not.
         $this->assertCount(1, $this->channel->sent);

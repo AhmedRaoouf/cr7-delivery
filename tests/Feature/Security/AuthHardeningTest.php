@@ -3,7 +3,7 @@
 namespace Tests\Feature\Security;
 
 use App\Models\Driver;
-use App\Models\OtpCode;
+use App\Models\SmsSend;
 use App\Models\User;
 use App\Services\Otp\OtpChannel;
 use Database\Seeders\SettingsSeeder;
@@ -107,7 +107,11 @@ class AuthHardeningTest extends TestCase
         // on the platform, and is it a captain, a place or the admin?».
         $this->assertSame($registered, $stranger);
         $this->assertSame([200, 'otp_resend_cooldown'], $registered);
-        $this->assertSame(0, OtpCode::query()->where('phone', '01090009500')->count());
+        // Batch 68 — nothing was sent for the stranger: every send on its ledger is a
+        // shadow. Its code row does exist now, random and never sent, so `password/reset`
+        // counts attempts for it exactly as for a registered number.
+        $this->assertSame(['shadow'], SmsSend::query()->where('phone', '01090009500')->distinct()->pluck('kind')->all());
+        $this->assertSame(0, SmsSend::query()->where('phone', '01090009500')->where('kind', 'real')->count());
     }
 
     public function test_verification_codes_cannot_be_sprayed(): void

@@ -263,5 +263,9 @@
     "هذا الكابتن في مشوار الآن": "This captain is on an errand right now",
     "رحلة هذا الكابتن مكتملة": "This captain's trip is full",
     "انتهت الجلسة. سجّل الدخول مرة أخرى.": "Your session has ended. Please sign in again.",
-    "هذه الجلسة تتجدد تلقائيًا بالفعل": "This session already renews itself."
+    "هذه الجلسة تتجدد تلقائيًا بالفعل": "This session already renews itself.",
+    "تم إيقاف رموز التحقق لهذا الرقم مؤقتًا": "Verification codes for this number are paused for now",
+    "خدمة رسائل التحقق متوقفة مؤقتًا، حاول لاحقًا": "Verification messages are paused for now, please try again later",
+    "تم حظر الرقم": "Number blocked",
+    "تم رفع الحظر عن الرقم": "Number unblocked"
 }

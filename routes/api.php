@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\OrderGroupController as AdminOrderGroupController;
+use App\Http\Controllers\Api\Admin\OtpController as AdminOtpController;
 use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
@@ -802,6 +803,18 @@ Route::prefix('v1')->group(function () {
             Route::get('/settings/sms-status', [AdminSettingController::class, 'smsStatus']);
         });
         Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware(['permission:settings.manage', 'admin.global']);
+
+        // Batch 68 — verification messages: what they cost today, and the numbers the
+        // platform has stopped sending to. The settings permissions, global only — the
+        // budget is a setting, and these are anybody's phone numbers.
+        Route::middleware(['permission:settings.view', 'admin.global'])->group(function () {
+            Route::get('/otp/usage', [AdminOtpController::class, 'usage']);
+            Route::get('/otp/blocks', [AdminOtpController::class, 'index']);
+        });
+        Route::middleware(['permission:settings.manage', 'admin.global'])->group(function () {
+            Route::post('/otp/blocks', [AdminOtpController::class, 'store']);
+            Route::delete('/otp/blocks/{block}', [AdminOtpController::class, 'destroy'])->whereNumber('block');
+        });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware(['permission:audit.view', 'admin.global']);
 

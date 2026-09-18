@@ -76,3 +76,11 @@ Schedule::command('cr7:tick')->everyMinute()->withoutOverlapping(2);
  */
 Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlapping(30);
 Schedule::command('cr7:prune-sessions')->hourly()->withoutOverlapping(30);
+
+/*
+ * Batch 68 — the SMS ledger, dead verification codes and long-ended number blocks. Every
+ * cap counts at most ‪24‬ hours back, so a pass that never runs costs disk, not
+ * correctness. An explicit `withoutOverlapping` expiry, for the reason written above
+ * `cr7:tick`.
+ */
+Schedule::command('cr7:prune-otp')->daily()->withoutOverlapping(30);

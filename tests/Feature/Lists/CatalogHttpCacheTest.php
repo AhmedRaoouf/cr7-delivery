@@ -39,7 +39,9 @@ class CatalogHttpCacheTest extends TestCase
 
         $this->assertMatchesRegularExpression('#^W/"[0-9a-f]{32}"$#', (string) $etag);
         $this->assertSame('MISS', $first->headers->get('X-Cache'));
-        $this->assertStringContainsString('public', (string) $first->headers->get('Cache-Control'));
+        // `private` by default: nobody has measured whether the CDN in front of production
+        // honours `Vary` (config/lists.php).
+        $this->assertStringContainsString('private', (string) $first->headers->get('Cache-Control'));
         $this->assertStringContainsString('max-age=30', (string) $first->headers->get('Cache-Control'));
         $this->assertContains('Accept-Language', $first->headers->all('Vary'));
         $this->assertContains('Authorization', $first->headers->all('Vary'));
@@ -54,6 +56,17 @@ class CatalogHttpCacheTest extends TestCase
 
         // A tag that no longer matches is a full answer.
         $this->getJson('/api/v1/config', ['If-None-Match' => 'W/"stale"'])->assertOk()->assertJsonPath('success', true);
+    }
+
+    public function test_the_public_switch_lets_a_shared_cache_keep_a_guest_answer(): void
+    {
+        config(['lists.http_cache.public' => true]);
+
+        $guest = $this->getJson('/api/v1/config')->assertOk();
+
+        $this->assertStringContainsString('public', (string) $guest->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=30', (string) $guest->headers->get('Cache-Control'));
+        $this->assertContains('Accept-Language', $guest->headers->all('Vary'));
     }
 
     public function test_a_hit_does_not_run_the_controller_and_a_setting_saved_retires_it(): void

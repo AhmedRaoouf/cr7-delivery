@@ -548,7 +548,7 @@ always the whole account.
 The reads the customer home opens on are built once and served from the server cache
 until something they depend on changes (`CachePublicResponse`, route alias `http.cache`).
 
-| Endpoint | Server cache | `Cache-Control` (signed out) | `Vary` |
+| Endpoint | Server cache | `Cache-Control` (signed out; `private` unless `HTTP_CACHE_PUBLIC=true`) | `Vary` |
 |---|---|---|---|
 | `GET /config` | 60 s, **per audience** (guest · first order ahead · returning) | `public, max-age=30` | `Accept-Language, Authorization` |
 | `GET /banners`, `GET /home-popups` | 60 s, per audience | `public, max-age=30` | `Accept-Language, Authorization` |
@@ -580,7 +580,9 @@ until something they depend on changes (`CachePublicResponse`, route alias `http
 - `cr7:prune-cache` (every 10 min) deletes expired rows from the `cache` table in batches of
   2 000 (`cache (expiration)` is indexed); it is a no-op on any store but `database`.
 - Switches, no deploy needed: `HTTP_CACHE_ENABLED=false` (build every read again),
-  `HTTP_CACHE_PUBLIC=false` (`private` instead of `public`, if a CDN ignores `Vary`).
+  `HTTP_CACHE_PUBLIC=true` (`public` instead of `private`). **Off by default** — production
+  sits behind Hostinger's CDN (`server: hcdn`), and whether it honours `Vary` has not been
+  measured; a CDN that ignores it would hand an English body to an Arabic phone.
 
 ## 6 · Throttles (new)
 

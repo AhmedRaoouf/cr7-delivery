@@ -10,9 +10,14 @@ return [
     'http_cache' => [
         // Off: every public read is built from the database again, as before batch 68.
         'enabled' => (bool) env('HTTP_CACHE_ENABLED', true),
-        // Off: `private` instead of `public` on the language-only answers — for a shared
-        // cache (a CDN) found to ignore `Vary: Accept-Language`.
-        'public' => (bool) env('HTTP_CACHE_PUBLIC', true),
+        // On: `public` instead of `private` on the language-only answers, so a shared cache
+        // may keep them. Off by default: production sits behind Hostinger's CDN (`server:
+        // hcdn`), which has already been measured mangling a response header (doc 65 — it
+        // forwarded one CSP directive of many), and nobody has measured whether it honours
+        // `Vary: Accept-Language` / `Vary: Authorization`. A CDN that ignores `Vary` would
+        // hand an English body to an Arabic phone. The server-side store and the ETag/304
+        // still do the work with this off; turn it on only after measuring the CDN.
+        'public' => (bool) env('HTTP_CACHE_PUBLIC', false),
     ],
 
     /*

@@ -70,7 +70,7 @@ class CachePublicResponse
         $personal = $byViewer && $viewer !== 'guest';
         $response->headers->set('Cache-Control', match (true) {
             $personal => 'private, max-age=0, must-revalidate',
-            (bool) config('lists.http_cache.public', true) => 'public, max-age='.max(0, (int) $maxAge),
+            (bool) config('lists.http_cache.public', false) => 'public, max-age='.max(0, (int) $maxAge),
             default => 'private, max-age='.max(0, (int) $maxAge),
         });
 

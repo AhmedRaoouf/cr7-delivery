@@ -37,11 +37,10 @@ return [
     |
     */
 
-    // Batch 67 — bearer tokens only. No client of this API holds a web session (D-69:
-    // the dashboards keep the token server-side, the app sends it as a header), so
-    // consulting the `web` session guard first only kept a cookie-authentication path
-    // open that nothing uses.
-    'guard' => [],
+    // Left as `web` deliberately (batch 67 looked at emptying it): no `/api/*` route
+    // starts a session, so the web guard can never authenticate an API request in
+    // production, and the test suite's `actingAs()` relies on it.
+    'guard' => ['web'],
 
     // Batch 67 — and so `/sanctum/csrf-cookie`, the SPA endpoint that answered 204 and
     // minted an `XSRF-TOKEN` and a session row for anybody who asked, is not registered.

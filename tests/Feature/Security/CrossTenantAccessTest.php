@@ -96,6 +96,11 @@ class CrossTenantAccessTest extends TestCase
         $this->postJson("/api/v1/addresses/{$address->id}/default")->assertNotFound();
 
         $this->patchJson("/api/v1/cart/items/{$item->id}", ['quantity' => 5])->assertNotFound();
+
+        // An invalid body must not turn the 404 into a 422: validation used to run before
+        // ownership, so «someone else's row» and «no such row» answered differently.
+        $this->patchJson("/api/v1/addresses/{$address->id}", ['latitude' => 'not-a-number'])->assertNotFound();
+        $this->patchJson("/api/v1/cart/items/{$item->id}", ['quantity' => 0])->assertNotFound();
         $this->deleteJson("/api/v1/cart/items/{$item->id}")->assertNotFound();
 
         $this->getJson("/api/v1/complaints/{$complaint->id}")->assertNotFound();

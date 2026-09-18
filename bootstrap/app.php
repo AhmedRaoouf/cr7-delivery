@@ -199,7 +199,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     match (true) {
                         $status === 413 => 'payload_too_large',
-                        $status === 503 => 'maintenance',
+                        $status === 503 => 'service_unavailable',
                         $status >= 500 => 'server_error',
                         default => 'http_error',
                     },

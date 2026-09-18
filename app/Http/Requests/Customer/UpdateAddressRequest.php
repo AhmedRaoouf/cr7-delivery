@@ -18,6 +18,11 @@ class UpdateAddressRequest extends FormRequest
 
     public function authorize(): bool
     {
+        // Batch 67 — ownership before validation. Validation ran first, so another
+        // customer's row answered 422 where a missing one answered 404 — an existence
+        // oracle for somebody else's address (doc 12 §5: violations are a 404).
+        abort_unless($this->route('address')?->user_id === $this->user()?->id, 404);
+
         return true;
     }
 

@@ -65,9 +65,15 @@ class SecurityHeaders
         $headers->set('Cross-Origin-Resource-Policy', 'same-site');
         $headers->set('X-Permitted-Cross-Domain-Policies', 'none');
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+        $headers->set('Cross-Origin-Opener-Policy', 'same-origin');
+
+        // JSON anywhere on this origin (the API, and `/` itself) is data, never a page.
+        if (! $headers->has('Content-Security-Policy')
+            && ($request->is('api/*') || str_contains((string) $headers->get('Content-Type'), 'json'))) {
+            $headers->set('Content-Security-Policy', self::API_CSP);
+        }
 
         if ($request->is('api/*')) {
-            $headers->set('Content-Security-Policy', self::API_CSP);
 
             if ($request->bearerToken() !== null) {
                 $headers->set('Cache-Control', 'no-store, private');

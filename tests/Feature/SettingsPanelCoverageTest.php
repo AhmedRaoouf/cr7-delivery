@@ -270,6 +270,8 @@ class SettingsPanelCoverageTest extends TestCase
         $this->assertSame(SettingsCatalog::get('app.force_update.android_min_version'), $config['force_update']['android_min']);
         $this->assertSame(SettingsCatalog::bool('app.maintenance_mode'), $config['maintenance']['enabled']);
         $this->assertSame(SettingsCatalog::bool('payment.cash_enabled'), $config['payment']['cash_enabled']);
+        $this->assertEquals(SettingsCatalog::float('payment.cash_max_total'), $config['payment']['cash_max_total']);
+        $this->assertEquals(1000, $config['payment']['cash_max_total']);
         $this->assertSame(SettingsCatalog::int('payment.transfer_deadline_minutes'), $config['payment']['transfer_deadline_minutes']);
         $this->assertSame(SettingsCatalog::bool('auth.register_requires_otp'), $config['auth']['register_requires_otp']);
     }

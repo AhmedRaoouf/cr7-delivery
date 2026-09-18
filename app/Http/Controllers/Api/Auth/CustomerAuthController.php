@@ -12,8 +12,8 @@ use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
-use App\Support\OtpRequester;
 use App\Support\Auth\SessionClient;
+use App\Support\OtpRequester;
 use Illuminate\Http\JsonResponse;
 
 /**

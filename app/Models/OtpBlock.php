@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Batch 68 — a number the platform will not send a code to, or check one for, until
@@ -12,8 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property string $phone
  * @property string $reason daily_cap|burned_codes|admin|abuse
- * @property \Illuminate\Support\Carbon $blocked_until
- * @property \Illuminate\Support\Carbon|null $lifted_at
+ * @property Carbon $blocked_until
+ * @property Carbon|null $lifted_at
  */
 class OtpBlock extends Model
 {

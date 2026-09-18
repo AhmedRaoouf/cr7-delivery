@@ -144,7 +144,7 @@ class AuthController extends Controller
      * The same sentence whether or not the account exists (doc 08 §1) — and, since batch 68,
      * the same `data` too: `{resend_in, expires_in, code_length, max_attempts, static_otp}`,
      * with every clock behind it running for a stranger's number exactly as for a registered
-     * one ({@see \App\Actions\Auth\SendOtpAction::shadow()}). `static_otp` is always null
+     * one ({@see SendOtpAction::shadow()}). `static_otp` is always null
      * here — see {@see ForgotPasswordAction::execute()}.
      */
     public function forgotPassword(ForgotPasswordRequest $request, ForgotPasswordAction $action): JsonResponse

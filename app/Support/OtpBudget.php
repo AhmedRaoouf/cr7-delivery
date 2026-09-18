@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\UserType;
+use App\Exceptions\ApiException;
 use App\Models\Notification;
 use App\Models\SmsSend;
 use App\Models\User;
@@ -66,7 +67,7 @@ final class OtpBudget
             ->count();
     }
 
-    /** @throws \App\Exceptions\ApiException 503 otp_unavailable */
+    /** @throws ApiException 503 otp_unavailable */
     public static function assertOpen(): void
     {
         if (self::sentToday() >= self::daily()) {
@@ -104,7 +105,7 @@ final class OtpBudget
         }
     }
 
-    private static function unavailable(CarbonInterface $availableAt): \App\Exceptions\ApiException
+    private static function unavailable(CarbonInterface $availableAt): ApiException
     {
         return OtpGuard::refusal('otp_unavailable', 'خدمة رسائل التحقق متوقفة مؤقتًا، حاول لاحقًا', 503, $availableAt);
     }

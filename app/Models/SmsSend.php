@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Support\OtpGuard;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Batch 68 — one verification code the platform answered, and what it cost.
  *
- * The ledger every OTP cap is counted from ({@see \App\Support\OtpGuard}). Written for
+ * The ledger every OTP cap is counted from ({@see OtpGuard}). Written for
  * every send the platform says yes to — a real SMS, the operator's test code, and the
  * shadow send a stranger's «نسيت كلمة المرور» gets — and never for a refusal, so a
  * blocked caller hammering the endpoint adds nothing to anybody's count.

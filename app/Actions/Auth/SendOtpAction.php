@@ -13,6 +13,7 @@ use App\Support\Otp;
 use App\Support\OtpBudget;
 use App\Support\OtpGuard;
 use App\Support\OtpRequester;
+use App\Support\OtpVerifier;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +30,7 @@ use Illuminate\Support\Facades\Log;
  * the platform budget.
  *
  * **One live code per number and purpose.** A new send retires every earlier code that is
- * still live, and {@see \App\Support\OtpVerifier} only ever checks the latest — so a code
+ * still live, and {@see OtpVerifier} only ever checks the latest — so a code
  * read off an old message, or guessed at across re-sends, is worth nothing once a new one
  * has gone out.
  *

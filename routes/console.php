@@ -76,3 +76,11 @@ Schedule::command('cr7:tick')->everyMinute()->withoutOverlapping(2);
  */
 Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlapping(30);
 Schedule::command('cr7:prune-sessions')->hourly()->withoutOverlapping(30);
+
+/*
+ * Batch 68 — the database cache store deletes an expired row only when that exact key is
+ * read again, and the public read cache retires its entries by moving to a new version
+ * rather than deleting them (ADMIN-LISTS.md §5). Every ten minutes the expired rows go, in
+ * bounded batches, so the table holds roughly what is live.
+ */
+Schedule::command('cr7:prune-cache')->everyTenMinutes()->withoutOverlapping(10);

@@ -102,14 +102,18 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     // §2 Public / shared — no auth.
-    Route::get('/config', [ConfigController::class, 'index']);
+    // Batch 68 — `http.cache:{group},{ttl},{max-age}[,viewer]` on the reads the customer
+    // home opens on: stored server-side per version, `ETag` + `304`, `Cache-Control`
+    // (ADMIN-LISTS.md §5, `CachePublicResponse`). Every signed-in group below carries
+    // `throttle.account`, one bucket per account sized by its type (§6).
+    Route::get('/config', [ConfigController::class, 'index'])->middleware('http.cache:config,60,30,viewer');
     // Every priced area, flat, in one call. This is what the app reads now:
     // the two below are the city-first pair it replaced, kept because older
     // installs are still asking for them (operator ruling 2026-09-12 — «هي
     // مناطق على طول»). The old pair also cost one request **per city**.
-    Route::get('/areas', [GeoController::class, 'areas']);
-    Route::get('/cities', [SharedCityController::class, 'index']);
-    Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
+    Route::get('/areas', [GeoController::class, 'areas'])->middleware('http.cache:catalog,300,60');
+    Route::get('/cities', [SharedCityController::class, 'index'])->middleware('http.cache:catalog,300,60');
+    Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones'])->middleware('http.cache:catalog,300,60');
     Route::post('/geo/resolve', [GeoController::class, 'resolve'])->middleware('throttle:120,1');
     // Our own shops, by name, near a point — what the raster tiles under them will
     // never know. Public for the same reason `/store-categories` is: the app browses
@@ -138,22 +142,22 @@ Route::prefix('v1')->group(function () {
     // makes the server fetch a URL a user chose, and the host allowlist inside is
     // what keeps that from being an open proxy.
     Route::middleware('throttle:geo-expand')->get('/geo/expand-link', [GeoController::class, 'expandLink']);
-    Route::get('/cuisines', [SharedCuisineController::class, 'index']);
+    Route::get('/cuisines', [SharedCuisineController::class, 'index'])->middleware('http.cache:catalog,300,60');
     // The home screen's top strip. Public — the app browses before it signs in.
-    Route::get('/store-categories', [SharedStoreCategoryController::class, 'index']);
-    Route::get('/banners', [BannerController::class, 'index']);
+    Route::get('/store-categories', [SharedStoreCategoryController::class, 'index'])->middleware('http.cache:catalog,300,60');
+    Route::get('/banners', [BannerController::class, 'index'])->middleware('http.cache:catalog,60,30,viewer');
     // «العرض المنبثق» — the card drawn over the home screen the moment it opens. Public
     // for the same reason the strip above is: it is shown before anyone signs in.
-    Route::get('/home-popups', [SharedHomePopupController::class, 'index']);
-    Route::get('/pages/{slug}', [PageController::class, 'show']);
-    Route::get('/faqs', [FaqController::class, 'index']);
+    Route::get('/home-popups', [SharedHomePopupController::class, 'index'])->middleware('http.cache:catalog,60,30,viewer');
+    Route::get('/pages/{slug}', [PageController::class, 'show'])->middleware('http.cache:catalog,300,60');
+    Route::get('/faqs', [FaqController::class, 'index'])->middleware('http.cache:catalog,300,60');
     // APP-03 — public by necessity: an applicant has no account yet, and this creates
     // an application rather than one (D-45).
     // Batch 67 — public, unauthenticated, and it stores up to three 5 MB files per
     // request on the private disk. The app stopped offering it (doc 61); throttled
     // hard rather than removed, for an old build still in somebody's pocket.
     Route::post('/captain-applications', [CaptainApplicationController::class, 'store'])->middleware('throttle:captain-application');
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'throttle.account'])->group(function () {
         Route::post('/devices', [DeviceController::class, 'store']);
         Route::delete('/devices', [DeviceController::class, 'destroy']);
     });
@@ -217,7 +221,7 @@ Route::prefix('v1')->group(function () {
     | caller (doc 12 §5): user_id = auth.id, enforced inside the controller.
     |----------------------------------------------------------------------
     */
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer', 'throttle.account'])->group(function () {
         Route::get('/addresses', [AddressController::class, 'index']);
         Route::post('/addresses', [AddressController::class, 'store']);
         // D-112 — proving a second number for an address. Declared before the
@@ -281,7 +285,7 @@ Route::prefix('v1')->group(function () {
     | `client.type` still refuses the dashboard binaries.
     |----------------------------------------------------------------------
     */
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer,driver'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer,driver', 'throttle.account'])->group(function () {
         Route::get('/complaints', [CustomerComplaintController::class, 'index']);
         Route::post('/complaints', [CustomerComplaintController::class, 'store'])->middleware('throttle:20,1');
         Route::get('/complaints/{complaint}', [CustomerComplaintController::class, 'show']);
@@ -298,7 +302,7 @@ Route::prefix('v1')->group(function () {
     | a case that exists, and the captain's half lives in §5.
     |----------------------------------------------------------------------
     */
-    Route::prefix('customer')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer'])->group(function () {
+    Route::prefix('customer')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer', 'throttle.account'])->group(function () {
         Route::post('/errands/quote', [CustomerErrandController::class, 'quote']);
         Route::post('/errands', [CustomerErrandController::class, 'store']);
         Route::get('/errands', [CustomerErrandController::class, 'index']);
@@ -315,7 +319,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'throttle:120,1'])
         ->get('/geo/route', [GeoController::class, 'route']);
 
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'throttle.account'])->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
@@ -323,21 +327,21 @@ Route::prefix('v1')->group(function () {
     });
 
     // Catalog browsing — public within the customer app, no auth required (matches doc 08 §4 grouping).
-    Route::get('/restaurants', [CustomerRestaurantController::class, 'index']);
-    Route::get('/restaurants/{restaurant}', [CustomerRestaurantController::class, 'show']);
-    Route::get('/restaurants/{restaurant}/categories', [CustomerRestaurantController::class, 'categories']);
-    Route::get('/restaurants/{restaurant}/products', [CustomerRestaurantController::class, 'products']);
-    Route::get('/restaurants/{restaurant}/best-sellers', [CustomerRestaurantController::class, 'bestSellers']);
+    Route::get('/restaurants', [CustomerRestaurantController::class, 'index'])->middleware('http.cache:catalog,60,30');
+    Route::get('/restaurants/{restaurant}', [CustomerRestaurantController::class, 'show'])->middleware('http.cache:catalog,60,30');
+    Route::get('/restaurants/{restaurant}/categories', [CustomerRestaurantController::class, 'categories'])->middleware('http.cache:catalog,60,30');
+    Route::get('/restaurants/{restaurant}/products', [CustomerRestaurantController::class, 'products'])->middleware('http.cache:catalog,60,30');
+    Route::get('/restaurants/{restaurant}/best-sellers', [CustomerRestaurantController::class, 'bestSellers'])->middleware('http.cache:catalog,60,30');
     Route::get('/restaurants/{restaurant}/reviews', [CustomerRestaurantController::class, 'reviews']);
     // Before /products/{product}: restoring a saved basket is one request, not one
     // per line.
     Route::get('/products', [CustomerProductController::class, 'index']);
-    Route::get('/products/{product}', [CustomerProductController::class, 'show']);
+    Route::get('/products/{product}', [CustomerProductController::class, 'show'])->middleware('http.cache:catalog,60,30');
     // Tapping a cuisine lists dishes, not kitchens — «يجيبلي المنتجات على طول، مش
     // مطاعم». Public like the rest of the catalogue, and gated on nothing: the
     // browse path runs before the customer signs in.
-    Route::get('/cuisines/{cuisine}/products', [CustomerProductController::class, 'byCuisine']);
-    Route::get('/search', [SearchController::class, 'index']);
+    Route::get('/cuisines/{cuisine}/products', [CustomerProductController::class, 'byCuisine'])->middleware('http.cache:catalog,60,30');
+    Route::get('/search', [SearchController::class, 'index'])->middleware('throttle.account:search');
 
     /*
     |----------------------------------------------------------------------
@@ -346,7 +350,7 @@ Route::prefix('v1')->group(function () {
     | sees its own slice of a group, never a sibling sub-order.
     |----------------------------------------------------------------------
     */
-    Route::prefix('restaurant')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:restaurant'])->group(function () {
+    Route::prefix('restaurant')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:restaurant', 'throttle.account'])->group(function () {
         Route::get('/me', [RestaurantMeController::class, 'show']);
         Route::patch('/me', [RestaurantMeController::class, 'update']);
         Route::post('/open-status', [RestaurantMeController::class, 'openStatus']);
@@ -426,7 +430,7 @@ Route::prefix('v1')->group(function () {
     | an order (doc 05 §4), never the app.
     |----------------------------------------------------------------------
     */
-    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:driver'])->group(function () {
+    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:driver', 'throttle.account'])->group(function () {
         Route::get('/me', [DriverMeController::class, 'show']);
         Route::post('/status', [DriverMeController::class, 'status']);
         Route::post('/location', [DriverMeController::class, 'location']);
@@ -483,7 +487,7 @@ Route::prefix('v1')->group(function () {
     | controller via App\Support\AdminScope — out-of-scope resolves as 404.
     |----------------------------------------------------------------------
     */
-    Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:admin'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:admin', 'throttle.account'])->group(function () {
 
         // Batch 68 — the filter pickers (ADMIN-LISTS.md §1.27): id + name, scoped like the
         // list each one narrows, open to every admin.

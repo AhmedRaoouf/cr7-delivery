@@ -28,7 +28,9 @@ class RestaurantController extends Controller
         $lng = $request->float('lng') ?: null;
 
         $restaurants = Restaurant::query()
-            ->with(['cuisines', 'serviceZone', 'storeCategory'])
+            // `openingHours` too (batch 68): `is_open_now` on every card read today's row
+            // with a query of its own.
+            ->with(['cuisines', 'serviceZone', 'storeCategory', 'openingHours'])
             ->where('is_active', true)
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->when($request->integer('zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))

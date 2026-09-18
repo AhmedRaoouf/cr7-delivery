@@ -11,6 +11,7 @@ use App\Models\HomePopup;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\FileUploader;
+use App\Support\Http\PublicCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -123,6 +124,9 @@ class HomePopupController extends Controller
         foreach ($validated['ids'] as $index => $id) {
             HomePopup::query()->whereKey($id)->update(['sort_order' => $index]);
         }
+
+        // A reorder is a bulk update and fires no model event (batch 68).
+        PublicCache::bump('catalog');
 
         // Logged against the first card in the new order rather than not at all —
         // `AuditLogger` requires a subject, and the order of what the customer is shown

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
 use App\Models\Product;
 use App\Support\ApiResponse;
+use App\Support\Http\PublicCache;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -103,6 +104,8 @@ class ProductController extends Controller
         ]);
 
         $restaurant->products()->whereIn('id', $validated['ids'])->update(['is_available' => $validated['is_available']]);
+        // A bulk update fires no model event; the public menu must not wait out its TTL.
+        PublicCache::bump('catalog');
 
         return ApiResponse::success(message: 'تم تحديث حالة التوفر للمنتجات المحددة');
     }

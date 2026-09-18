@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Schema;
  *    audit log's action filter.
  *  - `ratings (rateable_type, rateable_id, is_hidden, created_at)` — a place's public
  *    reviews and `RES-27`, newest first.
+ *  - `cache (expiration)` — `cr7:prune-cache` deletes expired rows every ten minutes; the
+ *    public read cache and the geocoders write keys that are never read again.
  *
  * Guarded by `hasIndex`, so a database that already carries one (added by hand during an
  * incident) migrates cleanly.
@@ -55,6 +57,9 @@ return new class extends Migration
         ],
         'ratings' => [
             'ratings_rateable_hidden_created_at_index' => ['rateable_type', 'rateable_id', 'is_hidden', 'created_at'],
+        ],
+        'cache' => [
+            'cache_expiration_index' => ['expiration'],
         ],
     ];
 

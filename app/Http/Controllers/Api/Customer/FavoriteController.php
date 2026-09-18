@@ -9,6 +9,7 @@ use App\Models\Favorite;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\ApiResponse;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,14 @@ class FavoriteController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $favorites = $request->user()->favorites()->with('favoritable')->latest()->get();
+        // A favourite place is drawn with its fee, ETA and «مفتوح الآن», which read its zone
+        // and today's hours — loaded once for the list, not once per card (batch 68).
+        $favorites = $request->user()->favorites()
+            ->with(['favoritable' => fn (MorphTo $morph) => $morph->morphWith([
+                Restaurant::class => ['serviceZone', 'openingHours'],
+            ])])
+            ->latest()
+            ->get();
 
         $data = $favorites->map(function (Favorite $favorite) {
             $type = $favorite->favoritable_type;

@@ -37,7 +37,10 @@ class SearchController extends Controller
     /** @param  list<string>  $tokens */
     private function restaurants(Request $request, array $tokens, string $search)
     {
+        // `serviceZone` and `openingHours` are what `RestaurantResource` reads per card —
+        // the fee, the ETA and «مفتوح الآن» — and each was a query per row (batch 68).
         $query = Restaurant::query()
+            ->with(['serviceZone', 'openingHours'])
             ->where('is_active', true)
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId));
 

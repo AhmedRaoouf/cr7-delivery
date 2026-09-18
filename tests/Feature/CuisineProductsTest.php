@@ -138,7 +138,10 @@ class CuisineProductsTest extends TestCase
         $listed = $this->getJson("/api/v1/cuisines/{$cuisine->id}/products?per_page=100");
         $first = $listed->json('data.0.id');
 
-        Product::query()->whereKey($first)->update(['is_available' => false]);
+        // Through the model, as every screen that switches a dish off does: the public
+        // catalogue is cached since batch 68 and a model write is what retires it. A raw
+        // SQL update is picked up on the cache's TTL instead.
+        Product::query()->findOrFail($first)->update(['is_available' => false]);
 
         $again = $this->getJson("/api/v1/cuisines/{$cuisine->id}/products?per_page=100");
 

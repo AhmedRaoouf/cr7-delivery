@@ -120,6 +120,33 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
             'otp',
             'code',
             'fcm_token',
+            // Batch 67 — the session's other half and the registration proof are
+            // credentials exactly like a password.
+            'refresh_token',
+            'registration_token',
+            'token',
+        ]);
+
+        /*
+         * Batch 67 — response bodies are recorded too, and every sign-in answers its
+         * bearer token and refresh token in the body. Measured on production 2026-09-18:
+         * 43 of 3 375 recorded requests held a live access token and refresh token in
+         * plain text — Sanctum stores only their hashes precisely so that a read of the
+         * database is not a read of everybody's session, and Telescope undid that for
+         * anyone with the panel token, a database dump or a backup. The same goes for a
+         * test-mode code, an office-issued temporary password and a pickup code.
+         */
+        Telescope::hideResponseParameters([
+            'data.token',
+            'data.access_token',
+            'data.refresh_token',
+            'data.registration_token',
+            'data.session.token',
+            'data.session.refresh_token',
+            'data.static_otp',
+            'data.temp_password',
+            'data.pickup_otp',
+            'data.delivery_otp',
         ]);
     }
 

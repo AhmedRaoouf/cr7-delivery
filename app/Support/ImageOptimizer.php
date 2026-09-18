@@ -236,6 +236,12 @@ final class ImageOptimizer
         $exif = @exif_read_data($path);
         $orientation = is_array($exif) ? (int) ($exif['Orientation'] ?? 1) : 1;
 
+        return self::orient($image, $orientation);
+    }
+
+    /** The EXIF orientation `1…8`, baked into the pixels. */
+    private static function orient(\GdImage $image, int $orientation): \GdImage
+    {
         $rotated = match ($orientation) {
             3, 4 => imagerotate($image, 180, 0),
             5, 6 => imagerotate($image, -90, 0),
@@ -259,5 +265,47 @@ final class ImageOptimizer
         }
 
         return $image;
+    }
+
+    /**
+     * Batch 67 — a JPEG redrawn the right way up, so its EXIF can be dropped.
+     *
+     * Used by {@see FileUploader} when a photo carries an orientation other than 1: the
+     * rotation is part of the metadata being removed, so it is applied to the pixels
+     * first. Re-encoding drops every metadata block with it. Null when GD cannot read
+     * the file — the caller then strips the block anyway, sideways being the lesser
+     * harm next to a published GPS position.
+     */
+    public static function upright(UploadedFile $file, int $orientation): ?UploadedFile
+    {
+        if (! extension_loaded('gd') || $orientation < 2 || $orientation > 8) {
+            return null;
+        }
+
+        $path = $file->getRealPath();
+        $info = $path === false ? false : @getimagesize($path);
+
+        if ($info === false || ($info[2] ?? null) !== IMAGETYPE_JPEG || $info[0] * $info[1] > self::MAX_PIXELS) {
+            return null;
+        }
+
+        $image = @imagecreatefromjpeg($path);
+
+        if ($image === false) {
+            return null;
+        }
+
+        try {
+            $image = self::orient($image, $orientation);
+            $target = tempnam(sys_get_temp_dir(), 'cr7up');
+
+            if ($target === false || ! imagejpeg($image, $target, 90)) {
+                return null;
+            }
+
+            return new UploadedFile($target, $file->getClientOriginalName(), 'image/jpeg', null, true);
+        } finally {
+            unset($image);
+        }
     }
 }

@@ -129,6 +129,9 @@ final class OrderParties
             $order->unsetRelation($relation);
         }
 
+        // Batch 67 — the place's commission is never the captain's to read (doc 12 §5).
+        $order->makeHidden(['commission_rate_snapshot', 'commission_amount']);
+
         return $order->toArray() + $parties + [
             'pickup_code_required' => (bool) ($order->pickup_code_required ?? true),
             'delivery_code_required' => ! $order->isDirect() && (bool) ($order->delivery_code_required ?? true),

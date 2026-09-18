@@ -36,7 +36,7 @@ final class ImageMetadata
      * @return array{stripped: bool, orientation: int} `orientation` is the EXIF value
      *                                                  that was found (1 = upright).
      */
-    public static function strip(string $path): array
+    public static function strip(string $path, bool $force = false): array
     {
         $bytes = @file_get_contents($path);
 
@@ -57,9 +57,9 @@ final class ImageMetadata
 
         [$clean, $orientation] = $result;
 
-        if ($orientation !== 1) {
+        if ($orientation !== 1 && ! $force) {
             // Leave the file alone; the caller re-encodes it upright, which drops every
-            // block anyway.
+            // block anyway. `force` strips it regardless, for when that re-encode failed.
             return ['stripped' => false, 'orientation' => $orientation];
         }
 
@@ -67,10 +67,10 @@ final class ImageMetadata
             file_put_contents($path, $clean);
             clearstatcache(true, $path);
 
-            return ['stripped' => true, 'orientation' => 1];
+            return ['stripped' => true, 'orientation' => $orientation];
         }
 
-        return ['stripped' => false, 'orientation' => 1];
+        return ['stripped' => false, 'orientation' => $orientation];
     }
 
     /** Does this file still carry anything {@see strip()} removes? For tests and checks. */

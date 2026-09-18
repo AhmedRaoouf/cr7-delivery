@@ -352,7 +352,7 @@ scope. A filter naming an out-of-scope id (`filter[restaurant_id]=<not mine>`) r
 
 | search | captain name (folded) / phone |
 |---|---|
-| filters | `city_id` · `zone_id`, `is_online`, `is_active` (new) · `owes` (new, bool — `cash_in_hand > 0`) |
+| filters | `city_id` · `zone_id`, `is_online`, `is_active` (new) · `owes` (new, bool — the captain owes the platform: `cash_in_hand − wallet_balance > 0`, `DriverLedger`'s own rule) |
 | sort | `cash_in_hand` (default `-cash_in_hand`), `wallet_balance`, `name` |
 | paging | 20 / 100, total: yes; `meta.totals` as before (whole scope, not the filter) |
 

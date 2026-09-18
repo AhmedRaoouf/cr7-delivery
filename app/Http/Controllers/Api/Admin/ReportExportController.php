@@ -96,7 +96,7 @@ class ReportExportController extends Controller
         $query = AdminOrderFilters::sort($request)->apply(AdminOrderFilters::apply(
             AdminScope::applyToOrders(Order::query(), $request->user())->with(['restaurant:id,name_ar', 'driver.user:id,name', 'user:id,name,phone']),
             $request,
-        ), [])->limit(self::MAX_ROWS);
+        ), []);
 
         $summary = [];
         foreach (['status' => 'الحالة', 'origin' => 'المصدر', 'restaurant_id' => 'المطعم'] as $key => $label) {
@@ -117,7 +117,11 @@ class ReportExportController extends Controller
                 'العميل', 'هاتف العميل', 'الكابتن', 'الحالة', 'طريقة الدفع',
                 'قيمة الأصناف', 'رسوم التوصيل', 'الخصم', 'الإجمالي', 'العمولة',
             ],
-            $this->generate($query->cursor(), fn (Order $order) => [
+            // `lazy()`, not `cursor()`: a cursor ignores `with()`, so every row of the
+            // workbook paid three queries for its place, captain and customer. Chunks of
+            // 500 load theirs once per chunk; `take()` is the row cap (a `limit()` would be
+            // overwritten by each chunk's own).
+            $this->generate($query->lazy(500)->take(self::MAX_ROWS), fn (Order $order) => [
                 $order->order_number,
                 // The number the restaurant reads back over the phone. Null until the
                 // kitchen has answered, and an empty cell says that better than a zero.

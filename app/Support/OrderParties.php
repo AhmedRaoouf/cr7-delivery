@@ -39,6 +39,11 @@ final class OrderParties
             'serviceZone:id,name_ar,name_en',
             'city:id,name_ar,name_en',
             'orderGroup.payment',
+            // Batch 68 — `customer()` falls back to the account's name and phone when the
+            // order carries no snapshot of them. Loaded lazily that was a query per card on
+            // a board that polls every fifteen seconds, and it put the whole account row on
+            // the card; three columns, once per page, now.
+            'user:id,name,phone',
         ];
     }
 

@@ -10,6 +10,7 @@ use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
+use App\Support\Lists\ListParams;
 use App\Support\Locale;
 use App\Support\MenuCategoryIcon;
 use Illuminate\Http\JsonResponse;
@@ -21,11 +22,15 @@ class RestaurantController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filter = $request->array('filter');
+        // `search` or `filter[search]` (ADMIN-LISTS.md §0.1).
+        $search = ListParams::of($request)->search();
         $lat = $request->float('lat') ?: null;
         $lng = $request->float('lng') ?: null;
 
         $restaurants = Restaurant::query()
-            ->with(['cuisines', 'serviceZone', 'storeCategory'])
+            // `openingHours` too (batch 68): `is_open_now` on every card read today's row
+            // with a query of its own.
+            ->with(['cuisines', 'serviceZone', 'storeCategory', 'openingHours'])
             ->where('is_active', true)
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
             ->when($request->integer('zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
@@ -78,11 +83,15 @@ class RestaurantController extends Controller
             ))
             // Same folding + substring match `GET /search` uses — see `ArabicSearch`.
             // A full-text index answers on whole words, so «كشر» found nothing.
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+            ->when($search !== '', fn ($q) => ArabicSearch::apply(
                 $q,
                 ['name_ar', 'name_en', 'description_ar', 'description_en'],
-                ArabicSearch::tokens((string) $request->string('search')->value()),
+                ArabicSearch::tokens($search),
             ))
+            // Batch 68 — in SQL, so the page is full and `meta.total` counts only open
+            // places. It used to drop the closed ones from each page after the fact: a page
+            // of twenty came back with six and a total that still counted all forty.
+            ->when($filter['open_now'] ?? null, fn ($q) => $q->openNow())
             ->when($request->string('sort')->value(), function ($q, $sort) use ($lat, $lng) {
                 match ($sort) {
                     '-rating_avg' => $q->orderByDesc('rating_avg'),
@@ -112,10 +121,6 @@ class RestaurantController extends Controller
             ->paginate($request->integer('per_page', 20));
 
         $items = $restaurants->getCollection();
-
-        if ($filter['open_now'] ?? null) {
-            $items = $items->filter(fn (Restaurant $r) => $r->isOpenNow())->values();
-        }
 
         return ApiResponse::success(RestaurantResource::collection($items), meta: [
             'current_page' => $restaurants->currentPage(),
@@ -160,13 +165,16 @@ class RestaurantController extends Controller
 
     public function products(Request $request, Restaurant $restaurant): JsonResponse
     {
+        $params = ListParams::of($request);
+        $search = $params->search();
+
         $products = $restaurant->products()
             ->where('is_available', true)
-            ->when($request->integer('category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+            ->when($params->id('category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
+            ->when($search !== '', fn ($q) => ArabicSearch::apply(
                 $q,
                 ['name_ar', 'name_en', 'description_ar', 'description_en'],
-                ArabicSearch::tokens((string) $request->string('search')->value()),
+                ArabicSearch::tokens($search),
             ))
             ->when($request->string('sort')->value(), function ($q, $sort) {
                 match ($sort) {
@@ -199,9 +207,12 @@ class RestaurantController extends Controller
 
     public function reviews(Request $request, Restaurant $restaurant): JsonResponse
     {
+        $stars = array_map('intval', ListParams::of($request)->enum('stars', ['1', '2', '3', '4', '5']));
+
         $ratings = $restaurant->ratings()
             ->with('user:id,name')
             ->where('is_hidden', false)
+            ->when($stars !== [], fn ($q) => $q->whereIn('stars', $stars))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 

@@ -11,6 +11,7 @@ use App\Models\StoreCategory;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\FileUploader;
+use App\Support\Http\PublicCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -118,6 +119,9 @@ class StoreCategoryController extends Controller
         foreach ($validated['ids'] as $index => $id) {
             StoreCategory::query()->whereKey($id)->update(['sort_order' => $index]);
         }
+
+        // A reorder is a bulk update and fires no model event (batch 68).
+        PublicCache::bump('catalog');
 
         // Logged against the first row in the new order rather than not at all —
         // `AuditLogger` requires a subject, and a reorder with no trace is the one

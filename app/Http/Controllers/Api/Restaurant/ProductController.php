@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
 use App\Models\Product;
 use App\Support\ApiResponse;
+use App\Support\Http\PublicCache;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,25 +22,26 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
+        $params = $this->listParams($request);
+        $sort = $params->sort(['sort_order', 'name', 'price', 'sold_count', 'created_at'], 'sort_order');
 
-        $products = $restaurant->products()
-            ->with('optionGroups.options')
-            ->when($this->filterInt($request, 'menu_category_id'), fn ($q, $id) => $q->where('menu_category_id', $id))
-            // `RES-14`'s search box, which the endpoint never implemented: an operator
-            // looking for one dish in a 200-row menu got the whole menu back.
-            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                $term = '%'.$this->filterString($request, 'search').'%';
-                $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
-            })
-            ->orderBy('sort_order')
-            ->paginate($request->integer('per_page', 30));
+        $query = $restaurant->products()->getQuery()->with('optionGroups.options');
 
-        return ApiResponse::success($products->items(), meta: [
-            'current_page' => $products->currentPage(),
-            'per_page' => $products->perPage(),
-            'total' => $products->total(),
-            'last_page' => $products->lastPage(),
-        ]);
+        $this->whereInList($query, 'products.menu_category_id', $params->ids('menu_category_id'));
+
+        foreach (['is_available', 'is_featured'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('products.'.$flag, $value);
+            }
+        }
+
+        // `RES-14`'s search box, which the endpoint never implemented until batch 57: an
+        // operator looking for one dish in a 200-row menu got the whole menu back.
+        ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
+
+        $products = $sort->apply($query, ['name' => 'products.name_ar'])->paginate($params->perPage(30));
+
+        return $this->paginated($products, sort: $sort);
     }
 
     public function show(Request $request, Product $product): JsonResponse
@@ -101,6 +104,8 @@ class ProductController extends Controller
         ]);
 
         $restaurant->products()->whereIn('id', $validated['ids'])->update(['is_available' => $validated['is_available']]);
+        // A bulk update fires no model event; the public menu must not wait out its TTL.
+        PublicCache::bump('catalog');
 
         return ApiResponse::success(message: 'تم تحديث حالة التوفر للمنتجات المحددة');
     }

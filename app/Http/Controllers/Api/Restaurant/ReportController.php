@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\Lists\ListParams;
 use App\Support\ReportExporter;
 use Generator;
 use Illuminate\Http\JsonResponse;
@@ -197,12 +198,14 @@ class ReportController extends Controller
      */
     private function range(Request $request): array
     {
-        $from = $request->date('filter.date_from') ?? $request->date('from');
-        $to = $request->date('filter.date_to') ?? $request->date('to');
+        // Batch 68 — `ListParams`: a malformed date is a 422, not a 500.
+        $params = ListParams::of($request);
+        [$from, $to] = $params->dates();
+        [$bareFrom, $bareTo] = $params->dates('from', 'to');
 
         return [
-            BusinessTime::fromInput($from) ?? BusinessTime::startOfDaysAgo(30),
-            BusinessTime::fromInput($to, endOfDay: true) ?? BusinessTime::endOfToday(),
+            $from ?? $bareFrom ?? BusinessTime::startOfDaysAgo(30),
+            $to ?? $bareTo ?? BusinessTime::endOfToday(),
         ];
     }
 }

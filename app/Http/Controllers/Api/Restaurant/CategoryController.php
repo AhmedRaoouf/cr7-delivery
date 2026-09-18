@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreCategoryRequest;
 use App\Models\MenuCategory;
 use App\Support\ApiResponse;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,17 +21,18 @@ class CategoryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
+        $params = $this->listParams($request);
 
-        return ApiResponse::success(
-            $restaurant->menuCategories()
-                // `RES-12`'s search box, which the endpoint never implemented.
-                ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                    $term = '%'.$this->filterString($request, 'search').'%';
-                    $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
-                })
-                ->orderBy('sort_order')
-                ->get(),
-        );
+        $query = $restaurant->menuCategories()->getQuery();
+
+        if (($active = $params->bool('is_active')) !== null) {
+            $query->where('menu_categories.is_active', $active);
+        }
+
+        // `RES-12`'s search box, which the endpoint never implemented until batch 57.
+        ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
+
+        return ApiResponse::success($query->orderBy('sort_order')->orderBy('id')->get());
     }
 
     public function store(StoreCategoryRequest $request): JsonResponse

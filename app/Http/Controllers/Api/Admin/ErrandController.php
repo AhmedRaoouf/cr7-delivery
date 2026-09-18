@@ -13,6 +13,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\DriverTrip;
 use App\Support\Geo;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,6 +33,9 @@ class ErrandController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'offered_fee'], '-created_at');
+
         // `errand_requests` carries `city_id` and `service_zone_id` under the same names
         // `orders` does, so the order scope applies verbatim (D-51).
         $query = AdminScope::applyToOrders(
@@ -39,30 +43,30 @@ class ErrandController extends Controller
             $request->user(),
         );
 
-        if ($status = $request->query('filter.status') ?? $request->input('status')) {
-            $query->where('status', $status);
+        $this->whereInList($query, 'errand_requests.status', $params->enum('status', array_column(ErrandStatus::cases(), 'value')));
+        $this->whereInList($query, 'errand_requests.city_id', $params->ids('city_id'));
+        $this->whereInList($query, 'errand_requests.service_zone_id', $params->ids('zone_id'));
+        $this->whereInList($query, 'errand_requests.driver_id', $params->ids('driver_id'));
+        $this->whereInList($query, 'errand_requests.user_id', $params->ids('customer_id'));
+
+        if ($params->bool('unclaimed') === true) {
+            $query->where('errand_requests.status', ErrandStatus::Open->value)->whereNull('errand_requests.driver_id');
         }
 
-        if ($request->boolean('filter.unclaimed')) {
-            $query->where('status', ErrandStatus::Open->value)->whereNull('driver_id');
-        }
+        $this->whereBetweenDates($query, 'errand_requests.created_at', $params->dates());
 
-        if ($search = $request->input('search')) {
-            $query->where(fn ($q) => $q
-                ->where('reference', 'like', '%'.$search.'%')
-                ->orWhere('pickup_address_text', 'like', '%'.$search.'%')
-                ->orWhere('dropoff_address_text', 'like', '%'.$search.'%'));
-        }
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['reference'],
+            'names' => ['pickup_address_text', 'dropoff_address_text'],
+            'relations' => ['customer' => ['names' => ['name'], 'phones' => ['phone']]],
+        ]);
 
-        $errands = $query->latest()->paginate($request->integer('per_page', 20));
+        $errands = $sort->apply($query, [])->paginate($params->perPage());
 
-        return ApiResponse::success(
+        return $this->paginated(
+            $errands,
             ErrandRequestResource::collection($errands->items()),
-            meta: [
-                'current_page' => $errands->currentPage(),
-                'per_page' => $errands->perPage(),
-                'total' => $errands->total(),
-                'last_page' => $errands->lastPage(),
+            [
                 // The one number the alert dock and this screen must agree on — counted
                 // inside the same scope, so a city admin's badge matches their own list.
                 'unclaimed' => AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
@@ -70,6 +74,7 @@ class ErrandController extends Controller
                     ->whereNull('driver_id')
                     ->count(),
             ],
+            $sort,
         );
     }
 

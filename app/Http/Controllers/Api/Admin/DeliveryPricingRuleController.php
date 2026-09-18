@@ -21,18 +21,22 @@ class DeliveryPricingRuleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $rules = AdminScope::applyToPricingRules(DeliveryPricingRule::query(), $request->user())
-            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($this->filterInt($request, 'service_zone_id'), fn ($q, $zoneId) => $q->where('service_zone_id', $zoneId))
-            ->orderBy('sort_order')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['sort_order', 'fee', 'min_distance_km'], 'sort_order');
 
-        return ApiResponse::success($rules->items(), meta: [
-            'current_page' => $rules->currentPage(),
-            'per_page' => $rules->perPage(),
-            'total' => $rules->total(),
-            'last_page' => $rules->lastPage(),
-        ]);
+        $query = AdminScope::applyToPricingRules(DeliveryPricingRule::query(), $request->user());
+
+        $this->whereInList($query, 'city_id', $params->ids('city_id'));
+        // `service_zone_id` is the older spelling ADM-24 sent; `zone_id` is doc 08 §7's.
+        $this->whereInList($query, 'service_zone_id', [...$params->ids('zone_id'), ...$params->ids('service_zone_id')]);
+
+        if (($active = $params->bool('is_active')) !== null) {
+            $query->where('is_active', $active);
+        }
+
+        $rules = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($rules, sort: $sort);
     }
 
     public function show(Request $request, DeliveryPricingRule $pricingRule): JsonResponse

@@ -15,6 +15,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
 use App\Support\DriverTrip;
+use App\Support\Lists\ListParams;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,8 +30,9 @@ class DashboardController extends Controller
     public function summary(Request $request): JsonResponse
     {
         // «اليوم» is a Cairo day, not a UTC one — see `BusinessTime`.
-        $from = BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfToday();
-        $to = BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? Carbon::now();
+        [$from, $to] = ListParams::of($request)->dates();
+        $from ??= BusinessTime::startOfToday();
+        $to ??= Carbon::now();
 
         $orders = AdminScope::applyToOrders(Order::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 
@@ -68,8 +70,9 @@ class DashboardController extends Controller
 
     public function charts(Request $request): JsonResponse
     {
-        $from = BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfDaysAgo(7);
-        $to = BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? Carbon::now();
+        [$from, $to] = ListParams::of($request)->dates();
+        $from ??= BusinessTime::startOfDaysAgo(7);
+        $to ??= Carbon::now();
 
         $orders = AdminScope::applyToOrders(Order::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 

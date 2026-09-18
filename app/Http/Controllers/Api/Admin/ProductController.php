@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductRequest;
@@ -10,29 +11,37 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+    use FiltersLists;
     use HandlesUploads;
 
     public function index(Request $request, Restaurant $restaurant): JsonResponse
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $products = $restaurant->products()
-            ->with('optionGroups.options')
-            ->when($request->integer('menu_category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
-            ->orderBy('sort_order')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['sort_order', 'name', 'price', 'sold_count', 'rating_avg', 'created_at'], 'sort_order');
 
-        return ApiResponse::success($products->items(), meta: [
-            'current_page' => $products->currentPage(),
-            'per_page' => $products->perPage(),
-            'total' => $products->total(),
-            'last_page' => $products->lastPage(),
-        ]);
+        $query = $restaurant->products()->getQuery()->with('optionGroups.options');
+
+        $this->whereInList($query, 'products.menu_category_id', $params->ids('menu_category_id'));
+
+        foreach (['is_available', 'is_featured'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('products.'.$flag, $value);
+            }
+        }
+
+        ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
+
+        $products = $sort->apply($query, ['name' => 'products.name_ar'])->paginate($params->perPage());
+
+        return $this->paginated($products, sort: $sort);
     }
 
     public function show(Request $request, Restaurant $restaurant, Product $product): JsonResponse

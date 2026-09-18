@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
 use App\Support\BusinessTime;
+use App\Support\Lists\ListParams;
 use App\Support\ReportExporter;
 use Generator;
 use Illuminate\Http\Request;
@@ -90,10 +91,12 @@ class ReportExportController extends Controller
      */
     private function orders(Request $request, string $stamp): StreamedResponse
     {
-        $query = AdminOrderFilters::apply(
+        // The table's own sort too (batch 68): the download comes out in the order the
+        // operator was looking at.
+        $query = AdminOrderFilters::sort($request)->apply(AdminOrderFilters::apply(
             AdminScope::applyToOrders(Order::query(), $request->user())->with(['restaurant:id,name_ar', 'driver.user:id,name', 'user:id,name,phone']),
             $request,
-        )->latest()->limit(self::MAX_ROWS);
+        ), []);
 
         $summary = [];
         foreach (['status' => 'الحالة', 'origin' => 'المصدر', 'restaurant_id' => 'المطعم'] as $key => $label) {
@@ -114,7 +117,11 @@ class ReportExportController extends Controller
                 'العميل', 'هاتف العميل', 'الكابتن', 'الحالة', 'طريقة الدفع',
                 'قيمة الأصناف', 'رسوم التوصيل', 'الخصم', 'الإجمالي', 'العمولة',
             ],
-            $this->generate($query->cursor(), fn (Order $order) => [
+            // `lazy()`, not `cursor()`: a cursor ignores `with()`, so every row of the
+            // workbook paid three queries for its place, captain and customer. Chunks of
+            // 500 load theirs once per chunk; `take()` is the row cap (a `limit()` would be
+            // overwritten by each chunk's own).
+            $this->generate($query->lazy(500)->take(self::MAX_ROWS), fn (Order $order) => [
                 $order->order_number,
                 // The number the restaurant reads back over the phone. Null until the
                 // kitchen has answered, and an empty cell says that better than a zero.
@@ -401,9 +408,12 @@ class ReportExportController extends Controller
     /** @return array{0: Carbon, 1: Carbon} */
     private function range(Request $request): array
     {
+        // Batch 68 — a malformed date is a 422, not the 500 `$request->date()` threw.
+        [$from, $to] = ListParams::of($request)->dates();
+
         return [
-            BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfDaysAgo(30),
-            BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? BusinessTime::endOfToday(),
+            $from ?? BusinessTime::startOfDaysAgo(30),
+            $to ?? BusinessTime::endOfToday(),
         ];
     }
 }

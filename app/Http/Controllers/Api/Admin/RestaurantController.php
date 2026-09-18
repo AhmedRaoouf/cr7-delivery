@@ -15,6 +15,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Auth\Sessions;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,24 +26,54 @@ class RestaurantController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $restaurants = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
-            ->with(['city', 'serviceZone'])
-            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            // `like`, not `whereFullText`. A full-text index answers on whole words, so a
-            // dashboard search box — which fires on every keystroke — matched nothing until
-            // the operator finished a word, and never matched a partial one at all.
-            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                $term = '%'.$this->filterString($request, 'search').'%';
-                $q->where(fn ($sq) => $sq->where('name_ar', 'like', $term)->orWhere('name_en', 'like', $term));
-            })
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['id', 'name', 'created_at', 'rating_avg', 'orders_count', 'sort_order'], 'id');
 
-        return ApiResponse::success($restaurants->items(), meta: [
-            'current_page' => $restaurants->currentPage(),
-            'per_page' => $restaurants->perPage(),
-            'total' => $restaurants->total(),
-            'last_page' => $restaurants->lastPage(),
+        $query = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
+            ->with(['city', 'serviceZone']);
+
+        $this->whereInList($query, 'restaurants.city_id', $params->ids('city_id'));
+        $this->whereInList($query, 'restaurants.store_category_id', $params->ids('store_category_id'));
+        $this->whereInList($query, 'restaurants.price_band', $params->enum('price_band', ['budget', 'mid', 'premium']));
+
+        if (($zones = $params->ids('zone_id')) !== []) {
+            // Its home zone, or any zone it delivers to — the same reach the scope reads.
+            $query->where(fn ($q) => $q
+                ->whereIn('restaurants.service_zone_id', $zones)
+                ->orWhereHas('servedZones', fn ($z) => $z->whereIn('service_zones.id', $zones)));
+        }
+
+        if (($cuisines = $params->ids('cuisine_id')) !== []) {
+            $query->whereHas('cuisines', fn ($c) => $c->whereIn('cuisines.id', $cuisines));
+        }
+
+        foreach (['is_active', 'is_verified', 'is_featured', 'direct_orders_enabled'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('restaurants.'.$flag, $value);
+            }
+        }
+
+        if (($open = $params->bool('open_now')) !== null) {
+            $query->openNow($open);
+        }
+
+        if (($pending = $params->bool('has_pending')) !== null) {
+            $waiting = fn ($o) => $o->whereIn('status', ['pending', 'restaurant_timeout']);
+            $pending ? $query->whereHas('orders', $waiting) : $query->whereDoesntHave('orders', $waiting);
+        }
+
+        // Folded, not `whereFullText`. A full-text index answers on whole words, so a
+        // dashboard search box — which fires on every keystroke — matched nothing until
+        // the operator finished a word, and never matched a partial one at all.
+        ListSearch::apply($query, $params->search(), [
+            'names' => ['name_ar', 'name_en'],
+            'phones' => ['phone'],
+            'refs' => ['slug'],
         ]);
+
+        $restaurants = $sort->apply($query, ['name' => 'restaurants.name_ar'])->paginate($params->perPage());
+
+        return $this->paginated($restaurants, sort: $sort);
     }
 
     public function show(Request $request, Restaurant $restaurant): JsonResponse

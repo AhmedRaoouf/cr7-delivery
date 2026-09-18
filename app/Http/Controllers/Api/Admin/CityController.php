@@ -2,29 +2,37 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCityRequest;
 use App\Http\Requests\Admin\UpdateCityRequest;
 use App\Models\City;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CityController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $cities = AdminScope::applyToCities(City::query(), $request->user())
-            ->orderBy('sort_order')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['sort_order', 'name', 'id'], 'sort_order');
 
-        return ApiResponse::success($cities->items(), meta: [
-            'current_page' => $cities->currentPage(),
-            'per_page' => $cities->perPage(),
-            'total' => $cities->total(),
-            'last_page' => $cities->lastPage(),
-        ]);
+        $query = AdminScope::applyToCities(City::query(), $request->user());
+
+        if (($active = $params->bool('is_active')) !== null) {
+            $query->where('cities.is_active', $active);
+        }
+
+        ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
+
+        $cities = $sort->apply($query, ['name' => 'cities.name_ar'])->paginate($params->perPage());
+
+        return $this->paginated($cities, sort: $sort);
     }
 
     public function show(Request $request, City $city): JsonResponse

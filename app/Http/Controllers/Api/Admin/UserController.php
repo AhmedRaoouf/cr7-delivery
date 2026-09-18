@@ -7,12 +7,14 @@ use App\Actions\Admin\ResetUserPasswordAction;
 use App\Enums\AdminScopeType;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreAdminUserRequest;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Auth\Sessions;
+use App\Support\Lists\ListSearch;
 use App\Support\PermissionEscalationGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,23 +22,45 @@ use Illuminate\Http\Request;
 /** doc 08 §7 / doc 24 §1 — admin accounts, roles, scope. Reachable by global-scope admins only (doc 08 §7 note). */
 class UserController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $users = User::query()
-            ->where('type', UserType::Admin)
-            ->with(['roles', 'adminProfile', 'adminScopes'])
-            ->when($request->string('filter.role')->isNotEmpty(), fn ($q) => $q->whereHas('roles', fn ($rq) => $rq->where('name', $request->string('filter.role'))))
-            ->when($request->string('filter.status')->value() === 'suspended', fn ($q) => $q->whereHas('adminProfile', fn ($pq) => $pq->whereNotNull('suspended_at')))
-            ->when($request->string('filter.status')->value() === 'invited', fn ($q) => $q->whereHas('adminProfile', fn ($pq) => $pq->whereNull('accepted_at')))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'name', 'last_login_at'], '-created_at');
 
-        return ApiResponse::success($users->items(), meta: [
-            'current_page' => $users->currentPage(),
-            'per_page' => $users->perPage(),
-            'total' => $users->total(),
-            'last_page' => $users->lastPage(),
+        $query = User::query()
+            ->where('users.type', UserType::Admin)
+            ->with(['roles', 'adminProfile', 'adminScopes']);
+
+        if (($roles = $params->list('role')) !== []) {
+            $query->whereHas('roles', fn ($rq) => $rq->whereIn('name', $roles));
+        }
+
+        if (($statuses = $params->enum('status', ['active', 'suspended', 'invited'])) !== []) {
+            $query->where(function ($q) use ($statuses) {
+                foreach ($statuses as $status) {
+                    match ($status) {
+                        'suspended' => $q->orWhereHas('adminProfile', fn ($pq) => $pq->whereNotNull('suspended_at')),
+                        'invited' => $q->orWhereHas('adminProfile', fn ($pq) => $pq->whereNull('accepted_at')),
+                        // Neither suspended nor still on an unaccepted invitation.
+                        'active' => $q->orWhere(fn ($a) => $a
+                            ->where('users.is_active', true)
+                            ->whereDoesntHave('adminProfile', fn ($pq) => $pq->whereNotNull('suspended_at')->orWhereNull('accepted_at'))),
+                    };
+                }
+            });
+        }
+
+        ListSearch::apply($query, $params->search(), [
+            'names' => ['name'],
+            'phones' => ['phone'],
+            'emails' => ['email'],
         ]);
+
+        $users = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($users, sort: $sort);
     }
 
     public function store(StoreAdminUserRequest $request, CreateAdminUserAction $action): JsonResponse

@@ -2,6 +2,8 @@
 
 namespace App\Support\Security;
 
+use App\Support\ImageOptimizer;
+
 /**
  * Batch 67 — what a photo says about where it was taken, removed before anybody else
  * can download it.
@@ -25,7 +27,7 @@ namespace App\Support\Security;
  *
  * A JPEG whose EXIF says it is rotated is reported back rather than stripped blindly:
  * the orientation lives in the very block being removed, so the caller has to bake the
- * rotation into the pixels first ({@see \App\Support\ImageOptimizer::optimise()} with
+ * rotation into the pixels first ({@see ImageOptimizer::optimise()} with
  * `force`) or the picture would be drawn on its side.
  */
 final class ImageMetadata
@@ -34,7 +36,7 @@ final class ImageMetadata
      * Strip the file in place.
      *
      * @return array{stripped: bool, orientation: int} `orientation` is the EXIF value
-     *                                                  that was found (1 = upright).
+     *                                                 that was found (1 = upright).
      */
     public static function strip(string $path, bool $force = false): array
     {

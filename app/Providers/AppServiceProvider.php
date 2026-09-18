@@ -40,6 +40,7 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -358,7 +359,7 @@ class AppServiceProvider extends ServiceProvider
         $loginKey = static function (Request $request): string {
             $login = $request->input('login');
 
-            return hash('sha256', is_string($login) ? \App\Support\PhoneNumber::normaliseLogin($login) : '');
+            return hash('sha256', is_string($login) ? PhoneNumber::normaliseLogin($login) : '');
         };
 
         RateLimiter::for('auth-login', fn (Request $request) => [
@@ -382,7 +383,7 @@ class AppServiceProvider extends ServiceProvider
             )->withHeaders($headers);
 
             $phone = $request->input('phone', $request->input('login'));
-            $phone = is_string($phone) ? \App\Support\PhoneNumber::normaliseLogin($phone) : '';
+            $phone = is_string($phone) ? PhoneNumber::normaliseLogin($phone) : '';
 
             return [
                 Limit::perMinute(10)->by('otp-verify:'.hash('sha256', $phone).'|'.$request->ip())->response($refused),
@@ -406,7 +407,7 @@ class AppServiceProvider extends ServiceProvider
         // handful an hour per address, three a day per phone number.
         RateLimiter::for('captain-application', function (Request $request) {
             $phone = $request->input('phone');
-            $phone = is_string($phone) ? \App\Support\PhoneNumber::normaliseLogin($phone) : '';
+            $phone = is_string($phone) ? PhoneNumber::normaliseLogin($phone) : '';
 
             return [
                 Limit::perHour(5)->by('captain-application-ip:'.$request->ip()),

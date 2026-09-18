@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Security;
 
+use App\Exceptions\ApiException;
 use App\Support\FileUploader;
 use App\Support\PdfPages;
 use App\Support\Security\ImageMetadata;
@@ -66,7 +67,7 @@ class UploadAndFetchHardeningTest extends TestCase
         try {
             FileUploader::storePublic($svg, 'complaints');
             $this->fail('An SVG was stored.');
-        } catch (\App\Exceptions\ApiException $e) {
+        } catch (ApiException $e) {
             $this->assertSame('unsupported_file_type', $e->errorCode);
             $this->assertSame(422, $e->status);
         }

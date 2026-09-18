@@ -9,12 +9,14 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Providers\TelescopeServiceProvider;
+use App\Support\SettingsCatalog;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Laravel\Telescope\Telescope;
+use Laravel\Telescope\Watchers\RequestWatcher;
 use Tests\TestCase;
 
 /**
@@ -84,7 +86,7 @@ class BusinessRuleHardeningTest extends TestCase
         ]);
 
         Sanctum::actingAs($driver->user);
-        $limit = \App\Support\SettingsCatalog::int('order.otp_max_attempts');
+        $limit = SettingsCatalog::int('order.otp_max_attempts');
 
         for ($i = 0; $i < $limit; $i++) {
             $this->withHeaders(['X-App' => 'app'])
@@ -136,7 +138,7 @@ class BusinessRuleHardeningTest extends TestCase
 
         // What the watcher actually writes for a sign-in answer — measured on
         // production: 43 recorded requests held a live bearer and refresh token.
-        $watcher = new \Laravel\Telescope\Watchers\RequestWatcher(['size_limit' => 512]);
+        $watcher = new RequestWatcher(['size_limit' => 512]);
         $record = (new \ReflectionMethod($watcher, 'response'))->invoke($watcher, response()->json([
             'success' => true,
             'data' => ['user' => ['id' => 1], 'token' => '1|plaintext-bearer', 'refresh_token' => 'plaintext-refresh', 'expires_in' => 3600],

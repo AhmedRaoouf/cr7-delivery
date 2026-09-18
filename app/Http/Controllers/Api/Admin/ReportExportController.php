@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\OrderOrigin;
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Complaint;
 use App\Models\Driver;
@@ -11,7 +13,6 @@ use App\Models\PromoCode;
 use App\Models\Refund;
 use App\Models\Restaurant;
 use App\Models\User;
-use App\Enums\OrderStatus;
 use App\Support\AdminOrderFilters;
 use App\Support\AdminScope;
 use App\Support\BusinessTime;
@@ -120,7 +121,7 @@ class ReportExportController extends Controller
                 $order->restaurant_order_ref,
                 BusinessTime::localDate($order->created_at),
                 BusinessTime::localTime($order->created_at),
-                $order->origin instanceof \App\Enums\OrderOrigin && $order->origin === \App\Enums\OrderOrigin::RestaurantDirect ? 'مباشر' : 'من التطبيق',
+                $order->origin instanceof OrderOrigin && $order->origin === OrderOrigin::RestaurantDirect ? 'مباشر' : 'من التطبيق',
                 $order->restaurant?->name_ar ?? $order->restaurant_name_snapshot,
                 $order->guest_customer_name ?? $order->user?->name ?? $order->customer_name_snapshot,
                 $order->guest_customer_phone ?? $order->user?->phone,

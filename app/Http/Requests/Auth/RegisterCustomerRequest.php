@@ -4,10 +4,10 @@ namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\NormalisesPhone;
 use App\Support\PhoneNumber;
+use App\Support\Security\PasswordPolicy;
 use App\Support\SettingsCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Support\Security\PasswordPolicy;
 
 class RegisterCustomerRequest extends FormRequest
 {

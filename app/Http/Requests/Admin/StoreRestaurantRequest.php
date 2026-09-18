@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Http\Requests\Concerns\NormalisesPhone;
+use App\Support\PdfPages;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** FR-REST-01 — Admin creates a restaurant; the linked owner login is provisioned server-side. */
@@ -72,13 +73,13 @@ class StoreRestaurantRequest extends FormRequest
             // the pages swipe and zoom like any other picture. 10 MB rather than
             // the 5 MB the logo gets: a scanned four-page menu is a big file and
             // the operator has no way to shrink one.
-            'menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'menu_sheets.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'remove_menu_sheets' => ['nullable', 'boolean'],
             // Which already-stored pages the form still shows. An upload adds to
             // the gallery rather than replacing it, so removing one page has to
             // be said out loud — see `HandlesUploads::withPublicSheets()`.
-            'keep_menu_sheets' => ['nullable', 'array', 'max:'.\App\Support\PdfPages::MAX_PAGES],
+            'keep_menu_sheets' => ['nullable', 'array', 'max:'.PdfPages::MAX_PAGES],
             'keep_menu_sheets.*' => ['string', 'max:2048'],
         ];
     }

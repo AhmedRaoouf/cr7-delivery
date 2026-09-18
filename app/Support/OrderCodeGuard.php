@@ -24,8 +24,8 @@ final class OrderCodeGuard
 {
     /**
      * @return array{matched: bool, attempts: int, locked: bool}
-     *                                                          `locked` — the order had already used every attempt before this one;
-     *                                                          nothing was compared and nothing was counted.
+     *                                                           `locked` — the order had already used every attempt before this one;
+     *                                                           nothing was compared and nothing was counted.
      */
     public static function attempt(Order $order, string $codeColumn, string $attemptsColumn, string $given, int $limit): array
     {

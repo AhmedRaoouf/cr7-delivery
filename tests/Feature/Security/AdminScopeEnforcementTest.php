@@ -19,6 +19,7 @@ use App\Models\ScheduledOrder;
 use App\Models\ServiceZone;
 use App\Models\Settlement;
 use App\Models\User;
+use App\Support\AdminScope;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -211,7 +212,7 @@ class AdminScopeEnforcementTest extends TestCase
             'title_ar' => 'x', 'title_en' => 'x', 'body_ar' => 'x', 'body_en' => 'x',
         ])->assertNotFound();
 
-        $this->assertFalse(\App\Support\AdminScope::isGlobal($operator->fresh()));
+        $this->assertFalse(AdminScope::isGlobal($operator->fresh()));
     }
 
     public function test_an_admin_cannot_take_over_a_more_privileged_admin(): void
@@ -247,7 +248,7 @@ class AdminScopeEnforcementTest extends TestCase
             ->assertStatus(422)->assertJsonPath('error', 'cannot_modify_self');
 
         $this->assertTrue((bool) $boss->fresh()->is_active);
-        $this->assertTrue(\App\Support\AdminScope::isGlobal($boss->fresh()));
+        $this->assertTrue(AdminScope::isGlobal($boss->fresh()));
     }
 
     public function test_a_scope_names_cities_and_zones_that_exist(): void

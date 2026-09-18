@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\UserType;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Complaint;
-use App\Enums\UserType;
 use App\Models\Setting;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
@@ -15,6 +15,7 @@ use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 /** doc 08 §7 / doc 24 §4 — the platform side of the two-sided complaints box. */
 class ComplaintController extends Controller
@@ -168,7 +169,7 @@ class ComplaintController extends Controller
     }
 
     /** Batch 67 — a ticket is assigned to an operator. `exists:users,id` accepted a customer. */
-    private static function assignee(): \Illuminate\Validation\Rules\Exists
+    private static function assignee(): Exists
     {
         return Rule::exists('users', 'id')->where('type', UserType::Admin->value)->whereNull('deleted_at');
     }

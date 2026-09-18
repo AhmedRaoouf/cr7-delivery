@@ -215,7 +215,7 @@ class SettingsPanelCoverageTest extends TestCase
             $orphans,
             "these settings are on the panel and read by nothing:\n  ".implode("\n  ", $orphans)
                 ."\nEither wire the key up, take it off the catalogue, or — if a client is its only reader"
-                ." — name it in PUBLISHED_TO_CLIENTS with the `/config` path that carries it.",
+                .' — name it in PUBLISHED_TO_CLIENTS with the `/config` path that carries it.',
         );
     }
 

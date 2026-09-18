@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\PaymentMethod;
 use App\Exceptions\ApiException;
 use App\Models\Cart;
 use App\Models\DeliveryPricingRule;
@@ -211,6 +212,15 @@ class CheckoutPricer
 
         $total = round($subtotal - $discountAmount + $deliveryFee + $platformFee + $outstandingFees, 2);
 
+        // Operator, 2026-09-18 — «فوق الالف جنيه لازم تحويل». Compared with the total the
+        // customer is about to be charged, all of it: every place in the basket, the
+        // delivery and service fees, a carried fee, less the discount. Only for a cash
+        // basket the operator still takes cash for — a switched-off cash is already
+        // `payment_method_disabled` above, and one refusal is enough.
+        if ($paymentMethod === PaymentMethod::Cash->value && PaymentMethods::isEnabled(PaymentMethod::Cash) && ! CashLimit::allows($total)) {
+            $blockers[] = CashLimit::blocker($total, $user);
+        }
+
         return [
             'restaurant_count' => $restaurantCount,
             'groups' => $groups,
@@ -244,13 +254,33 @@ class CheckoutPricer
             'eta_minutes_min' => $groups->min('eta_minutes_min'),
             'eta_minutes_max' => $groups->max('eta_minutes_max'),
             // D-109 — the switched-on methods only, each with its own destination.
-            // `enabled` stays on every row for the clients that filtered on it.
-            'payment_methods' => array_map(
-                static fn (array $method) => $method + ['enabled' => true],
-                PaymentMethods::enabled(),
-            ),
+            // `enabled` stays on every row for the clients that filtered on it;
+            // `available` and `reason` say whether *this* basket may use it
+            // (`above_cash_limit`, `cash_only_restricted`), so no client re-prices.
+            'payment_methods' => PaymentMethods::offeredFor($total, $user),
+            // `payment.cash_max_total` — cash pays a basket up to this, 0 = no limit.
+            'cash_max_total' => CashLimit::max(),
             'blockers' => $blockers,
         ];
+    }
+
+    /**
+     * The 422 `POST /orders` and `POST /scheduled-orders` answer with: the first blocker's
+     * code and sentence, every blocker in `meta.blockers` — and, for `cash_not_allowed`,
+     * the limit and the total it was compared with beside them.
+     *
+     * @param  non-empty-list<array<string, mixed>>  $blockers
+     */
+    public static function refusal(array $blockers): ApiException
+    {
+        $first = $blockers[0];
+        $meta = ['blockers' => $blockers];
+
+        if ($first['code'] === CashLimit::CODE) {
+            $meta += ['cash_max_total' => $first['cash_max_total'], 'total' => $first['total']];
+        }
+
+        return new ApiException($first['code'], $first['message'], 422, meta: $meta);
     }
 
     /** doc 08 §4 — POST /promo/validate: strict, throws on any invalidity. */

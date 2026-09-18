@@ -75,6 +75,11 @@ class SettingsSeeder extends Seeder
             'restaurant.prep_timer_tick_seconds' => [15, 'restaurant'],
             'restaurant.prep_warn_at_percent' => [25, 'restaurant'],
 
+            // Operator, 2026-09-18: «فوق الالف جنيه لازم تحويل». A basket above this is
+            // paid by Vodafone Cash or InstaPay only (`CashLimit`); 0 lifts the limit.
+            // `firstOrCreate` below, so an operator's own number — zero included — is
+            // never put back by a re-seed.
+            'payment.cash_max_total' => [1000, 'payment'],
             'payment.transfer_deadline_minutes' => [15, 'payment'],
             'payment.reminder_before_minutes' => [5, 'payment'],
             'payment.max_unpaid_before_cash_only' => [3, 'payment'],

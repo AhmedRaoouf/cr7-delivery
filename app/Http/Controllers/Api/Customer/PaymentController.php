@@ -11,6 +11,7 @@ use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\OrderGroup;
 use App\Models\PaymentProof;
 use App\Support\ApiResponse;
+use App\Support\CashLimit;
 use App\Support\FileUploader;
 use App\Support\Notifications\OperatorAlerts;
 use App\Support\PaymentMethods;
@@ -47,6 +48,10 @@ class PaymentController extends Controller
             'wallet_number' => SettingsCatalog::get('payment.vodafone_cash_number'),
             'wallet_number_alt' => SettingsCatalog::get('payment.vodafone_cash_number_alt'),
             'instapay_handle' => SettingsCatalog::get('payment.instapay_handle'),
+            // Whether «ادفع نقدًا بدلًا من ذلك» would be taken for this basket: cash is
+            // switched on and the total is within `payment.cash_max_total` (0 = no limit).
+            'can_switch_to_cash' => PaymentMethods::isEnabled(PaymentMethod::Cash) && CashLimit::allows((float) $orderGroup->total),
+            'cash_max_total' => CashLimit::max(),
             'amount' => $payment->amount !== null ? (float) $payment->amount : null,
             'opened_at' => $payment->gate_opened_at,
             'deadline_at' => $payment->deadline_at,
@@ -129,6 +134,12 @@ class PaymentController extends Controller
         // D-109 — «ادفع نقدًا بدلًا من ذلك» is a way out only while the operator takes cash.
         if (! PaymentMethods::isEnabled(PaymentMethod::Cash)) {
             throw new ApiException('payment_method_disabled', PaymentMethods::disabledMessage(), 422);
+        }
+
+        // …and only for a basket cash may pay. Without this the limit would be one tap
+        // deep: order by transfer, then switch to cash on the payment screen.
+        if (! CashLimit::allows((float) $orderGroup->total)) {
+            throw CashLimit::refusalOfSwitch((float) $orderGroup->total);
         }
 
         DB::transaction(function () use ($orderGroup, $payment) {

@@ -9,7 +9,6 @@ use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
-use App\Models\UserAddress;
 use App\Support\BusinessTime;
 use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
@@ -51,8 +50,7 @@ class CreateOrderAction
         $quote = $this->pricer->price($user, $cart, $address, $data['promo_code'] ?? null, $data['payment_method']);
 
         if ($quote['blockers'] !== []) {
-            $first = $quote['blockers'][0];
-            throw new ApiException($first['code'], $first['message'], 422, meta: ['blockers' => $quote['blockers']]);
+            throw CheckoutPricer::refusal($quote['blockers']);
         }
 
         $addressSnapshot = [

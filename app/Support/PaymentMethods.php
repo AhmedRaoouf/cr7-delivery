@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\PaymentMethod;
+use App\Models\User;
 
 /**
  * D-109 — «طرق الدفع اشيل واحده او اسيب واحده والارقام اللي هيتحول عليها».
@@ -50,6 +51,33 @@ final class PaymentMethods
         $methods = array_filter(array_keys(self::SWITCHES), static fn (string $method) => self::isEnabled($method));
 
         return array_values(array_map(static fn (string $method) => self::describe($method), $methods));
+    }
+
+    /**
+     * The switched-on methods for one priced basket, each saying whether this customer
+     * may use it for this total — the checkout quote's `payment_methods`.
+     *
+     * `enabled` keeps its D-109 meaning (switched on at `ADM-46`, so `true` on every row
+     * listed) because an installed app filters the picker on it. `available` is the new
+     * answer for this basket and this account, and `reason` says why not:
+     * `above_cash_limit` (the basket is over `payment.cash_max_total`) or
+     * `cash_only_restricted` (the account is held to cash, `users.cash_only_until`).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function offeredFor(float $total, ?User $user = null): array
+    {
+        $cashOnly = $user?->cash_only_until !== null && $user->cash_only_until->isFuture();
+
+        return array_map(static function (array $method) use ($total, $cashOnly) {
+            $reason = match (true) {
+                $method['value'] === PaymentMethod::Cash->value && ! CashLimit::allows($total) => CashLimit::REASON,
+                $method['value'] !== PaymentMethod::Cash->value && $cashOnly => 'cash_only_restricted',
+                default => null,
+            };
+
+            return $method + ['enabled' => true, 'available' => $reason === null, 'reason' => $reason];
+        }, self::enabled());
     }
 
     /**

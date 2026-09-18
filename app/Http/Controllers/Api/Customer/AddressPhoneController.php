@@ -9,6 +9,8 @@ use App\Http\Requests\Customer\AddressPhoneRequest;
 use App\Http\Requests\Customer\VerifyAddressPhoneRequest;
 use App\Support\AddressContactPhone;
 use App\Support\ApiResponse;
+use App\Support\OtpGuard;
+use App\Support\OtpRequester;
 use App\Support\OtpVerifier;
 use Illuminate\Http\JsonResponse;
 
@@ -43,19 +45,20 @@ class AddressPhoneController extends Controller
                 'sent' => false,
                 'already_verified' => true,
                 'resend_in' => 0,
+                'expires_in' => 0,
+                'code_length' => OtpGuard::CODE_LENGTH,
+                'max_attempts' => OtpGuard::maxAttempts(),
                 'static_otp' => null,
             ], 'هذا الرقم مؤكد بالفعل');
         }
 
-        $sent = $sendOtp->execute($phone, OtpPurpose::AddressPhone);
+        $sent = $sendOtp->execute($phone, OtpPurpose::AddressPhone, requester: OtpRequester::fromRequest($request));
 
         return ApiResponse::success([
             'phone' => $phone,
             'sent' => true,
             'already_verified' => false,
-            'resend_in' => $sent['resend_in'],
-            'expires_in' => $sent['expires_in'],
-            'static_otp' => $sent['static_otp'],
+            ...$sent,
         ], 'تم إرسال رمز التحقق');
     }
 

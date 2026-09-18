@@ -12,6 +12,7 @@ use App\Support\BasketLimit;
 use App\Support\FirstOrderPerk;
 use App\Support\MapStyles;
 use App\Support\Otp;
+use App\Support\OtpGuard;
 use App\Support\PaymentMethods;
 use App\Support\SettingsCatalog;
 use Illuminate\Http\JsonResponse;
@@ -108,6 +109,14 @@ class ConfigController extends Controller
                 // published `false` rather than deleted — an installed app reads it, and a
                 // missing key and `false` must mean the same thing to it.
                 'admin_login_by_email' => false,
+            ],
+            // Batch 68 — what a code screen draws before its first send: the first
+            // countdown (it doubles on each resend; every send answers its own
+            // `resend_in`), the number of boxes and the wrong tries a code survives.
+            'otp' => [
+                'resend_seconds' => OtpGuard::resendSeconds(),
+                'code_length' => OtpGuard::CODE_LENGTH,
+                'max_attempts' => OtpGuard::maxAttempts(),
             ],
             // D-111 / D-112 — what an address must carry before it can be ordered to
             // (the pin and the area always, so never listed), and what the phone

@@ -51,7 +51,9 @@ class ChangePasswordAction
                 throw $sendFirst;
             }
 
-            OtpVerifier::consume($user->phone, OtpPurpose::PasswordChange, (string) $code, whenNone: $sendFirst);
+            // Batch 68 — the owner's own code: a block a stranger ran up on this number
+            // through «نسيت كلمة المرور» does not stop it (see OtpGuard).
+            OtpVerifier::consume($user->phone, OtpPurpose::PasswordChange, (string) $code, whenNone: $sendFirst, owner: true);
         }
 
         $user->forceFill([

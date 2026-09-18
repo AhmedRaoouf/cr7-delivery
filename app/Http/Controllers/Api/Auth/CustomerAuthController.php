@@ -12,6 +12,7 @@ use App\Http\Requests\Auth\SendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
+use App\Support\OtpRequester;
 use App\Support\Auth\SessionClient;
 use Illuminate\Http\JsonResponse;
 
@@ -33,11 +34,12 @@ class CustomerAuthController extends Controller
     {
         $purpose = OtpPurpose::from($request->string('purpose')->isNotEmpty() ? $request->string('purpose')->value() : 'login');
 
-        $sent = $action->execute($request->string('phone')->value(), $purpose);
+        $sent = $action->execute($request->string('phone')->value(), $purpose, requester: OtpRequester::fromRequest($request));
 
         // `static_otp` is the operator's test code while `otp.mode = test` reaches this
         // send, and null otherwise — including every send for an admin's number (D-107).
-        // The app prints it as «وضع التجربة» and prefills the field.
+        // The app prints it as «وضع التجربة» and prefills the field. Batch 68 — beside it,
+        // `resend_in` (it escalates), `expires_in`, `code_length` and `max_attempts`.
         return ApiResponse::success($sent, 'تم إرسال رمز التحقق');
     }
 

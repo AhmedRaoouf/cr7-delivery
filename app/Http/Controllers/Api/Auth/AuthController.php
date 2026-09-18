@@ -20,6 +20,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\OtpRequester;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -140,14 +141,17 @@ class AuthController extends Controller
     }
 
     /**
-     * The same sentence, and no `data`, whether or not the account exists (doc 08 §1). The
-     * `masked_phone` an admin's email login used to be answered with went with the email.
+     * The same sentence whether or not the account exists (doc 08 §1) — and, since batch 68,
+     * the same `data` too: `{resend_in, expires_in, code_length, max_attempts, static_otp}`,
+     * with every clock behind it running for a stranger's number exactly as for a registered
+     * one ({@see \App\Actions\Auth\SendOtpAction::shadow()}). `static_otp` is always null
+     * here — see {@see ForgotPasswordAction::execute()}.
      */
     public function forgotPassword(ForgotPasswordRequest $request, ForgotPasswordAction $action): JsonResponse
     {
-        $action->execute($request->string('login')->value());
+        $sent = $action->execute($request->string('login')->value(), OtpRequester::fromRequest($request));
 
-        return ApiResponse::success(message: 'إذا كان الحساب موجودًا، سيصلك رمز التحقق');
+        return ApiResponse::success($sent, 'إذا كان الحساب موجودًا، سيصلك رمز التحقق');
     }
 
     public function resetPassword(ResetPasswordRequest $request, ResetPasswordAction $action): JsonResponse
@@ -166,13 +170,11 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        $sent = $action->execute($user->phone, OtpPurpose::PasswordChange, $user);
+        $sent = $action->execute($user->phone, OtpPurpose::PasswordChange, $user, OtpRequester::fromRequest($request));
 
-        return ApiResponse::success([
-            'masked_phone' => PhoneNumber::mask($user->phone),
-            'resend_in' => $sent['resend_in'],
-            'expires_in' => $sent['expires_in'],
-        ], 'تم إرسال رمز التحقق إلى هاتفك');
+        // Batch 68 — the send shape every other code answers, plus where it went.
+        // `static_otp` is always null: a password-change code is never the test code.
+        return ApiResponse::success(['masked_phone' => PhoneNumber::mask($user->phone)] + $sent, 'تم إرسال رمز التحقق إلى هاتفك');
     }
 
     public function changePassword(ChangePasswordRequest $request, ChangePasswordAction $action): JsonResponse

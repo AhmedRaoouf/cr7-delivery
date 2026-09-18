@@ -349,6 +349,19 @@ class NotificationCopy
             'ar' => ['مشوار بلا كابتن منذ {minutes} دقيقة', '{reference} — {pickup} ← {dropoff} · العميل يعرض {fee}'],
             'en' => ['Errand unclaimed for {minutes} min', '{reference} — {pickup} → {dropoff} · offer {fee}'],
         ],
+        // Batch 68 — the platform's SMS budget (`OtpBudget`). Once a day each.
+        'sms.budget_warning_admin' => [
+            'ar' => ['رسائل التحقق تقترب من الحد اليومي', 'أُرسلت {sent} رسالة من {budget} اليوم — راجع الاستخدام في الإعدادات'],
+            'en' => ['Verification messages near the daily limit', '{sent} of {budget} messages sent today — check the usage in settings'],
+        ],
+        'sms.budget_reached_admin' => [
+            'ar' => ['توقّف إرسال رسائل التحقق', 'بلغت الرسائل الحد اليومي ({budget}). لن تُرسل رموز جديدة حتى الغد أو حتى يُرفع الحد. رموز الإدارة مستثناة.'],
+            'en' => ['Verification messages stopped', 'The daily limit ({budget}) was reached. No new codes go out until tomorrow or until the limit is raised. Admin codes are exempt.'],
+        ],
+        'sms.hourly_budget_reached_admin' => [
+            'ar' => ['توقّف إرسال رسائل التحقق مؤقتًا', 'بلغت الرسائل حد الساعة ({budget}). لن تُرسل رموز جديدة حتى تنقضي الساعة أو يُرفع الحد. رموز الإدارة مستثناة.'],
+            'en' => ['Verification messages paused', 'The hourly limit ({budget}) was reached. No new codes go out until the hour has passed or the limit is raised. Admin codes are exempt.'],
+        ],
     ];
 
     /**

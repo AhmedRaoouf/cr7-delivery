@@ -109,7 +109,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/areas', [GeoController::class, 'areas']);
     Route::get('/cities', [SharedCityController::class, 'index']);
     Route::get('/cities/{city}/zones', [SharedCityController::class, 'zones']);
-    Route::post('/geo/resolve', [GeoController::class, 'resolve']);
+    Route::post('/geo/resolve', [GeoController::class, 'resolve'])->middleware('throttle:120,1');
     // Our own shops, by name, near a point — what the raster tiles under them will
     // never know. Public for the same reason `/store-categories` is: the app browses
     // before it signs in, and this is the same catalogue narrowed to a pin and a name.
@@ -148,8 +148,11 @@ Route::prefix('v1')->group(function () {
     Route::get('/faqs', [FaqController::class, 'index']);
     // APP-03 — public by necessity: an applicant has no account yet, and this creates
     // an application rather than one (D-45).
-    Route::post('/captain-applications', [CaptainApplicationController::class, 'store']);
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {
+    // Batch 67 — public, unauthenticated, and it stores up to three 5 MB files per
+    // request on the private disk. The app stopped offering it (doc 61); throttled
+    // hard rather than removed, for an old build still in somebody's pocket.
+    Route::post('/captain-applications', [CaptainApplicationController::class, 'store'])->middleware('throttle:captain-application');
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh'])->group(function () {
         Route::post('/devices', [DeviceController::class, 'store']);
         Route::delete('/devices', [DeviceController::class, 'destroy']);
     });
@@ -159,7 +162,7 @@ Route::prefix('v1')->group(function () {
         // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
         // `otp-send` — D-106's per-IP ceiling, shared by every route that sends an SMS.
         Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:otp-send');
-        Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp']);
+        Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp'])->middleware('throttle:otp-verify');
         // «إنشاء حساب» — the second half of registration: the token `otp/verify` handed
         // back, plus a name and a password. Throttled per IP because it is the one
         // unauthenticated route that creates a row in `users`.
@@ -177,10 +180,12 @@ Route::prefix('v1')->group(function () {
         // driver / restaurant / admin — Admin-created accounts, **phone** + password
         // (FR-AUTH-04). No email for anyone: D-107's admin email was removed by the
         // operator on 2026-09-17. X-App decides the expected users.type (doc 12 §1.1).
-        Route::post('/login', [PasswordAuthController::class, 'login']);
+        // Batch 67 — there was no throttle on the one password endpoint every staff
+        // account signs in through. See the `auth-login` limiter.
+        Route::post('/login', [PasswordAuthController::class, 'login'])->middleware('throttle:auth-login');
 
         Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
-        Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+        Route::post('/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:otp-verify');
 
         // D-120 — renewing a session. Public: the access token it replaces has usually
         // expired by the time it is called, so `auth:sanctum` would refuse the one
@@ -189,14 +194,14 @@ Route::prefix('v1')->group(function () {
         // together, since the BFF calls from one server address.
         Route::post('/refresh', [SessionController::class, 'refresh'])->middleware('throttle:auth-refresh');
 
-        Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {
+        Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh'])->group(function () {
             Route::get('/me', [AuthController::class, 'me']);
             Route::patch('/me', [AuthController::class, 'updateMe']);
             Route::get('/me/notification-settings', [AuthController::class, 'notificationSettings']);
             Route::patch('/me/notification-settings', [AuthController::class, 'updateNotificationSettings']);
             // D-107 — the SMS code an admin's password change needs. Real SMS, always.
             Route::post('/password/change/send-code', [AuthController::class, 'sendPasswordChangeCode'])->middleware('throttle:otp-send');
-            Route::post('/password/change', [AuthController::class, 'changePassword']);
+            Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('throttle:password-change');
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);
             // D-120 — a legacy token (no `expires_at`) exchanged for a session that renews.
@@ -211,7 +216,7 @@ Route::prefix('v1')->group(function () {
     | caller (doc 12 §5): user_id = auth.id, enforced inside the controller.
     |----------------------------------------------------------------------
     */
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'type:customer'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer'])->group(function () {
         Route::get('/addresses', [AddressController::class, 'index']);
         Route::post('/addresses', [AddressController::class, 'store']);
         // D-112 — proving a second number for an address. Declared before the
@@ -275,9 +280,9 @@ Route::prefix('v1')->group(function () {
     | `client.type` still refuses the dashboard binaries.
     |----------------------------------------------------------------------
     */
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'type:customer,driver'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer,driver'])->group(function () {
         Route::get('/complaints', [CustomerComplaintController::class, 'index']);
-        Route::post('/complaints', [CustomerComplaintController::class, 'store']);
+        Route::post('/complaints', [CustomerComplaintController::class, 'store'])->middleware('throttle:20,1');
         Route::get('/complaints/{complaint}', [CustomerComplaintController::class, 'show']);
         Route::post('/complaints/{complaint}/messages', [CustomerComplaintController::class, 'addMessage']);
     });
@@ -292,7 +297,7 @@ Route::prefix('v1')->group(function () {
     | a case that exists, and the captain's half lives in §5.
     |----------------------------------------------------------------------
     */
-    Route::prefix('customer')->middleware(['auth:sanctum', 'client.type', 'account.active', 'type:customer'])->group(function () {
+    Route::prefix('customer')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:customer'])->group(function () {
         Route::post('/errands/quote', [CustomerErrandController::class, 'quote']);
         Route::post('/errands', [CustomerErrandController::class, 'store']);
         Route::get('/errands', [CustomerErrandController::class, 'index']);
@@ -306,10 +311,10 @@ Route::prefix('v1')->group(function () {
     // request is the most expensive thing an anonymous caller could spend the
     // Mapbox quota on. Throttled on top of that, and cached per 110 m in
     // `MapboxRouter`.
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'throttle:120,1'])
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'throttle:120,1'])
         ->get('/geo/route', [GeoController::class, 'route']);
 
-    Route::middleware(['auth:sanctum', 'client.type', 'account.active'])->group(function () {
+    Route::middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh'])->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
@@ -340,7 +345,7 @@ Route::prefix('v1')->group(function () {
     | sees its own slice of a group, never a sibling sub-order.
     |----------------------------------------------------------------------
     */
-    Route::prefix('restaurant')->middleware(['auth:sanctum', 'client.type', 'account.active', 'type:restaurant'])->group(function () {
+    Route::prefix('restaurant')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:restaurant'])->group(function () {
         Route::get('/me', [RestaurantMeController::class, 'show']);
         Route::patch('/me', [RestaurantMeController::class, 'update']);
         Route::post('/open-status', [RestaurantMeController::class, 'openStatus']);
@@ -420,7 +425,7 @@ Route::prefix('v1')->group(function () {
     | an order (doc 05 §4), never the app.
     |----------------------------------------------------------------------
     */
-    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'type:driver'])->group(function () {
+    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:driver'])->group(function () {
         Route::get('/me', [DriverMeController::class, 'show']);
         Route::post('/status', [DriverMeController::class, 'status']);
         Route::post('/location', [DriverMeController::class, 'location']);
@@ -477,7 +482,7 @@ Route::prefix('v1')->group(function () {
     | controller via App\Support\AdminScope — out-of-scope resolves as 404.
     |----------------------------------------------------------------------
     */
-    Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'account.active', 'type:admin'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:admin'])->group(function () {
 
         // Locations & pricing
         Route::middleware('permission:locations.view')->group(function () {
@@ -518,23 +523,27 @@ Route::prefix('v1')->group(function () {
         Route::post('/restaurants/{restaurant}/direct-orders', [RestaurantController::class, 'directOrders'])->middleware('permission:restaurants.toggle_direct_orders');
         Route::delete('/restaurants/{restaurant}', [RestaurantController::class, 'destroy'])->middleware('permission:restaurants.update');
 
-        Route::middleware('permission:restaurants.manage_menu')->group(function () {
+        // Batch 67 — `scopeBindings()`: the child in the path must belong to the parent in
+        // the path, or it is a 404. Without it `PATCH /restaurants/1/products/999` edited
+        // product 999 wherever it lived — the restaurant id in the URL was decoration,
+        // and a scope check on it could be stepped around with any in-scope parent.
+        Route::middleware('permission:restaurants.manage_menu')->scopeBindings()->group(function () {
             Route::get('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'index']);
             Route::post('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'store']);
             Route::patch('/restaurants/{restaurant}/categories/{menuCategory}', [MenuCategoryController::class, 'update']);
             Route::delete('/restaurants/{restaurant}/categories/{menuCategory}', [MenuCategoryController::class, 'destroy']);
         });
 
-        Route::middleware('permission:products.view')->group(function () {
+        Route::middleware('permission:products.view')->scopeBindings()->group(function () {
             Route::get('/restaurants/{restaurant}/products', [ProductController::class, 'index']);
             Route::get('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'show']);
         });
         Route::post('/restaurants/{restaurant}/products', [ProductController::class, 'store'])->middleware('permission:products.create');
-        Route::patch('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'update'])->middleware('permission:products.update');
-        Route::post('/restaurants/{restaurant}/products/{product}/availability', [ProductController::class, 'toggleAvailability'])->middleware('permission:products.toggle_availability');
-        Route::delete('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:products.delete');
+        Route::patch('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'update'])->middleware('permission:products.update')->scopeBindings();
+        Route::post('/restaurants/{restaurant}/products/{product}/availability', [ProductController::class, 'toggleAvailability'])->middleware('permission:products.toggle_availability')->scopeBindings();
+        Route::delete('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:products.delete')->scopeBindings();
 
-        Route::middleware('permission:products.update')->group(function () {
+        Route::middleware('permission:products.update')->scopeBindings()->group(function () {
             Route::get('/products/{product}/option-groups', [ProductOptionGroupController::class, 'index']);
             Route::post('/products/{product}/option-groups', [ProductOptionGroupController::class, 'store']);
             Route::patch('/products/{product}/option-groups/{optionGroup}', [ProductOptionGroupController::class, 'update']);
@@ -731,17 +740,20 @@ Route::prefix('v1')->group(function () {
         Route::patch('/faqs/{faq}', [AdminFaqController::class, 'update']);
         Route::delete('/faqs/{faq}', [AdminFaqController::class, 'destroy'])->middleware('permission:content.manage');
 
-        Route::post('/notifications/broadcast', [NotificationBroadcastController::class, 'store'])->middleware('permission:notifications.broadcast');
+        Route::post('/notifications/broadcast', [NotificationBroadcastController::class, 'store'])->middleware(['permission:notifications.broadcast', 'admin.global']);
 
         // System — users, roles, permissions, settings, audit log (doc 08 §7 note: global-scope admins only)
-        Route::middleware('permission:users.view')->group(function () {
+        // Batch 67 — doc 12 §10.1: users, roles, settings and the audit log are
+        // `global` only, whatever the role grants. `admin.global` answers 404 to a
+        // scoped admin, after the permission check.
+        Route::middleware(['permission:users.view', 'admin.global'])->group(function () {
             Route::get('/users', [AdminUserController::class, 'index']);
             Route::get('/users/{user}', [AdminUserController::class, 'show']);
         });
-        Route::middleware('permission:users.invite')->group(function () {
+        Route::middleware(['permission:users.invite', 'admin.global'])->group(function () {
             Route::post('/users', [AdminUserController::class, 'store']);
         });
-        Route::middleware('permission:users.manage')->group(function () {
+        Route::middleware(['permission:users.manage', 'admin.global'])->group(function () {
             Route::patch('/users/{user}', [AdminUserController::class, 'update']);
             Route::post('/users/{user}/reset-password', [AdminUserController::class, 'resetPassword']);
             Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
@@ -760,32 +772,32 @@ Route::prefix('v1')->group(function () {
             Route::delete('/accounts/{user}', [AccountModerationController::class, 'destroy']);
         });
 
-        Route::post('/users/{user}/suspend', [AdminUserController::class, 'suspend'])->middleware('permission:users.suspend');
-        Route::post('/users/{user}/restore', [AdminUserController::class, 'restore'])->middleware('permission:users.suspend');
-        Route::post('/users/{user}/roles', [AdminUserController::class, 'updateRoles'])->middleware('permission:roles.manage');
-        Route::post('/users/{user}/permissions', [AdminUserController::class, 'updatePermissions'])->middleware('permission:roles.manage');
-        Route::post('/users/{user}/scope', [AdminUserController::class, 'updateScope'])->middleware('permission:scope.manage');
+        Route::post('/users/{user}/suspend', [AdminUserController::class, 'suspend'])->middleware(['permission:users.suspend', 'admin.global']);
+        Route::post('/users/{user}/restore', [AdminUserController::class, 'restore'])->middleware(['permission:users.suspend', 'admin.global']);
+        Route::post('/users/{user}/roles', [AdminUserController::class, 'updateRoles'])->middleware(['permission:roles.manage', 'admin.global']);
+        Route::post('/users/{user}/permissions', [AdminUserController::class, 'updatePermissions'])->middleware(['permission:roles.manage', 'admin.global']);
+        Route::post('/users/{user}/scope', [AdminUserController::class, 'updateScope'])->middleware(['permission:scope.manage', 'admin.global']);
 
-        Route::middleware('permission:roles.manage')->group(function () {
+        Route::middleware(['permission:roles.manage', 'admin.global'])->group(function () {
             Route::get('/roles', [RoleController::class, 'index']);
             Route::get('/roles/{role}', [RoleController::class, 'show']);
             Route::patch('/roles/{role}', [RoleController::class, 'update']);
             Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
             Route::post('/roles/{role}/clone', [RoleController::class, 'clone']);
         });
-        Route::post('/roles', [RoleController::class, 'store'])->middleware('permission:roles.create');
-        Route::get('/permissions', [AdminPermissionController::class, 'index'])->middleware('permission:roles.manage');
+        Route::post('/roles', [RoleController::class, 'store'])->middleware(['permission:roles.create', 'admin.global']);
+        Route::get('/permissions', [AdminPermissionController::class, 'index'])->middleware(['permission:roles.manage', 'admin.global']);
 
-        Route::middleware('permission:settings.view')->group(function () {
+        Route::middleware(['permission:settings.view', 'admin.global'])->group(function () {
             Route::get('/settings', [AdminSettingController::class, 'index']);
             // D-113 — the declared panel both clients render. Before `/settings/{…}`
             // could ever exist, and it does not.
             Route::get('/settings/schema', [AdminSettingController::class, 'schema']);
             Route::get('/settings/sms-status', [AdminSettingController::class, 'smsStatus']);
         });
-        Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware('permission:settings.manage');
+        Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware(['permission:settings.manage', 'admin.global']);
 
-        Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('permission:audit.view');
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware(['permission:audit.view', 'admin.global']);
 
         // Dashboard & alerts
         Route::get('/dashboard/summary', [AdminDashboardController::class, 'summary']);

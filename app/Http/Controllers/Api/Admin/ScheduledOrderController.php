@@ -6,6 +6,7 @@ use App\Actions\Customer\ReleaseScheduledOrdersAction;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\ScheduledOrderResource;
 use App\Models\ScheduledOrder;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -16,7 +17,7 @@ class ScheduledOrderController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $rows = ScheduledOrder::query()
+        $rows = AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())
             ->with(['customer', 'restaurants'])
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q
                 ->where('status', $request->string('filter.status')->value()))
@@ -30,18 +31,22 @@ class ScheduledOrderController extends Controller
             'per_page' => $rows->perPage(),
             'total' => $rows->total(),
             'last_page' => $rows->lastPage(),
-            'pending_count' => ScheduledOrder::query()->where('status', ScheduledOrder::STATUS_SCHEDULED)->count(),
+            'pending_count' => AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())->where('status', ScheduledOrder::STATUS_SCHEDULED)->count(),
         ]);
     }
 
-    public function show(ScheduledOrder $scheduledOrder): JsonResponse
+    public function show(Request $request, ScheduledOrder $scheduledOrder): JsonResponse
     {
+        $this->ensureInScope($request, $scheduledOrder);
+
         return ApiResponse::success(new ScheduledOrderResource($scheduledOrder->load(['customer', 'restaurants'])));
     }
 
     /** «أرسله الآن» — release ahead of the clock, at the operator's own risk. */
     public function release(Request $request, ScheduledOrder $scheduledOrder, ReleaseScheduledOrdersAction $action): JsonResponse
     {
+        $this->ensureInScope($request, $scheduledOrder);
+
         if (! $scheduledOrder->isPending()) {
             return ApiResponse::error('schedule_not_pending', 'هذا الطلب لم يعد في انتظار موعده', 422);
         }
@@ -55,6 +60,8 @@ class ScheduledOrderController extends Controller
 
     public function cancel(Request $request, ScheduledOrder $scheduledOrder): JsonResponse
     {
+        $this->ensureInScope($request, $scheduledOrder);
+
         if (! $scheduledOrder->isPending()) {
             return ApiResponse::error('schedule_not_pending', 'هذا الطلب لم يعد في انتظار موعده', 422);
         }
@@ -68,5 +75,11 @@ class ScheduledOrderController extends Controller
         AuditLogger::record($request->user(), 'scheduled_orders.cancel', $scheduledOrder);
 
         return ApiResponse::success(message: 'تم إلغاء الطلب المجدول');
+    }
+
+    /** Batch 67 — a scheduled basket follows its delivery address's scope (D-52). */
+    private function ensureInScope(Request $request, ScheduledOrder $scheduledOrder): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user()), $scheduledOrder);
     }
 }

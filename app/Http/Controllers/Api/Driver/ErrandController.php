@@ -160,7 +160,7 @@ class ErrandController extends Controller
             'purchases_amount' => ['required', 'numeric', 'min:0', 'max:100000'],
             'purchases_note' => ['nullable', 'string', 'max:500'],
             'receipts' => ['nullable', 'array', 'max:3'],
-            'receipts.*' => ['image', 'max:5120'],
+            'receipts.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
         ]);
 
         return ApiResponse::success(

@@ -17,8 +17,8 @@ class UpdateStoreCategoryRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:120'],
             'name_ar' => ['sometimes', 'required', 'string', 'max:120'],
             'name_en' => ['sometimes', 'required', 'string', 'max:120'],
-            'image' => ['nullable', 'image', 'max:5120'],
-            'icon' => ['nullable', 'image', 'max:2048'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'icon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:2048'],
             // The sibling booleans — see `HandlesUploads`. A multipart body cannot carry
             // a JSON null, so «clear this» has to be its own field.
             'remove_image' => ['nullable', 'boolean'],

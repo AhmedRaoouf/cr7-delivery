@@ -46,8 +46,8 @@ class UpdateRestaurantRequest extends FormRequest
             // `ADM-12` offered a logo picker the API had no rule for, so the file was
             // dropped and the response still answered 200 with `logo: null`. The
             // drawing and the contract agree now.
-            'logo' => ['nullable', 'image', 'max:5120'],
-            'cover' => ['nullable', 'image', 'max:5120'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_cover' => ['nullable', 'boolean'],
             // D-58 — the printed menu sheets, «المنيو», pill 0 of the tab strip.

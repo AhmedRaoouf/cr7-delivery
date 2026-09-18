@@ -22,8 +22,8 @@ class StoreBannerRequest extends FormRequest
             // them required forced a designer to produce two of everything, and the
             // dashboard could not create a banner at all.
             'title_en' => ['nullable', 'string', 'max:255'],
-            'image_ar' => [$required, 'image', 'max:5120'],
-            'image_en' => ['nullable', 'image', 'max:5120'],
+            'image_ar' => [$required, 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'image_en' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
             'link_value' => ['nullable', 'string'],
             'audience' => ['nullable', 'in:all,first_order,returning'],

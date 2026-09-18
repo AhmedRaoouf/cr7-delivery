@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StoreDriverDocumentRequest;
 use App\Http\Resources\Admin\DriverDocumentResource;
 use App\Models\Driver;
 use App\Models\DriverDocument;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,13 +20,17 @@ class DriverDocumentController extends Controller
 {
     use HandlesUploads;
 
-    public function index(Driver $driver): JsonResponse
+    public function index(Request $request, Driver $driver): JsonResponse
     {
+        $this->ensureDriverInScope($request, $driver);
+
         return ApiResponse::success(DriverDocumentResource::collection($driver->documents()->latest()->get()));
     }
 
     public function store(StoreDriverDocumentRequest $request, Driver $driver): JsonResponse
     {
+        $this->ensureDriverInScope($request, $driver);
+
         $data = $this->withPrivateUpload($request->validated(), $request, 'file', 'driver-documents');
         $document = $driver->documents()->create($data);
 
@@ -53,6 +58,8 @@ class DriverDocumentController extends Controller
      */
     public function file(Request $request, DriverDocument $driverDocument): StreamedResponse
     {
+        $this->ensureDocumentInScope($request, $driverDocument);
+
         abort_unless(Storage::disk('local')->exists($driverDocument->file), 404);
 
         if (! $request->boolean('download')) {
@@ -72,6 +79,8 @@ class DriverDocumentController extends Controller
 
     public function review(Request $request, DriverDocument $driverDocument): JsonResponse
     {
+        $this->ensureDocumentInScope($request, $driverDocument);
+
         $validated = $request->validate([
             'status' => ['required', 'in:approved,rejected'],
             'note' => ['nullable', 'string', 'max:255', 'required_if:status,rejected'],
@@ -83,5 +92,16 @@ class DriverDocumentController extends Controller
         ]);
 
         return ApiResponse::success(new DriverDocumentResource($driverDocument), 'تم تحديث حالة المستند بنجاح');
+    }
+
+    /** Batch 67 — a captain's documents follow the captain's scope (D-52). */
+    private function ensureDriverInScope(Request $request, Driver $driver): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToDrivers(Driver::query(), $request->user()), $driver);
+    }
+
+    private function ensureDocumentInScope(Request $request, DriverDocument $document): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToDriverDocuments(DriverDocument::query(), $request->user()), $document);
     }
 }

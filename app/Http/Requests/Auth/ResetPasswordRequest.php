@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\ValidatesLogin;
+use App\Support\Security\PasswordPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ResetPasswordRequest extends FormRequest
@@ -25,7 +26,7 @@ class ResetPasswordRequest extends FormRequest
         return [
             'login' => $this->loginRules(),
             'code' => ['required', 'digits:6'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => PasswordPolicy::rules(confirmed: true),
         ];
     }
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\Payment;
 use App\Models\PaymentProof;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\RollupStatus;
@@ -20,8 +21,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class PaymentController extends Controller
 {
     /** doc 12 §5 — "Payment proof image — Admin only": never a public URL, served through this gate. */
-    public function proofFile(PaymentProof $proof): StreamedResponse
+    public function proofFile(Request $request, PaymentProof $proof): StreamedResponse
     {
+        // Batch 67 — the proof follows its payment's scope (doc 12 §10.1).
+        abort_unless($proof->payment !== null, 404);
+        $this->ensureInScope($request, $proof->payment);
+
         abort_unless(Storage::disk('local')->exists($proof->image), 404);
 
         return Storage::disk('local')->response($proof->image);
@@ -29,7 +34,7 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $payments = Payment::query()
+        $payments = AdminScope::applyToPayments(Payment::query(), $request->user())
             ->with(['orderGroup.user', 'proofs'])
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
             ->latest()
@@ -52,8 +57,10 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function show(Payment $payment): JsonResponse
+    public function show(Request $request, Payment $payment): JsonResponse
     {
+        $this->ensureInScope($request, $payment);
+
         $payment->load(['orderGroup.orders', 'proofs.reviewedBy']);
 
         $row = $payment->toArray();
@@ -66,6 +73,8 @@ class PaymentController extends Controller
 
     public function approve(Request $request, Payment $payment): JsonResponse
     {
+        $this->ensureInScope($request, $payment);
+
         if ($payment->status->value !== 'under_review') {
             throw new ApiException('invalid_transition', 'لا يوجد إيصال قيد المراجعة لهذا الدفع', 422);
         }
@@ -109,6 +118,8 @@ class PaymentController extends Controller
 
     public function reject(Request $request, Payment $payment): JsonResponse
     {
+        $this->ensureInScope($request, $payment);
+
         if ($payment->status->value !== 'under_review') {
             throw new ApiException('invalid_transition', 'لا يوجد إيصال قيد المراجعة لهذا الدفع', 422);
         }
@@ -129,5 +140,11 @@ class PaymentController extends Controller
         });
 
         return ApiResponse::success($payment->fresh(), 'تم رفض الإيصال، بانتظار إيصال جديد من العميل');
+    }
+
+    /** Batch 67 — D-52: out of scope is a 404, the same answer a missing row gets. */
+    private function ensureInScope(Request $request, Payment $payment): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToPayments(Payment::query(), $request->user()), $payment);
     }
 }

@@ -63,12 +63,12 @@ class ReportExportController extends Controller
             'orders' => $this->orders($request, $stamp),
             'sales' => $this->sales($request, $from, $to, $stamp),
             'restaurants' => $this->restaurants($request, $from, $to, $stamp),
-            'products' => $this->products($stamp),
+            'products' => $this->products($request, $stamp),
             'drivers' => $this->drivers($request, $from, $to, $stamp),
             'zones' => $this->zones($request, $from, $to, $stamp),
             'promo-codes' => $this->promoCodes($stamp),
-            'refunds' => $this->refunds($from, $to, $stamp),
-            'complaints' => $this->complaints($from, $to, $stamp),
+            'refunds' => $this->refunds($request, $from, $to, $stamp),
+            'complaints' => $this->complaints($request, $from, $to, $stamp),
             'customers' => $this->customers($request, $stamp),
             default => abort(404),
         };
@@ -200,9 +200,11 @@ class ReportExportController extends Controller
         );
     }
 
-    private function products(string $stamp): StreamedResponse
+    private function products(Request $request, string $stamp): StreamedResponse
     {
+        // Batch 67 — every workbook is the operator's scope, exactly like its screen.
         $rows = Product::query()->with('restaurant:id,name_ar')
+            ->whereHas('restaurant', fn ($q) => AdminScope::applyToRestaurants($q, $request->user()))
             ->orderByDesc('sold_count')->limit(self::MAX_ROWS)->get();
 
         return ReportExporter::stream(
@@ -286,9 +288,9 @@ class ReportExportController extends Controller
         );
     }
 
-    private function refunds($from, $to, string $stamp): StreamedResponse
+    private function refunds(Request $request, $from, $to, string $stamp): StreamedResponse
     {
-        $rows = Refund::query()->with('order:id,order_number')
+        $rows = AdminScope::applyToRefunds(Refund::query(), $request->user())->with('order:id,order_number')
             ->whereBetween('created_at', [$from, $to])
             ->latest()->limit(self::MAX_ROWS)->get();
 
@@ -308,9 +310,9 @@ class ReportExportController extends Controller
         );
     }
 
-    private function complaints($from, $to, string $stamp): StreamedResponse
+    private function complaints(Request $request, $from, $to, string $stamp): StreamedResponse
     {
-        $rows = Complaint::query()->with('user:id,name')
+        $rows = AdminScope::applyToComplaints(Complaint::query(), $request->user())->with('user:id,name')
             ->whereBetween('created_at', [$from, $to])
             ->latest()->limit(self::MAX_ROWS)->get();
 
@@ -335,7 +337,7 @@ class ReportExportController extends Controller
     {
         $segment = $request->string('filter.segment')->value();
 
-        $query = User::query()->where('type', 'customer');
+        $query = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user());
         $query = match ($segment) {
             'new' => $query->where('created_at', '>=', BusinessTime::startOfDaysAgo(30)),
             'returning' => $query->whereHas('orderGroups', fn ($q) => $q->where('rollup_status', 'delivered'), '>=', 2),
@@ -346,8 +348,7 @@ class ReportExportController extends Controller
         $rows = $query->withCount('orderGroups')->latest()->limit(self::MAX_ROWS)->get();
 
         // `ADM-52`'s retention grid, from the same query that feeds it on screen.
-        $cohorts = User::query()
-            ->where('type', 'customer')
+        $cohorts = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user())
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as cohort_month, COUNT(*) as customers_count")
             ->groupBy('cohort_month')
             ->orderBy('cohort_month')

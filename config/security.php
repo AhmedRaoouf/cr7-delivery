@@ -33,22 +33,6 @@ return [
     ],
 
     /*
-     * The only browsers that ever talk to this API are the two dashboards, and they
-     * do it from their own Node server through the BFF (D-69) — the browser never
-     * holds a token and never calls this origin with fetch(). The mobile app is not
-     * a browser and never sends a CORS preflight. So the allow-list is the two
-     * dashboard origins and nothing else, and even those are a fallback rather than
-     * something a client relies on today. `*` is never correct here.
-     */
-    'cors_allowed_origins' => array_values(array_filter(array_map(
-        'trim',
-        explode(',', (string) env(
-            'CORS_ALLOWED_ORIGINS',
-            'https://dashboard.cr7-delivery.com,https://admin.cr7-delivery.com',
-        )),
-    ))),
-
-    /*
      * The largest page any list endpoint will answer. The biggest page a client asks
      * for today is 200 (`/admin/restaurants` on ADM-10's picker); `per_page=1000000`
      * used to be answered in full.

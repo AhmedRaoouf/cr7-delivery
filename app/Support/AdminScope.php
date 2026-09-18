@@ -3,7 +3,10 @@
 namespace App\Support;
 
 use App\Enums\AdminScopeType;
+use App\Enums\UserType;
 use App\Models\City;
+use App\Models\Driver;
+use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -170,5 +173,148 @@ class AdminScope
                 $q->orWhereIn('city_id', $cityIds);
             }
         });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Batch 67 — the entities doc 12 §10.1 lists and nothing scoped
+    |--------------------------------------------------------------------------
+    |
+    | Complaints, payments, refunds, settlements, delivery issues, captain documents,
+    | order groups, scheduled orders and moderated accounts were answered to any admin
+    | holding the permission, whatever their scope. Each helper below states the rule
+    | from doc 12 §10.1 in the query, so a scoped admin's list, counts and single-row
+    | lookups (through {@see self::abortUnlessVisible()}) all agree.
+    */
+
+    /**
+     * doc 12 §10.1 — a complaint follows its linked order; without one, the reporter:
+     * a customer by the city of their default address, a captain by their zones, a
+     * place by the place. Anything else is global-only.
+     */
+    public static function applyToComplaints(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($admin) {
+            $q->whereHas('order', fn (Builder $order) => self::applyToOrders($order, $admin))
+                ->orWhere(fn (Builder $unlinked) => $unlinked
+                    ->whereNull('order_id')
+                    ->whereHas('user', fn (Builder $reporter) => self::applyToAccounts($reporter, $admin)));
+        });
+    }
+
+    /** doc 12 §10.1 — a payment follows the orders of its group. */
+    public static function applyToPayments(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->whereHas('orderGroup.orders', fn (Builder $order) => self::applyToOrders($order, $admin));
+    }
+
+    /** doc 12 §10.1 — a refund follows its order. */
+    public static function applyToRefunds(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->whereHas('order', fn (Builder $order) => self::applyToOrders($order, $admin));
+    }
+
+    /** A delivery issue follows its order. */
+    public static function applyToDeliveryIssues(Builder $query, User $admin): Builder
+    {
+        return self::applyToRefunds($query, $admin);
+    }
+
+    /** An order group is in scope when any of its sub-orders is. */
+    public static function applyToOrderGroups(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->whereHas('orders', fn (Builder $order) => self::applyToOrders($order, $admin));
+    }
+
+    /** A captain's document follows the captain. */
+    public static function applyToDriverDocuments(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->whereHas('driver', fn (Builder $driver) => self::applyToDrivers($driver, $admin));
+    }
+
+    /** A settlement follows its party — the place or the captain it pays. */
+    public static function applyToSettlements(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        $restaurants = self::applyToRestaurants(Restaurant::query(), $admin)->select('restaurants.id');
+        $drivers = self::applyToDrivers(Driver::query(), $admin)->select('drivers.id');
+
+        return $query->where(function (Builder $q) use ($restaurants, $drivers) {
+            $q->where(fn (Builder $r) => $r->where('party_type', 'restaurant')->whereIn('party_id', $restaurants))
+                ->orWhere(fn (Builder $d) => $d->where('party_type', 'driver')->whereIn('party_id', $drivers));
+        });
+    }
+
+    /** A scheduled basket follows the address it will be delivered to. */
+    public static function applyToScheduledOrders(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        $cityIds = self::scopedCityIds($admin);
+        $zoneIds = self::scopedZoneIds($admin);
+
+        return $query->whereHas('address', fn (Builder $address) => $address->where(function (Builder $q) use ($cityIds, $zoneIds) {
+            $q->whereIn('service_zone_id', $zoneIds);
+
+            if ($cityIds !== []) {
+                $q->orWhereIn('city_id', $cityIds);
+            }
+        }));
+    }
+
+    /**
+     * Any non-admin account, by the rule for its type: a customer by the city of their
+     * default address, a captain by their zones, a place by the place. Admin accounts
+     * are never in a scoped admin's reach (users are global-only).
+     */
+    public static function applyToAccounts(Builder $query, User $admin): Builder
+    {
+        if (self::isGlobal($admin)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($admin) {
+            $q->where(fn (Builder $customer) => self::applyToCustomers($customer->where('type', UserType::Customer), $admin))
+                ->orWhere(fn (Builder $captain) => $captain
+                    ->where('type', UserType::Driver)
+                    ->whereHas('driver', fn (Builder $driver) => self::applyToDrivers($driver, $admin)))
+                ->orWhere(fn (Builder $place) => $place
+                    ->where('type', UserType::Restaurant)
+                    ->whereHas('restaurant', fn (Builder $restaurant) => self::applyToRestaurants($restaurant, $admin)));
+        });
+    }
+
+    /**
+     * The single-row half of every helper above: out of scope is a 404, the same answer
+     * a row that does not exist gets (D-51). Pass the scoped query for the row's type.
+     */
+    public static function abortUnlessVisible(Builder $scoped, Model $row): void
+    {
+        abort_unless($scoped->whereKey($row->getKey())->exists(), 404);
     }
 }

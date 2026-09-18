@@ -47,8 +47,11 @@ class DirectOrderController extends Controller
         ]);
     }
 
-    public function ratio(Restaurant $restaurant): JsonResponse
+    public function ratio(Request $request, Restaurant $restaurant): JsonResponse
     {
+        // Batch 67 — the ratio is a fact about one restaurant; it follows that restaurant's scope.
+        AdminScope::abortUnlessVisible(AdminScope::applyToRestaurants(Restaurant::query(), $request->user()), $restaurant);
+
         $windowDays = 30;
         $since = now()->subDays($windowDays);
 

@@ -57,7 +57,7 @@ class ComplaintController extends Controller
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
             'attachments' => ['nullable', 'array', 'max:3'],
-            'attachments.*' => ['image', 'max:5120'],
+            'attachments.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
         ]);
 
         $message = $complaint->messages()->create([

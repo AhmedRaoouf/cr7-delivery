@@ -125,10 +125,20 @@ class OrderController extends Controller
         $driver = $request->user()->driver()->firstOrFail();
         abort_unless($order->driver_id === $driver->id, 404);
 
+        // Batch 67 — a finished order stays finished. This moved *any* order the captain
+        // had ever carried to `delivery_issue`: a delivered one reopened on every board,
+        // in the settlements and in the customer's history.
+        if ($order->status->isTerminal()) {
+            throw new ApiException('invalid_transition', 'لا يمكن الإبلاغ عن مشكلة في طلب منتهٍ', 422);
+        }
+
         $validated = $request->validate([
             'category' => ['required', 'in:customer_unreachable,wrong_address,accident,food_problem,driver_unresponsive,payment,handover,other'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'attachments' => ['nullable', 'array'],
+            // Batch 67 — was `array` of anything, stored verbatim and rendered as links on
+            // the operators' screens. Only https URLs now; the app sends none today.
+            'attachments' => ['nullable', 'array', 'max:5'],
+            'attachments.*' => ['string', 'max:2048', 'url:https'],
         ]);
 
         $issue = $order->deliveryIssues()->create([

@@ -4,14 +4,38 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\FileUploader;
 use App\Support\Locale;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+/*
+ * Batch 67 — none of the routes in this file needs a session, a cookie or a CSRF token.
+ *
+ * They are all public reads: an image, a share page, the App Links proof. They sat in the
+ * `web` group, so every hit on `/` — the stock Laravel welcome page, 39 KB, printing
+ * «Laravel v11.56.0 (PHP v8.3.33)» — wrote a session row and set `XSRF-TOKEN` and
+ * `cr7_delivery_session` cookies, for scanners and crawlers alike. The `web` group
+ * itself stays, for Telescope and the API docs, which do use its cookies.
+ */
+Route::withoutMiddleware([
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    ValidateCsrfToken::class,
+    AddQueuedCookiesToResponse::class,
+    EncryptCookies::class,
+])->group(function () {
+
+/*
+ * The root says what this host is and nothing about what it runs on. `/up` is the health
+ * check; this is only what a person who types the bare domain sees.
+ */
+Route::get('/', fn () => response()->json(['name' => 'CR7 Delivery API', 'status' => 'ok']));
 
 /**
  * Serve the public upload disk directly.
@@ -33,11 +57,30 @@ Route::get('/', function () {
 Route::get('/storage/{path}', function (string $path) {
     abort_if(str_contains($path, '..'), 404);
 
+    /*
+     * Batch 67 — pictures only, typed by their extension, never by their bytes.
+     *
+     * `$disk->response()` sniffed the MIME type from the file's contents, so anything
+     * that reached the upload disk — an SVG stored as `.bin` before the uploader
+     * refused them, a file some older path wrote — was served with whatever type its
+     * bytes claimed: `image/svg+xml` or `text/html`, from the API's own origin, which
+     * is stored XSS. Every public upload is written with one of these extensions
+     * (`FileUploader::SAFE_IMAGE_EXTENSIONS`), so nothing legitimate is lost.
+     */
+    $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', 'avif' => 'image/avif'];
+    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+    abort_unless(array_key_exists($extension, $types), 404);
+
     $disk = Storage::disk(FileUploader::disk());
 
     abort_unless($disk->exists($path), 404);
 
-    $response = $disk->response($path);
+    $response = $disk->response($path, null, [
+        'Content-Type' => $types[$extension],
+        'X-Content-Type-Options' => 'nosniff',
+        'Content-Security-Policy' => "default-src 'none'; sandbox",
+    ]);
 
     if ($response instanceof StreamedResponse || $response instanceof BinaryFileResponse) {
         $response->setPublic();
@@ -168,3 +211,5 @@ Route::get('/.well-known/apple-app-site-association', function () {
         ],
     ])->header('Content-Type', 'application/json');
 })->name('share.aasa');
+
+});

@@ -11,6 +11,7 @@ use App\Support\DriverLedger;
 use App\Support\Notifications\OperatorAlerts;
 use App\Support\Otp;
 use App\Support\RollupStatus;
+use App\Support\OrderCodeGuard;
 use App\Support\SettingsCatalog;
 use Illuminate\Support\Facades\DB;
 
@@ -47,14 +48,19 @@ class PickupOrderAction
                 throw new ApiException('invalid_otp', 'كود الاستلام مطلوب', 422);
             }
 
-            if ($order->getRawOriginal('pickup_otp') !== $otp) {
-                $order->increment('pickup_otp_attempts');
+            // Batch 67 — counted under a row lock; see {@see OrderCodeGuard}.
+            $guess = OrderCodeGuard::attempt($order, 'pickup_otp', 'pickup_otp_attempts', $otp, $limit);
 
-                if ($order->pickup_otp_attempts >= $limit) {
+            if ($guess['locked']) {
+                throw new ApiException('otp_attempts_locked', 'تم قفل إدخال الكود، برجاء التواصل مع الدعم', 423);
+            }
+
+            if (! $guess['matched']) {
+                if ($guess['attempts'] >= $limit) {
                     OperatorAlerts::codeLocked($order, 'pickup');
                 }
 
-                throw new ApiException('invalid_otp', 'كود الاستلام غير صحيح', 422, meta: ['attempts_left' => max(0, $limit - $order->pickup_otp_attempts)]);
+                throw new ApiException('invalid_otp', 'كود الاستلام غير صحيح', 422, meta: ['attempts_left' => max(0, $limit - $guess['attempts'])]);
             }
         }
 

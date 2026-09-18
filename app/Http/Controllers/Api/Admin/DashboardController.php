@@ -133,7 +133,7 @@ class DashboardController extends Controller
     {
         $orders = AdminScope::applyToOrders(Order::query(), $request->user());
 
-        $payments = Payment::query()
+        $payments = AdminScope::applyToPayments(Payment::query(), $request->user())
             ->where('status', 'under_review')
             ->with(['proofs' => fn ($q) => $q->latest(), 'orderGroup:id,group_number,user_id'])
             ->latest()
@@ -204,7 +204,7 @@ class DashboardController extends Controller
         // D-53 — a complaint is «something is waiting on a person and nobody has picked
         // it up», which is exactly what this dock is for. It was the one open queue that
         // had no way of reaching an operator who was not already on `ADM-41`.
-        $complaints = Complaint::query()
+        $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())
             ->whereIn('status', ['open', 'in_progress'])
             ->with('user:id,name')
             ->oldest()
@@ -259,7 +259,7 @@ class DashboardController extends Controller
         $orders = AdminScope::applyToOrders(Order::query(), $request->user());
 
         return [
-            'payment_review' => Payment::query()->where('status', 'under_review')->count(),
+            'payment_review' => AdminScope::applyToPayments(Payment::query(), $request->user())->where('status', 'under_review')->count(),
             'no_driver' => self::strandedQuery(clone $orders)->count(),
             'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
             'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
@@ -267,11 +267,9 @@ class DashboardController extends Controller
                 ->where('status', ErrandStatus::Open->value)
                 ->whereNull('driver_id')
                 ->count(),
-            // Not scoped: `complaints` carries neither `city_id` nor `service_zone_id`,
-            // so `AdminScope::applyToOrders` has nothing to filter on. Scoping it means
-            // a column and a backfill, and a count an out-of-scope operator can see is
-            // a smaller problem than a complaint nobody sees at all.
-            'complaint_open' => Complaint::query()->whereIn('status', ['open', 'in_progress'])->count(),
+            // Batch 67 — scoped through the linked order, else the reporter
+            // (`AdminScope::applyToComplaints`); a global operator still sees them all.
+            'complaint_open' => AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereIn('status', ['open', 'in_progress'])->count(),
         ];
     }
 

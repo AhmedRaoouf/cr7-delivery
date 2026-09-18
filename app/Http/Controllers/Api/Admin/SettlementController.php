@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Actions\Admin\GenerateSettlementAction;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
 use App\Models\Restaurant;
 use App\Models\Settlement;
+use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Notifications\NotificationDispatcher;
@@ -20,7 +22,7 @@ class SettlementController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $settlements = Settlement::query()
+        $settlements = AdminScope::applyToSettlements(Settlement::query(), $request->user())
             ->when($request->string('filter.party_type')->isNotEmpty(), fn ($q) => $q->where('party_type', $request->string('filter.party_type')))
             ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
             ->latest('period_end')
@@ -58,13 +60,21 @@ class SettlementController extends Controller
             'period_end' => ['required', 'date', 'after_or_equal:period_start'],
         ]);
 
+        // Batch 67 — a statement is generated only for a party in the operator's scope.
+        $parties = $validated['party_type'] === 'restaurant'
+            ? AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
+            : AdminScope::applyToDrivers(Driver::query(), $request->user());
+        abort_unless($parties->whereKey($validated['party_id'])->exists(), 404);
+
         $settlement = $action->execute($request->user(), $validated['party_type'], $validated['party_id'], $validated['period_start'], $validated['period_end']);
 
         return ApiResponse::success($settlement, 'تم إنشاء كشف التسوية بنجاح', status: 201);
     }
 
-    public function show(Settlement $settlement): JsonResponse
+    public function show(Request $request, Settlement $settlement): JsonResponse
     {
+        $this->ensureInScope($request, $settlement);
+
         return ApiResponse::success($settlement->load(['items.order', 'party', 'createdBy']));
     }
 
@@ -75,8 +85,10 @@ class SettlementController extends Controller
      * thousands of order lines, and holding the sheet in memory first is how a
      * 128 MB shared-hosting limit is hit by a report nobody thought was large.
      */
-    public function export(Settlement $settlement): StreamedResponse
+    public function export(Request $request, Settlement $settlement): StreamedResponse
     {
+        $this->ensureInScope($request, $settlement);
+
         $party = $settlement->party;
         $name = $party?->getAttribute('name_ar') ?? $party?->getAttribute('name') ?? '';
 
@@ -85,6 +97,8 @@ class SettlementController extends Controller
 
     public function pay(Request $request, Settlement $settlement): JsonResponse
     {
+        $this->ensureInScope($request, $settlement);
+
         if ($settlement->status->value === 'paid') {
             throw new ApiException('invalid_transition', 'تم دفع هذه التسوية بالفعل', 422);
         }
@@ -123,5 +137,11 @@ class SettlementController extends Controller
         }
 
         return ApiResponse::success($settlement->fresh(), 'تم تسجيل الدفع بنجاح');
+    }
+
+    /** Batch 67 — D-52: a settlement follows its party's scope; outside it, a 404. */
+    private function ensureInScope(Request $request, Settlement $settlement): void
+    {
+        AdminScope::abortUnlessVisible(AdminScope::applyToSettlements(Settlement::query(), $request->user()), $settlement);
     }
 }

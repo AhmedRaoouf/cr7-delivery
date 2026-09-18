@@ -40,6 +40,7 @@ use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\OtpRequester;
 use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -238,26 +239,18 @@ class AppServiceProvider extends ServiceProvider
         }
 
         /*
-         * D-106 — a per-IP ceiling on every route that sends an SMS, beside the per-phone
-         * one in `SendOtpAction`. A gateway that costs money per message is a gateway
-         * somebody can spend: the per-phone cap alone lets one caller walk a list of
-         * numbers at five messages each. One bucket for all of them — `otp/send`,
-         * `password/forgot`, `password/change/send-code` and `addresses/phone/send-code`
-         * — so a caller cannot get twenty from each.
+         * D-106's per-IP ceiling on the routes that send an SMS is not a route limiter any
+         * more (batch 68). It is `otp.ip_max_per_hour` / `otp.ip_max_per_day` on the panel,
+         * counted by `OtpGuard` from the `sms_sends` ledger after the phone was validated —
+         * so a cache clear cannot reset it, a mistyped number does not spend it, and the
+         * dashboards' staff are counted by their own browser's address rather than as one
+         * BFF (see `OtpRequester`).
          *
          * The static-mode warnings that used to sit here are gone with `OTP_STATIC_MODE`.
          * `otp.mode` is a setting, and reading the database on every boot would also run
          * during `migrate` on a database that has no settings table yet; the same two
          * warnings are logged by `SendOtpAction` on the send they concern.
          */
-        RateLimiter::for('otp-send', fn (Request $request) => Limit::perHour(20)
-            ->by((string) $request->ip())
-            ->response(fn (Request $request, array $headers) => ApiResponse::error(
-                'otp_send_rate_limited',
-                'محاولات كثيرة جدًا، حاول لاحقًا',
-                429,
-                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 3600)],
-            )->withHeaders($headers)));
 
         /*
          * D-127 — one bucket per geocoding route, not one between them.
@@ -353,7 +346,7 @@ class AppServiceProvider extends ServiceProvider
             'login_rate_limited',
             'محاولات دخول كثيرة جدًا، حاول بعد قليل',
             429,
-            meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+            meta: self::retryMeta($headers),
         )->withHeaders($headers);
 
         $loginKey = static function (Request $request): string {
@@ -362,10 +355,13 @@ class AppServiceProvider extends ServiceProvider
             return hash('sha256', is_string($login) ? PhoneNumber::normaliseLogin($login) : '');
         };
 
+        // Batch 68 — the address is `OtpRequester::ip()`: the browser's, when the
+        // dashboards' BFF vouches for it with the shared key, so one stranger on a
+        // dashboard's sign-in cannot fill the 60-a-minute bucket every operator shares.
         RateLimiter::for('auth-login', fn (Request $request) => [
-            Limit::perMinute(5)->by('login:'.$loginKey($request).'|'.$request->ip())->response($loginRefused),
+            Limit::perMinute(5)->by('login:'.$loginKey($request).'|'.OtpRequester::ip($request))->response($loginRefused),
             Limit::perHour(30)->by('login-account:'.$loginKey($request))->response($loginRefused),
-            Limit::perMinute(60)->by('login-ip:'.$request->ip())->response($loginRefused),
+            Limit::perMinute(60)->by('login-ip:'.OtpRequester::ip($request))->response($loginRefused),
         ]);
 
         /*
@@ -379,16 +375,17 @@ class AppServiceProvider extends ServiceProvider
                 'otp_verify_rate_limited',
                 'محاولات كثيرة جدًا، حاول لاحقًا',
                 429,
-                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+                meta: self::retryMeta($headers),
             )->withHeaders($headers);
 
             $phone = $request->input('phone', $request->input('login'));
             $phone = is_string($phone) ? PhoneNumber::normaliseLogin($phone) : '';
+            $ip = OtpRequester::ip($request);
 
             return [
-                Limit::perMinute(10)->by('otp-verify:'.hash('sha256', $phone).'|'.$request->ip())->response($refused),
+                Limit::perMinute(10)->by('otp-verify:'.hash('sha256', $phone).'|'.$ip)->response($refused),
                 Limit::perHour(40)->by('otp-verify-phone:'.hash('sha256', $phone))->response($refused),
-                Limit::perMinute(60)->by('otp-verify-ip:'.$request->ip())->response($refused),
+                Limit::perMinute(60)->by('otp-verify-ip:'.$ip)->response($refused),
             ];
         });
 
@@ -400,7 +397,7 @@ class AppServiceProvider extends ServiceProvider
                 'rate_limited',
                 'محاولات كثيرة جدًا، حاول بعد قليل',
                 429,
-                meta: ['retry_after' => (int) ($headers['Retry-After'] ?? 60)],
+                meta: self::retryMeta($headers),
             )->withHeaders($headers)));
 
         // Batch 67 — the public captain application (doc 61 retired the screen): a
@@ -456,5 +453,21 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production') && config('services.otp_channel') !== 'sms_misr') {
             Log::warning('[OTP] OTP_CHANNEL is the log in production — no SMS leaves this server, and an admin cannot change a password by SMS. Use `php artisan cr7:reset-password` until SMS Misr is bound.');
         }
+    }
+
+    /**
+     * Batch 68 — every refusal of a code or a sign-in says when to come back twice: in
+     * seconds (`retry_after`) and as a moment (`available_at`, ISO-8601 UTC), so a client
+     * that was backgrounded for a minute does not have to guess how much of the wait is
+     * left.
+     *
+     * @param  array<string, mixed>  $headers  the limiter's own, `Retry-After` among them
+     * @return array{retry_after: int, available_at: string}
+     */
+    private static function retryMeta(array $headers): array
+    {
+        $seconds = max(0, (int) ($headers['Retry-After'] ?? 60));
+
+        return ['retry_after' => $seconds, 'available_at' => now()->addSeconds($seconds)->utc()->toIso8601String()];
     }
 }

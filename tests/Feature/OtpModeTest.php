@@ -180,12 +180,20 @@ class OtpModeTest extends TestCase
 
         $this->postJson('/api/v1/auth/otp/send', ['phone' => '01011122233'])->assertOk();
 
-        foreach ([2, 1, 0] as $left) {
+        foreach ([2, 1] as $left) {
             $this->postJson('/api/v1/auth/otp/verify', ['phone' => '01011122233', 'code' => '000000'])
                 ->assertStatus(422)
                 ->assertJsonPath('error', 'otp_invalid')
                 ->assertJsonPath('meta.attempts_left', $left);
         }
+
+        // Batch 68 — the guess that uses the last attempt says the code is dead at once,
+        // and when a new one may be asked for, rather than `attempts_left: 0`.
+        $this->postJson('/api/v1/auth/otp/verify', ['phone' => '01011122233', 'code' => '000000'])
+            ->assertStatus(423)
+            ->assertJsonPath('error', 'otp_attempts_exceeded')
+            ->assertJsonPath('meta.attempts_left', 0)
+            ->assertJsonStructure(['meta' => ['retry_after', 'available_at']]);
 
         $this->assertSame(3, OtpCode::query()->where('phone', '01011122233')->value('attempts'));
 

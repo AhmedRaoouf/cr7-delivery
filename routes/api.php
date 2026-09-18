@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\OrderGroupController as AdminOrderGroupController;
+use App\Http\Controllers\Api\Admin\OtpController as AdminOtpController;
 use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
@@ -160,8 +161,12 @@ Route::prefix('v1')->group(function () {
     // §3 Auth
     Route::prefix('auth')->group(function () {
         // customer: phone + OTP (FR-AUTH-01/02/03), no password ever.
-        // `otp-send` — D-106's per-IP ceiling, shared by every route that sends an SMS.
-        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:otp-send');
+        // Batch 68 — no route throttle on any of the four routes that send a code: every
+        // per-number, per-address, per-install and platform count is `OtpGuard`'s and
+        // `OtpBudget`'s, counted from the `sms_sends` ledger **after** the phone was
+        // validated — a mistyped number costs nobody any of their allowance, and a cache
+        // clear hands nobody a fresh one.
+        Route::post('/otp/send', [CustomerAuthController::class, 'sendOtp']);
         Route::post('/otp/verify', [CustomerAuthController::class, 'verifyOtp'])->middleware('throttle:otp-verify');
         // «إنشاء حساب» — the second half of registration: the token `otp/verify` handed
         // back, plus a name and a password. Throttled per IP because it is the one
@@ -184,7 +189,7 @@ Route::prefix('v1')->group(function () {
         // account signs in through. See the `auth-login` limiter.
         Route::post('/login', [PasswordAuthController::class, 'login'])->middleware('throttle:auth-login');
 
-        Route::post('/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp-send');
+        Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
         Route::post('/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:otp-verify');
 
         // D-120 — renewing a session. Public: the access token it replaces has usually
@@ -200,7 +205,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/me/notification-settings', [AuthController::class, 'notificationSettings']);
             Route::patch('/me/notification-settings', [AuthController::class, 'updateNotificationSettings']);
             // D-107 — the SMS code an admin's password change needs. Real SMS, always.
-            Route::post('/password/change/send-code', [AuthController::class, 'sendPasswordChangeCode'])->middleware('throttle:otp-send');
+            Route::post('/password/change/send-code', [AuthController::class, 'sendPasswordChangeCode']);
             Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('throttle:password-change');
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/logout-all', [AuthController::class, 'logoutAll']);
@@ -221,8 +226,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/addresses', [AddressController::class, 'store']);
         // D-112 — proving a second number for an address. Declared before the
         // `{address}` routes; they could not match `phone` anyway (ids are numeric).
-        Route::post('/addresses/phone/send-code', [AddressPhoneController::class, 'sendCode'])->middleware('throttle:otp-send');
-        Route::post('/addresses/phone/verify', [AddressPhoneController::class, 'verify']);
+        Route::post('/addresses/phone/send-code', [AddressPhoneController::class, 'sendCode']);
+        // Batch 68 — it checks a six-digit code like the other four verify routes, and was
+        // the one with no throttle in front of it.
+        Route::post('/addresses/phone/verify', [AddressPhoneController::class, 'verify'])->middleware('throttle:otp-verify');
         Route::patch('/addresses/{address}', [AddressController::class, 'update']);
         Route::delete('/addresses/{address}', [AddressController::class, 'destroy']);
         Route::post('/addresses/{address}/default', [AddressController::class, 'makeDefault']);
@@ -796,6 +803,18 @@ Route::prefix('v1')->group(function () {
             Route::get('/settings/sms-status', [AdminSettingController::class, 'smsStatus']);
         });
         Route::patch('/settings', [AdminSettingController::class, 'update'])->middleware(['permission:settings.manage', 'admin.global']);
+
+        // Batch 68 — verification messages: what they cost today, and the numbers the
+        // platform has stopped sending to. The settings permissions, global only — the
+        // budget is a setting, and these are anybody's phone numbers.
+        Route::middleware(['permission:settings.view', 'admin.global'])->group(function () {
+            Route::get('/otp/usage', [AdminOtpController::class, 'usage']);
+            Route::get('/otp/blocks', [AdminOtpController::class, 'index']);
+        });
+        Route::middleware(['permission:settings.manage', 'admin.global'])->group(function () {
+            Route::post('/otp/blocks', [AdminOtpController::class, 'store']);
+            Route::delete('/otp/blocks/{block}', [AdminOtpController::class, 'destroy'])->whereNumber('block');
+        });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware(['permission:audit.view', 'admin.global']);
 

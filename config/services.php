@@ -39,6 +39,20 @@ return [
     'otp_channel' => env('OTP_CHANNEL', 'log'),
 
     /*
+     * Batch 68 — the two dashboards reach this API from their own Node server (the BFF),
+     * so every place owner and every operator arrives from **one** address and would
+     * share one per-address SMS allowance: a single stranger on the dashboard's «نسيت
+     * كلمة المرور» could spend it for all of them. With this key set here and in both
+     * dashboards, a request carrying `X-CR7-Bff-Key: <key>` has its `X-CR7-Client-Ip`
+     * believed for the OTP and sign-in limits, and nobody else's is. At least 32
+     * characters, compared in constant time; empty turns the header off. See
+     * {@see \App\Support\OtpRequester}.
+     */
+    'bff' => [
+        'key' => env('CR7_BFF_KEY'),
+    ],
+
+    /*
      * Firebase Cloud Messaging — doc 11's push channel.
      *
      * `credentials` is a path to the service-account JSON downloaded from

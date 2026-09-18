@@ -3,7 +3,6 @@
 namespace App\Actions\Auth;
 
 use App\Enums\OtpPurpose;
-use App\Exceptions\ApiException;
 use App\Models\User;
 use App\Support\Auth\Sessions;
 use App\Support\OtpVerifier;
@@ -24,12 +23,18 @@ class ResetPasswordAction
 
         // `! $user->password` used to be part of this guard, which meant every account
         // created before passwords existed — i.e. every customer — was told its own reset
-        // code was wrong. Setting a first password is exactly what this endpoint is for;
-        // only a login with no account at all is refused, and it is refused with the
-        // code's message so the endpoint does not become a way to ask which numbers are
-        // registered.
+        // code was wrong. Setting a first password is exactly what this endpoint is for.
+        //
+        // Batch 68 — a login with no account is checked against the shadow code its
+        // «نسيت كلمة المرور» stored ({@see SendOtpAction::shadow()}), so it counts
+        // attempts, expires, locks and blocks exactly like a registered number's: a
+        // stranger's `attempts_left` used to be missing, which named every registered
+        // number that had asked for a code. The shadow code was never sent to anybody;
+        // were it ever matched, the answer is the same success and nothing is written.
         if (! $user) {
-            throw new ApiException('otp_invalid', 'رمز التحقق غير صحيح', 422);
+            OtpVerifier::consume($login, OtpPurpose::Reset, $code);
+
+            return;
         }
 
         // Outside the transaction on purpose — see {@see OtpVerifier}.

@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Actions\Admin\CreateDriverAction;
 use App\Enums\CaptainApplicationStatus;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ReviewCaptainApplicationRequest;
 use App\Models\CaptainApplication;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,31 +29,35 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class CaptainApplicationController extends Controller
 {
+    use FiltersLists;
+
     public function __construct(private readonly CreateDriverAction $createDriver) {}
 
     public function index(Request $request): JsonResponse
     {
-        $applications = $this->scoped($request)
-            ->with('city:id,name_ar,name_en')
-            ->when($request->filled('filter.status'), fn ($q) => $q->where('status', $request->input('filter.status')))
-            ->when($request->filled('filter.city_id'), fn ($q) => $q->where('city_id', $request->integer('filter.city_id')))
-            ->when($request->filled('filter.search'), function ($q) use ($request) {
-                $term = '%'.$request->input('filter.search').'%';
-                $q->where(fn ($w) => $w->where('full_name', 'like', $term)
-                    ->orWhere('phone', 'like', $term)
-                    ->orWhere('reference', 'like', $term));
-            })
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'status'], '-created_at');
 
-        return ApiResponse::success(
+        $query = $this->scoped($request)->with('city:id,name_ar,name_en');
+
+        $this->whereInList($query, 'status', $params->enum('status', array_column(CaptainApplicationStatus::cases(), 'value')));
+        $this->whereInList($query, 'city_id', $params->ids('city_id'));
+        $this->whereInList($query, 'vehicle_type', $params->enum('vehicle_type', ['motorcycle', 'bicycle', 'car', 'scooter']));
+        $this->whereBetweenDates($query, 'created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'names' => ['full_name'],
+            'phones' => ['phone'],
+            'refs' => ['reference'],
+        ]);
+
+        $applications = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated(
+            $applications,
             array_map(fn (CaptainApplication $row) => $this->withFileUrls($row), $applications->items()),
-            meta: [
-                'current_page' => $applications->currentPage(),
-                'per_page' => $applications->perPage(),
-                'total' => $applications->total(),
-                'last_page' => $applications->lastPage(),
-            ]);
+            sort: $sort,
+        );
     }
 
     /** The three private-disk paths, keyed by the segment `file()` accepts. */

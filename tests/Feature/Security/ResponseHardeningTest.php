@@ -89,7 +89,7 @@ class ResponseHardeningTest extends TestCase
     {
         $this->getJson('/api/v1/restaurants?per_page=1000000')
             ->assertOk()
-            ->assertJsonPath('meta.per_page', 200);
+            ->assertJsonPath('meta.per_page', 100);
 
         $this->getJson('/api/v1/restaurants?per_page=-5')
             ->assertOk()

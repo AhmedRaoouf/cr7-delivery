@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\GenerateSettlementAction;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\Restaurant;
@@ -11,44 +12,101 @@ use App\Models\Settlement;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\BusinessTime;
+use App\Support\Lists\ListSearch;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\SettlementExporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** doc 08 §7 — GET /admin/settlements, POST /generate, GET /{id}, POST /{id}/pay. */
 class SettlementController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $settlements = AdminScope::applyToSettlements(Settlement::query(), $request->user())
-            ->when($request->string('filter.party_type')->isNotEmpty(), fn ($q) => $q->where('party_type', $request->string('filter.party_type')))
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->latest('period_end')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['period_end', 'created_at', 'net_amount', 'paid_at'], '-period_end');
 
-        // `party` branches on the row's own `party_type` (restaurant or driver),
-        // so it cannot be eager-loaded: `with('party')` builds the relation from
-        // a fresh model whose type is null and would resolve every row against
-        // one table. Resolved per row instead — bounded by `per_page` — because
-        // a settlement list that cannot name the party names nothing.
-        $rows = collect($settlements->items())->map(function (Settlement $settlement) {
-            $party = $settlement->party;
+        $query = AdminScope::applyToSettlements(Settlement::query(), $request->user());
 
-            return [
-                ...$settlement->toArray(),
-                'party_name' => $party?->getAttribute('name_ar')
-                    ?? $party?->getAttribute('name'),
-            ];
-        });
+        $this->whereInList($query, 'settlements.party_type', $params->enum('party_type', ['restaurant', 'driver']));
+        $this->whereInList($query, 'settlements.party_id', $params->ids('party_id'));
+        $this->whereInList($query, 'settlements.status', $params->enum('status', ['draft', 'pending', 'paid']));
 
-        return ApiResponse::success($rows, meta: [
-            'current_page' => $settlements->currentPage(),
-            'per_page' => $settlements->perPage(),
-            'total' => $settlements->total(),
-            'last_page' => $settlements->lastPage(),
+        // The shorthands name a party and its type at once — `party_id` alone is ambiguous
+        // between a place and a captain that happen to share an id.
+        foreach (['restaurant_id' => 'restaurant', 'driver_id' => 'driver'] as $key => $type) {
+            if (($ids = $params->ids($key)) !== []) {
+                $query->where('settlements.party_type', $type)->whereIn('settlements.party_id', $ids);
+            }
+        }
+
+        // A statement belongs to the range when its period overlaps it.
+        [$from, $to] = $params->dates();
+        $query->when($from, fn ($q) => $q->where('settlements.period_end', '>=', $from->copy()->setTimezone(BusinessTime::timezone())->toDateString()))
+            ->when($to, fn ($q) => $q->where('settlements.period_start', '<=', $to->copy()->setTimezone(BusinessTime::timezone())->toDateString()));
+
+        if (($term = $params->search()) !== '') {
+            $places = ListSearch::apply(Restaurant::query()->select('restaurants.id'), $term, [
+                'names' => ['name_ar', 'name_en'],
+                'id' => false,
+            ]);
+            $captains = Driver::query()->select('drivers.id')->whereHas(
+                'user',
+                fn ($u) => ListSearch::apply($u, $term, ['names' => ['name'], 'phones' => ['phone'], 'id' => false]),
+            );
+
+            $query->where(function ($q) use ($term, $places, $captains) {
+                ListSearch::apply($q, $term, ['refs' => ['payment_reference']]);
+                $q->orWhere(fn ($p) => $p->where('settlements.party_type', 'restaurant')->whereIn('settlements.party_id', $places))
+                    ->orWhere(fn ($d) => $d->where('settlements.party_type', 'driver')->whereIn('settlements.party_id', $captains));
+            });
+        }
+
+        $settlements = $sort->apply($query, [])->paginate($params->perPage());
+
+        // `party` branches on the row's own `party_type`, so it cannot be eager-loaded:
+        // `with('party')` builds the relation from a fresh model whose type is null and
+        // would resolve every row against one table. It used to be resolved per row — a
+        // query each — and a captain's statement was named nothing, because a captain's
+        // name lives on `users`. Two queries for the page now, one per party type.
+        $names = $this->partyNames(collect($settlements->items()));
+
+        $rows = collect($settlements->items())->map(fn (Settlement $settlement) => [
+            ...$settlement->toArray(),
+            'party_name' => $names[$settlement->party_type?->value.':'.$settlement->party_id] ?? null,
         ]);
+
+        return $this->paginated($settlements, $rows, sort: $sort);
+    }
+
+    /**
+     * `restaurant:<id>` / `driver:<id>` → the name a statement is filed under.
+     *
+     * @param  Collection<int, Settlement>  $settlements
+     * @return array<string, string|null>
+     */
+    private function partyNames($settlements): array
+    {
+        $ids = fn (string $type) => $settlements
+            ->filter(fn (Settlement $s) => $s->party_type?->value === $type)
+            ->pluck('party_id')->unique()->values()->all();
+
+        $names = [];
+
+        foreach (Restaurant::query()->withTrashed()->whereIn('id', $ids('restaurant'))->get(['id', 'name_ar']) as $place) {
+            $names['restaurant:'.$place->id] = $place->name_ar;
+        }
+
+        foreach (Driver::query()->withTrashed()->with('user:id,name')->whereIn('id', $ids('driver'))->get(['id', 'user_id']) as $captain) {
+            $names['driver:'.$captain->id] = $captain->user?->name;
+        }
+
+        return $names;
     }
 
     public function generate(Request $request, GenerateSettlementAction $action): JsonResponse

@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Admin\DriverFinanceController;
 use App\Http\Controllers\Api\Admin\ErrandController as AdminErrandController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\HomePopupController as AdminHomePopupController;
+use App\Http\Controllers\Api\Admin\LookupController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
@@ -483,6 +484,10 @@ Route::prefix('v1')->group(function () {
     |----------------------------------------------------------------------
     */
     Route::prefix('admin')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:admin'])->group(function () {
+
+        // Batch 68 — the filter pickers (ADMIN-LISTS.md §1.27): id + name, scoped like the
+        // list each one narrows, open to every admin.
+        Route::get('/lookups/{kind}', [LookupController::class, 'show'])->whereIn('kind', LookupController::KINDS);
 
         // Locations & pricing
         Route::middleware('permission:locations.view')->group(function () {

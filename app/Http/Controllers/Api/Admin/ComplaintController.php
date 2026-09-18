@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\ComplaintCategory;
+use App\Enums\ComplaintPriority;
+use App\Enums\ComplaintStatus;
+use App\Enums\ComplaintUserRole;
 use App\Enums\UserType;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
@@ -11,6 +15,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\ComplaintNotifier;
+use App\Support\Lists\ListSearch;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,27 +29,64 @@ class ComplaintController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())
-            ->with(['user', 'restaurant', 'assignedTo'])
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->when($request->string('filter.category')->isNotEmpty(), fn ($q) => $q->where('category', $request->string('filter.category')))
-            ->when($request->string('filter.priority')->isNotEmpty(), fn ($q) => $q->where('priority', $request->string('filter.priority')))
-            // `ADM-53`'s «متأخرة» toggle. Overdue is the same question `SlaChip` asks per
-            // row — past `due_at` and not yet resolved — and it was answered client-side
-            // only, so the filter returned the full list and the count above it was wrong.
-            ->when($this->filterBool($request, 'overdue') === true, fn ($q) => $q
-                ->whereNotNull('due_at')
-                ->where('due_at', '<', now())
-                ->whereNull('resolved_at'))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'due_at', 'updated_at', 'priority'], '-created_at');
 
-        return ApiResponse::success($complaints->items(), meta: [
-            'current_page' => $complaints->currentPage(),
-            'per_page' => $complaints->perPage(),
-            'total' => $complaints->total(),
-            'last_page' => $complaints->lastPage(),
+        $query = AdminScope::applyToComplaints(Complaint::query(), $request->user())
+            ->with(['user', 'restaurant', 'assignedTo']);
+
+        $this->whereInList($query, 'complaints.status', $params->enum('status', array_column(ComplaintStatus::cases(), 'value')));
+        $this->whereInList($query, 'complaints.category', $params->enum('category', array_column(ComplaintCategory::cases(), 'value')));
+        $this->whereInList($query, 'complaints.priority', $params->enum('priority', array_column(ComplaintPriority::cases(), 'value')));
+        $this->whereInList($query, 'complaints.user_role', $params->enum('user_role', array_column(ComplaintUserRole::cases(), 'value')));
+        $this->whereInList($query, 'complaints.restaurant_id', $params->ids('restaurant_id'));
+
+        if (($assignees = $params->ids('assigned_to', ['none', 'me'])) !== []) {
+            $query->where(function ($q) use ($assignees, $request) {
+                foreach ($assignees as $assignee) {
+                    match ($assignee) {
+                        'none' => $q->orWhereNull('complaints.assigned_to'),
+                        'me' => $q->orWhere('complaints.assigned_to', $request->user()->id),
+                        default => $q->orWhere('complaints.assigned_to', $assignee),
+                    };
+                }
+            });
+        }
+
+        $cities = $params->ids('city_id');
+        $zones = $params->ids('zone_id');
+
+        if ($cities !== [] || $zones !== []) {
+            $query->whereHas('order', function ($order) use ($cities, $zones) {
+                $this->whereInList($order, 'orders.city_id', $cities);
+                $this->whereInList($order, 'orders.service_zone_id', $zones);
+            });
+        }
+
+        // `ADM-53`'s «متأخرة» toggle. Overdue is the same question `SlaChip` asks per row —
+        // past `due_at` and not yet resolved — and it was answered client-side only, so the
+        // filter returned the full list and the count above it was wrong.
+        if (($overdue = $params->bool('overdue')) !== null) {
+            $late = fn ($q) => $q->whereNotNull('complaints.due_at')
+                ->where('complaints.due_at', '<', now())
+                ->whereNull('complaints.resolved_at');
+            $overdue ? $query->where($late) : $query->whereNot($late);
+        }
+
+        $this->whereBetweenDates($query, 'complaints.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['ticket_number'],
+            'names' => ['subject'],
+            'relations' => ['user' => ['names' => ['name'], 'phones' => ['phone']]],
         ]);
+
+        $complaints = $sort->apply($query, [
+            // Most urgent first when descending — the stored enum's own order.
+            'priority' => fn ($q, string $direction) => $q->orderByRaw("FIELD(complaints.priority, 'low', 'normal', 'high') {$direction}"),
+        ])->paginate($params->perPage());
+
+        return $this->paginated($complaints, sort: $sort);
     }
 
     public function show(Request $request, Complaint $complaint): JsonResponse

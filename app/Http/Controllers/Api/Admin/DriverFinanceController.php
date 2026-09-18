@@ -7,10 +7,12 @@ use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\DeliveryCommission;
 use App\Support\DriverLedger;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,17 +30,43 @@ class DriverFinanceController extends Controller
     /** `GET /admin/finance/drivers` — every captain, what they hold and what they are owed. */
     public function index(Request $request): JsonResponse
     {
-        $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
-            ->with(['user:id,name,phone', 'city:id,name_ar,name_en'])
-            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                $term = '%'.$this->filterString($request, 'search').'%';
-                $q->whereHas('user', fn ($u) => $u->where('name', 'like', $term)->orWhere('phone', 'like', $term));
-            })
-            // «مين عليه فلوس» is the question this screen is opened to answer, so the
-            // captains carrying the most of the platform's money sort to the top.
-            ->orderByDesc('cash_in_hand')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['cash_in_hand', 'wallet_balance', 'name'], '-cash_in_hand');
+
+        $query = AdminScope::applyToDrivers(Driver::query(), $request->user())
+            ->with(['user:id,name,phone', 'city:id,name_ar,name_en']);
+
+        $this->whereInList($query, 'drivers.city_id', $params->ids('city_id'));
+
+        if (($zones = $params->ids('zone_id')) !== []) {
+            $query->whereHas('assignedZones', fn ($z) => $z->whereIn('service_zones.id', $zones));
+        }
+
+        foreach (['is_online', 'is_active'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('drivers.'.$flag, $value);
+            }
+        }
+
+        // «عليه فلوس» is the net, not the cash: what the captain carries less what the
+        // platform already owes them — `DriverLedger::direction()`'s own threshold.
+        if (($owes = $params->bool('owes')) !== null) {
+            $query->whereRaw('(drivers.cash_in_hand - drivers.wallet_balance) '.($owes ? '>' : '<=').' 0.004');
+        }
+
+        ListSearch::apply($query, $params->search(), [
+            'id' => false,
+            'relations' => ['user' => ['names' => ['name'], 'phones' => ['phone']]],
+        ]);
+
+        // «مين عليه فلوس» is the question this screen is opened to answer, so the captains
+        // carrying the most of the platform's money sort to the top.
+        $drivers = $sort->apply($query, [
+            'name' => fn ($q, string $direction) => $q->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'drivers.user_id'),
+                $direction,
+            ),
+        ])->paginate($params->perPage());
 
         $rows = collect($drivers->items())->map(fn (Driver $driver) => [
             'driver_id' => $driver->id,
@@ -52,25 +80,22 @@ class DriverFinanceController extends Controller
             ...DriverLedger::balances($driver),
         ]);
 
-        // The page totals, and the platform's own side of it — what the fleet is
-        // carrying against what the platform earned out of the same fees.
-        $scoped = AdminScope::applyToDrivers(Driver::query(), $request->user());
+        // The page totals, and the platform's own side of it — what the fleet is carrying
+        // against what the platform earned out of the same fees. The whole scope, not the
+        // filter: the tiles above the table do not move when the table is searched.
+        $totals = AdminScope::applyToDrivers(Driver::query(), $request->user())
+            ->selectRaw('COALESCE(SUM(cash_in_hand), 0) as cash_in_hand, COALESCE(SUM(wallet_balance), 0) as wallet_balance')
+            ->toBase()
+            ->first();
 
-        return ApiResponse::success($rows, meta: [
-            'current_page' => $drivers->currentPage(),
-            'per_page' => $drivers->perPage(),
-            'total' => $drivers->total(),
-            'last_page' => $drivers->lastPage(),
+        return $this->paginated($drivers, $rows, [
             'totals' => [
-                'cash_in_hand' => round((float) (clone $scoped)->sum('cash_in_hand'), 2),
-                'wallet_balance' => round((float) (clone $scoped)->sum('wallet_balance'), 2),
-                'net_due_to_platform' => round(
-                    (float) (clone $scoped)->sum('cash_in_hand') - (float) (clone $scoped)->sum('wallet_balance'),
-                    2,
-                ),
+                'cash_in_hand' => round((float) $totals->cash_in_hand, 2),
+                'wallet_balance' => round((float) $totals->wallet_balance, 2),
+                'net_due_to_platform' => round((float) $totals->cash_in_hand - (float) $totals->wallet_balance, 2),
             ],
             'commission_rate' => DeliveryCommission::rate(),
-        ]);
+        ], $sort);
     }
 
     /** `GET /admin/drivers/{driver}/ledger` — one captain's balances and every row behind them. */
@@ -78,11 +103,18 @@ class DriverFinanceController extends Controller
     {
         $this->ensureInScope($request, $driver);
 
-        $transactions = $driver->transactions()
-            ->with('order:id,order_number,payment_method,total,delivery_fee_share,driver_earning,platform_delivery_margin')
-            ->when($this->filterString($request, 'type') !== '', fn ($q) => $q->where('type', $this->filterString($request, 'type')))
-            ->latest()
-            ->paginate($request->integer('per_page', 30));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at'], '-created_at');
+
+        $query = $driver->transactions()->getQuery()
+            ->with('order:id,order_number,payment_method,total,delivery_fee_share,driver_earning,platform_delivery_margin');
+
+        $this->whereInList($query, 'driver_transactions.type', $params->enum('type', [
+            'order_earning', 'bonus', 'deduction', 'cash_settlement', 'cash_collected', 'cash_handover', 'payout', 'place_advance',
+        ]));
+        $this->whereBetweenDates($query, 'driver_transactions.created_at', $params->dates());
+
+        $transactions = $sort->apply($query, [])->paginate($params->perPage(30));
 
         $rows = collect($transactions->items())->map(fn ($t) => [
             'id' => $t->id,
@@ -103,11 +135,7 @@ class DriverFinanceController extends Controller
             ],
         ]);
 
-        return ApiResponse::success($rows, meta: [
-            'current_page' => $transactions->currentPage(),
-            'per_page' => $transactions->perPage(),
-            'total' => $transactions->total(),
-            'last_page' => $transactions->lastPage(),
+        return $this->paginated($transactions, $rows, [
             'driver' => [
                 'id' => $driver->id,
                 'name' => $driver->user->name,
@@ -117,7 +145,7 @@ class DriverFinanceController extends Controller
             ],
             'balances' => DriverLedger::balances($driver),
             'lifetime' => $this->lifetime($driver),
-        ]);
+        ], $sort);
     }
 
     /** `GET /admin/drivers/{driver}/unsettled` — doc 62 §4.3, the same document the captain reads. */

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\PaymentStatus;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\PaymentProofResource;
 use App\Models\Payment;
@@ -10,6 +12,7 @@ use App\Models\PaymentProof;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +23,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /** doc 08 §7 — GET /admin/payments, POST /{id}/approve|reject. */
 class PaymentController extends Controller
 {
+    use FiltersLists;
+
     /** doc 12 §5 — "Payment proof image — Admin only": never a public URL, served through this gate. */
     public function proofFile(Request $request, PaymentProof $proof): StreamedResponse
     {
@@ -34,11 +39,43 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $payments = AdminScope::applyToPayments(Payment::query(), $request->user())
-            ->with(['orderGroup.user', 'proofs'])
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'amount', 'deadline_at'], '-created_at');
+
+        $query = AdminScope::applyToPayments(Payment::query(), $request->user())
+            ->with(['orderGroup.user', 'proofs']);
+
+        $this->whereInList($query, 'payments.status', $params->enum('status', array_column(PaymentStatus::cases(), 'value')));
+        $this->whereInList($query, 'payments.method', $params->enum('method', ['cash', 'vodafone_cash', 'instapay']));
+
+        $cities = $params->ids('city_id');
+        $zones = $params->ids('zone_id');
+
+        if ($cities !== [] || $zones !== []) {
+            $query->whereHas('orderGroup', function ($group) use ($cities, $zones) {
+                $this->whereInList($group, 'order_groups.city_id', $cities);
+                $this->whereInList($group, 'order_groups.service_zone_id', $zones);
+            });
+        }
+
+        if (($overdue = $params->bool('overdue')) !== null) {
+            $late = fn ($q) => $q->whereIn('payments.status', ['pending', 'awaiting_proof'])
+                ->whereNotNull('payments.deadline_at')
+                ->where('payments.deadline_at', '<', now());
+            $overdue ? $query->where($late) : $query->whereNot($late);
+        }
+
+        $this->whereBetweenDates($query, 'payments.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['reference'],
+            'relations' => [
+                'orderGroup' => ['refs' => ['group_number']],
+                'user' => ['names' => ['name'], 'phones' => ['phone']],
+            ],
+        ]);
+
+        $payments = $sort->apply($query, [])->paginate($params->perPage());
 
         // `proofs` carries a private-disk path; the resource swaps it for a gated URL.
         $rows = collect($payments->items())->map(function (Payment $payment) {
@@ -49,12 +86,7 @@ class PaymentController extends Controller
             return $row;
         });
 
-        return ApiResponse::success($rows, meta: [
-            'current_page' => $payments->currentPage(),
-            'per_page' => $payments->perPage(),
-            'total' => $payments->total(),
-            'last_page' => $payments->lastPage(),
-        ]);
+        return $this->paginated($payments, $rows, sort: $sort);
     }
 
     public function show(Request $request, Payment $payment): JsonResponse

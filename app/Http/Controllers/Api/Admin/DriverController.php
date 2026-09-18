@@ -9,12 +9,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDriverRequest;
 use App\Http\Requests\Admin\UpdateDriverRequest;
 use App\Models\Driver;
+use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Auth\Sessions;
+use App\Support\DriverLiveness;
 use App\Support\DriverTrip;
 use App\Support\FileUploader;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,28 +27,60 @@ class DriverController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
+        $params = $this->listParams($request);
+        $sort = $params->sort(
+            ['id', 'name', 'created_at', 'rating_avg', 'completed_orders', 'cash_in_hand', 'wallet_balance', 'location_updated_at'],
+            'id',
+        );
+
+        $query = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->with(['user', 'city'])
             // doc 63 §3.6 — `ADM-19` prints «في رحلة (‪2‬)» beside `active_order_id`, which is
             // only the trip's focus now.
-            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)])
-            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->when($this->filterBool($request, 'is_online') !== null, fn ($q) => $q->where('is_online', $this->filterBool($request, 'is_online')))
-            // `ADM-19` has had a search box since it was drawn and the endpoint never had
-            // the filter, so typing a captain's name returned the whole fleet. The name and
-            // the phone are both on `users`, which is why this is a `whereHas`.
-            ->when($this->filterString($request, 'search') !== '', function ($q) use ($request) {
-                $term = '%'.$this->filterString($request, 'search').'%';
-                $q->whereHas('user', fn ($u) => $u->where('name', 'like', $term)->orWhere('phone', 'like', $term));
-            })
-            ->paginate($request->integer('per_page', 20));
+            ->withCount(['orders as trip_count' => fn ($q) => $q->whereIn('status', DriverTrip::STATES)]);
 
-        return ApiResponse::success($drivers->items(), meta: [
-            'current_page' => $drivers->currentPage(),
-            'per_page' => $drivers->perPage(),
-            'total' => $drivers->total(),
-            'last_page' => $drivers->lastPage(),
+        $this->whereInList($query, 'drivers.city_id', $params->ids('city_id'));
+        $this->whereInList($query, 'drivers.vehicle_type', $params->enum('vehicle_type', ['motorcycle', 'bicycle', 'car', 'scooter']));
+        $this->whereInList($query, 'drivers.earning_type', $params->enum('earning_type', ['fixed', 'per_km', 'percent_of_delivery_fee']));
+
+        if (($zones = $params->ids('zone_id')) !== []) {
+            $query->whereHas('assignedZones', fn ($z) => $z->whereIn('service_zones.id', $zones));
+        }
+
+        foreach (['is_online', 'is_available', 'is_active'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('drivers.'.$flag, $value);
+            }
+        }
+
+        if (($carrying = $params->bool('has_active_order')) !== null) {
+            $trip = fn ($o) => $o->whereIn('status', DriverTrip::STATES);
+            $carrying ? $query->whereHas('orders', $trip) : $query->whereDoesntHave('orders', $trip);
+        }
+
+        if (($stale = $params->bool('stale')) !== null) {
+            $cutoff = now()->subSeconds(DriverLiveness::staleSeconds());
+            $isStale = fn ($q) => $q->where('drivers.is_online', true)
+                ->where(fn ($fix) => $fix->whereNull('drivers.location_updated_at')->orWhere('drivers.location_updated_at', '<', $cutoff));
+            $stale ? $query->where($isStale) : $query->whereNot($isStale);
+        }
+
+        // `ADM-19` has had a search box since it was drawn and the endpoint never had the
+        // filter, so typing a captain's name returned the whole fleet. The name and the
+        // phone are both on `users`, which is why they are a relation here.
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['vehicle_plate'],
+            'relations' => ['user' => ['names' => ['name'], 'phones' => ['phone']]],
         ]);
+
+        $drivers = $sort->apply($query, [
+            'name' => fn ($q, string $direction) => $q->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'drivers.user_id'),
+                $direction,
+            ),
+        ])->paginate($params->perPage());
+
+        return $this->paginated($drivers, sort: $sort);
     }
 
     public function show(Request $request, Driver $driver): JsonResponse

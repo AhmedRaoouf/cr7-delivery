@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\MenuLayout;
 use App\Support\BusinessTime;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -134,6 +135,61 @@ class Restaurant extends Model
         }
 
         return [max(5, $zone->avg_delivery_minutes - 10), $zone->avg_delivery_minutes + 10];
+    }
+
+    /**
+     * Batch 68 — {@see isOpenNow()} as a `WHERE`, so a list can filter on it and still
+     * count and page correctly.
+     *
+     * `GET /restaurants?filter[open_now]=1` used to fetch a page and then drop the closed
+     * places from it in PHP: a page of twenty came back with six, `meta.total` still
+     * counted all forty, and the scroll stopped on a list that had more behind it. The
+     * rule is the method's, clause for clause — the manual switch, round-the-clock, a
+     * week with no row for today, a 24-hour day, a closed day, and a shift that runs
+     * past midnight — on the same Cairo wall clock ({@see BusinessTime}).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeOpenNow(Builder $query, bool $open = true): Builder
+    {
+        $clock = BusinessTime::now();
+        $weekday = $clock->dayOfWeek;
+        $now = $clock->format('H:i:s');
+        $table = $this->getTable();
+
+        $today = fn ($q) => $q->from('restaurant_opening_hours as h')
+            ->whereColumn('h.restaurant_id', $table.'.id')
+            ->where('h.weekday', $weekday);
+
+        $isOpen = function (Builder $q) use ($today, $now, $table): void {
+            $q->where($table.'.is_open_manual', true)
+                ->where($table.'.is_active', true)
+                ->where(function ($hours) use ($today, $now, $table) {
+                    $hours->where($table.'.is_24_7', true)
+                        ->orWhereNotExists(fn ($none) => $today($none->selectRaw('1')))
+                        ->orWhereExists(fn ($row) => $today($row->selectRaw('1'))
+                            ->where(fn ($shift) => $shift
+                                ->where('h.is_24h', true)
+                                ->orWhere(fn ($timed) => $timed
+                                    ->where('h.is_closed', false)
+                                    ->whereNotNull('h.opens_at')
+                                    ->whereNotNull('h.closes_at')
+                                    ->where(fn ($window) => $window
+                                        // Past midnight: «من 10:00 حتى 02:00» is one window.
+                                        ->where(fn ($late) => $late
+                                            ->whereColumn('h.closes_at', '<', 'h.opens_at')
+                                            ->where(fn ($either) => $either
+                                                ->where('h.opens_at', '<=', $now)
+                                                ->orWhere('h.closes_at', '>=', $now)))
+                                        ->orWhere(fn ($day) => $day
+                                            ->whereColumn('h.closes_at', '>=', 'h.opens_at')
+                                            ->where('h.opens_at', '<=', $now)
+                                            ->where('h.closes_at', '>=', $now))))));
+                });
+        };
+
+        return $open ? $query->where($isOpen) : $query->whereNot($isOpen);
     }
 
     public function isOpenNow(): bool

@@ -3,36 +3,51 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Customer\ReleaseScheduledOrdersAction;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\ScheduledOrderResource;
 use App\Models\ScheduledOrder;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /** The operator's view of everything waiting on a clock, and the button that skips it. */
 class ScheduledOrderController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $rows = AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())
-            ->with(['customer', 'restaurants'])
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q
-                ->where('status', $request->string('filter.status')->value()))
-            ->when($request->integer('filter.restaurant_id'), fn ($q, $id) => $q
-                ->whereHas('restaurants', fn ($rq) => $rq->where('restaurants.id', $id)))
-            ->orderBy('scheduled_for')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['scheduled_for', 'created_at', 'estimated_total'], 'scheduled_for');
 
-        return ApiResponse::success(ScheduledOrderResource::collection($rows->getCollection()), meta: [
-            'current_page' => $rows->currentPage(),
-            'per_page' => $rows->perPage(),
-            'total' => $rows->total(),
-            'last_page' => $rows->lastPage(),
-            'pending_count' => AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())->where('status', ScheduledOrder::STATUS_SCHEDULED)->count(),
+        $query = AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())
+            ->with(['customer', 'restaurants']);
+
+        $this->whereInList($query, 'scheduled_orders.status', $params->enum('status', [
+            ScheduledOrder::STATUS_SCHEDULED, ScheduledOrder::STATUS_RELEASED, ScheduledOrder::STATUS_FAILED, ScheduledOrder::STATUS_CANCELLED,
+        ]));
+        $this->whereInList($query, 'scheduled_orders.user_id', $params->ids('customer_id'));
+
+        if (($restaurants = $params->ids('restaurant_id')) !== []) {
+            $query->whereHas('restaurants', fn ($rq) => $rq->whereIn('restaurants.id', $restaurants));
+        }
+
+        $this->whereBetweenDates($query, 'scheduled_orders.scheduled_for', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['reference'],
+            'relations' => ['customer' => ['names' => ['name'], 'phones' => ['phone']]],
         ]);
+
+        $rows = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($rows, ScheduledOrderResource::collection($rows->getCollection()), [
+            'pending_count' => AdminScope::applyToScheduledOrders(ScheduledOrder::query(), $request->user())->where('status', ScheduledOrder::STATUS_SCHEDULED)->count(),
+        ], $sort);
     }
 
     public function show(Request $request, ScheduledOrder $scheduledOrder): JsonResponse

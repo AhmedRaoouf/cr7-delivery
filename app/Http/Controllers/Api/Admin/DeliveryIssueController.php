@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\DeliveryIssueCategory;
+use App\Enums\DeliveryIssueReportedBy;
+use App\Enums\DeliveryIssueStatus;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryIssue;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,19 +22,35 @@ class DeliveryIssueController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $issues = AdminScope::applyToDeliveryIssues(DeliveryIssue::query(), $request->user())
-            ->with(['order.restaurant', 'reporter'])
-            ->when($this->filterString($request, 'status') !== '', fn ($q) => $q->where('status', $this->filterString($request, 'status')))
-            ->when($this->filterInt($request, 'restaurant_id'), fn ($q, $id) => $q->whereHas('order', fn ($o) => $o->where('restaurant_id', $id)))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at'], '-created_at');
 
-        return ApiResponse::success($issues->items(), meta: [
-            'current_page' => $issues->currentPage(),
-            'per_page' => $issues->perPage(),
-            'total' => $issues->total(),
-            'last_page' => $issues->lastPage(),
+        $query = AdminScope::applyToDeliveryIssues(DeliveryIssue::query(), $request->user())
+            ->with(['order.restaurant', 'reporter']);
+
+        $this->whereInList($query, 'delivery_issues.status', $params->enum('status', array_column(DeliveryIssueStatus::cases(), 'value')));
+        $this->whereInList($query, 'delivery_issues.category', $params->enum('category', array_column(DeliveryIssueCategory::cases(), 'value')));
+        $this->whereInList($query, 'delivery_issues.reported_by', $params->enum('reported_by', array_column(DeliveryIssueReportedBy::cases(), 'value')));
+
+        $restaurants = $params->ids('restaurant_id');
+        $drivers = $params->ids('driver_id');
+
+        if ($restaurants !== [] || $drivers !== []) {
+            $query->whereHas('order', function ($order) use ($restaurants, $drivers) {
+                $this->whereInList($order, 'orders.restaurant_id', $restaurants);
+                $this->whereInList($order, 'orders.driver_id', $drivers);
+            });
+        }
+
+        $this->whereBetweenDates($query, 'delivery_issues.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'relations' => ['order' => ['refs' => ['order_number']]],
         ]);
+
+        $issues = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($issues, sort: $sort);
     }
 
     public function resolve(Request $request, DeliveryIssue $deliveryIssue): JsonResponse

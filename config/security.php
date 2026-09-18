@@ -33,10 +33,11 @@ return [
     ],
 
     /*
-     * The largest page any list endpoint will answer. The biggest page a client asks
-     * for today is 200 (`/admin/restaurants` on ADM-10's picker); `per_page=1000000`
-     * used to be answered in full.
+     * The largest page any list endpoint will answer. `per_page=1000000` used to be
+     * answered in full. Batch 68 (ADMIN-LISTS.md §0.5): 100 — a picker that wanted 200
+     * rows (`/admin/restaurants` on ADM-10) reads `GET /admin/lookups/restaurants`,
+     * which carries two columns a row instead of the whole place.
      */
-    'max_per_page' => (int) env('SECURITY_MAX_PER_PAGE', 200),
+    'max_per_page' => (int) env('SECURITY_MAX_PER_PAGE', 100),
 
 ];

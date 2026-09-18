@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\UpdateServiceZoneRequest;
 use App\Models\ServiceZone;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,16 +19,24 @@ class ServiceZoneController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $zones = AdminScope::applyToZones(ServiceZone::query(), $request->user())
-            ->when($this->filterInt($request, 'city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['id', 'sort_order', 'name', 'delivery_fee'], 'id');
 
-        return ApiResponse::success($zones->items(), meta: [
-            'current_page' => $zones->currentPage(),
-            'per_page' => $zones->perPage(),
-            'total' => $zones->total(),
-            'last_page' => $zones->lastPage(),
-        ]);
+        $query = AdminScope::applyToZones(ServiceZone::query(), $request->user());
+
+        $this->whereInList($query, 'service_zones.city_id', $params->ids('city_id'));
+
+        foreach (['is_active', 'is_selectable'] as $flag) {
+            if (($value = $params->bool($flag)) !== null) {
+                $query->where('service_zones.'.$flag, $value);
+            }
+        }
+
+        ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
+
+        $zones = $sort->apply($query, ['name' => 'service_zones.name_ar'])->paginate($params->perPage());
+
+        return $this->paginated($zones, sort: $sort);
     }
 
     public function show(Request $request, ServiceZone $zone): JsonResponse

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Refund;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use App\Support\RefundPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,20 +19,35 @@ use Illuminate\Support\Facades\DB;
 /** doc 08 §7 — GET/POST /admin/refunds, POST /{id}/process. */
 class RefundController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $refunds = AdminScope::applyToRefunds(Refund::query(), $request->user())
-            ->with(['order.restaurant', 'processedBy'])
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'amount', 'processed_at'], '-created_at');
 
-        return ApiResponse::success($refunds->items(), meta: [
-            'current_page' => $refunds->currentPage(),
-            'per_page' => $refunds->perPage(),
-            'total' => $refunds->total(),
-            'last_page' => $refunds->lastPage(),
+        $query = AdminScope::applyToRefunds(Refund::query(), $request->user())
+            ->with(['order.restaurant', 'processedBy']);
+
+        $this->whereInList($query, 'refunds.status', $params->enum('status', ['pending', 'processed', 'failed']));
+        $this->whereInList($query, 'refunds.type', $params->enum('type', ['full', 'partial']));
+        $this->whereInList($query, 'refunds.method', $params->enum('method', ['cash', 'vodafone_cash', 'instapay', 'wallet']));
+        $this->whereInList($query, 'refunds.reason_code', $params->list('reason_code'));
+
+        if (($restaurants = $params->ids('restaurant_id')) !== []) {
+            $query->whereHas('order', fn ($o) => $o->whereIn('orders.restaurant_id', $restaurants));
+        }
+
+        $this->whereBetweenDates($query, 'refunds.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['reference'],
+            'relations' => ['order' => ['refs' => ['order_number']]],
         ]);
+
+        $refunds = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($refunds, sort: $sort);
     }
 
     public function store(Request $request): JsonResponse

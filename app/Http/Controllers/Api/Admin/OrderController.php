@@ -12,6 +12,7 @@ use App\Actions\Restaurant\ExtendPrepTimeAction;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\OrderResource;
 use App\Models\Order;
@@ -21,6 +22,7 @@ use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\DispatchService;
 use App\Support\DriverTrip;
+use App\Support\Lists\ListParams;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Notifications\RingService;
 use App\Support\Otp;
@@ -30,21 +32,32 @@ use Illuminate\Http\Request;
 /** doc 08 §7 — order management + the doc 24 §3 intervention console. `{id}` addresses a sub-order (orders.id). */
 class OrderController extends Controller
 {
+    use FiltersLists;
+
+    /** What one row of `ADM-04` reads — see `index()`. */
+    private const LIST_RELATIONS = [
+        'restaurant',
+        'driver.user',
+        'user:id,name,phone',
+        'serviceZone:id,name_ar,name_en',
+        'city:id,name_ar,name_en',
+        'orderGroup.payment.proofs',
+    ];
+
     public function index(Request $request): JsonResponse
     {
-        $orders = AdminOrderFilters::apply(
-            AdminScope::applyToOrders(Order::query(), $request->user())->with(['restaurant', 'driver.user']),
-            $request,
-        )
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $sort = AdminOrderFilters::sort($request);
 
-        return ApiResponse::success(OrderResource::collection($orders->getCollection()), meta: [
-            'current_page' => $orders->currentPage(),
-            'per_page' => $orders->perPage(),
-            'total' => $orders->total(),
-            'last_page' => $orders->lastPage(),
-        ]);
+        $orders = $sort->apply(AdminOrderFilters::apply(
+            // Batch 68 — every relation `OrderResource` reads, loaded once for the page:
+            // `OrderParties::for()` names the customer, the area, the city and the
+            // payment, and each of those was a query per row.
+            AdminScope::applyToOrders(Order::query(), $request->user())->with(self::LIST_RELATIONS),
+            $request,
+        ), [])
+            ->paginate(ListParams::of($request)->perPage());
+
+        return $this->paginated($orders, OrderResource::collection($orders->getCollection()), sort: $sort);
     }
 
     public function show(Request $request, Order $order): JsonResponse

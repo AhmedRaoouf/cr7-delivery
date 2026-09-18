@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Complaint;
 use App\Models\Driver;
@@ -15,12 +16,15 @@ use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /** doc 08 §7 / doc 14 — reports (scope-filtered, doc 24 §1.2). */
 class ReportController extends Controller
 {
+    use FiltersLists;
+
     public function sales(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
@@ -37,55 +41,71 @@ class ReportController extends Controller
     public function restaurants(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
+        $params = $this->listParams($request);
+        $sort = $params->sort(['gmv', 'delivered_orders_count', 'name'], '-gmv');
 
         $restaurants = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
             ->withCount(['orders as delivered_orders_count' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])])
-            ->withSum(['orders as gmv' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'subtotal')
-            ->orderByDesc('gmv')
-            ->paginate($request->integer('per_page', 20));
+            ->withSum(['orders as gmv' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'subtotal');
 
-        return ApiResponse::success($restaurants->items(), meta: [
-            'current_page' => $restaurants->currentPage(),
-            'per_page' => $restaurants->perPage(),
-            'total' => $restaurants->total(),
-            'last_page' => $restaurants->lastPage(),
-        ]);
+        $this->whereInList($restaurants, 'restaurants.city_id', $params->ids('city_id'));
+
+        ListSearch::apply($restaurants, $params->search(), ['names' => ['name_ar', 'name_en'], 'id' => false]);
+
+        $page = $sort->apply($restaurants, [
+            'name' => 'restaurants.name_ar',
+            'gmv' => fn ($q, string $direction) => $q->orderBy('gmv', $direction),
+            'delivered_orders_count' => fn ($q, string $direction) => $q->orderBy('delivered_orders_count', $direction),
+        ])->paginate($params->perPage());
+
+        return $this->paginated($page, sort: $sort);
     }
 
     public function products(Request $request): JsonResponse
     {
+        $params = $this->listParams($request);
+        $sort = $params->sort(['sold_count', 'rating_avg', 'price', 'name'], '-sold_count');
+
         // Batch 67 — every count below is the operator's scope, not the platform's
         // (doc 12 §10.2 rules 4 and 5: scope is enforced in the query).
         $products = Product::query()
-            ->whereHas('restaurant', fn ($q) => AdminScope::applyToRestaurants($q, $request->user()))
-            ->orderByDesc('sold_count')
-            ->paginate($request->integer('per_page', 20), ['id', 'restaurant_id', 'name_ar', 'name_en', 'price', 'sold_count', 'rating_avg']);
+            ->whereHas('restaurant', fn ($q) => AdminScope::applyToRestaurants($q, $request->user()));
 
-        return ApiResponse::success($products->items(), meta: [
-            'current_page' => $products->currentPage(),
-            'per_page' => $products->perPage(),
-            'total' => $products->total(),
-            'last_page' => $products->lastPage(),
-        ]);
+        $this->whereInList($products, 'products.restaurant_id', $params->ids('restaurant_id'));
+
+        ListSearch::apply($products, $params->search(), ['names' => ['name_ar', 'name_en'], 'id' => false]);
+
+        $page = $sort->apply($products, ['name' => 'products.name_ar'])
+            ->paginate($params->perPage(), ['id', 'restaurant_id', 'name_ar', 'name_en', 'price', 'sold_count', 'rating_avg']);
+
+        return $this->paginated($page, sort: $sort);
     }
 
     public function drivers(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
+        $params = $this->listParams($request);
+        $sort = $params->sort(['delivered_orders_count', 'earnings', 'name'], '-delivered_orders_count');
 
         $drivers = AdminScope::applyToDrivers(Driver::query(), $request->user())
             ->with('user:id,name')
             ->withCount(['orders as delivered_orders_count' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])])
-            ->withSum(['orders as earnings' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'driver_earning')
-            ->orderByDesc('delivered_orders_count')
-            ->paginate($request->integer('per_page', 20));
+            ->withSum(['orders as earnings' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'driver_earning');
 
-        return ApiResponse::success($drivers->items(), meta: [
-            'current_page' => $drivers->currentPage(),
-            'per_page' => $drivers->perPage(),
-            'total' => $drivers->total(),
-            'last_page' => $drivers->lastPage(),
+        $this->whereInList($drivers, 'drivers.city_id', $params->ids('city_id'));
+
+        ListSearch::apply($drivers, $params->search(), [
+            'id' => false,
+            'relations' => ['user' => ['names' => ['name'], 'phones' => ['phone']]],
         ]);
+
+        $page = $sort->apply($drivers, [
+            'name' => fn ($q, string $direction) => $q->orderBy(User::query()->select('name')->whereColumn('users.id', 'drivers.user_id'), $direction),
+            'delivered_orders_count' => fn ($q, string $direction) => $q->orderBy('delivered_orders_count', $direction),
+            'earnings' => fn ($q, string $direction) => $q->orderBy('earnings', $direction),
+        ])->paginate($params->perPage());
+
+        return $this->paginated($page, sort: $sort);
     }
 
     public function zones(Request $request): JsonResponse
@@ -105,18 +125,24 @@ class ReportController extends Controller
 
     public function promoCodes(Request $request): JsonResponse
     {
+        $params = $this->listParams($request);
+        $sort = $params->sort(['used_count', 'usages_sum_discount_amount', 'code'], '-used_count');
+
         $codes = PromoCode::query()
             ->withCount('usages')
-            ->withSum('usages', 'discount_amount')
-            ->orderByDesc('used_count')
-            ->paginate($request->integer('per_page', 20));
+            ->withSum('usages', 'discount_amount');
 
-        return ApiResponse::success($codes->items(), meta: [
-            'current_page' => $codes->currentPage(),
-            'per_page' => $codes->perPage(),
-            'total' => $codes->total(),
-            'last_page' => $codes->lastPage(),
-        ]);
+        if (($active = $params->bool('is_active')) !== null) {
+            $codes->where('is_active', $active);
+        }
+
+        ListSearch::apply($codes, $params->search(), ['refs' => ['code'], 'names' => ['title_ar', 'title_en'], 'id' => false]);
+
+        $page = $sort->apply($codes, [
+            'usages_sum_discount_amount' => fn ($q, string $direction) => $q->orderBy('usages_sum_discount_amount', $direction),
+        ])->paginate($params->perPage());
+
+        return $this->paginated($page, sort: $sort);
     }
 
     public function refunds(Request $request): JsonResponse
@@ -147,7 +173,9 @@ class ReportController extends Controller
 
     public function customers(Request $request): JsonResponse
     {
-        $segment = $request->string('filter.segment')->value();
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'name'], '-created_at');
+        $segment = $params->enum('segment', ['new', 'returning', 'restricted'])[0] ?? null;
 
         $customers = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user());
 
@@ -158,15 +186,11 @@ class ReportController extends Controller
             default => $customers,
         };
 
-        $paginated = $customers->paginate($request->integer('per_page', 20));
+        ListSearch::apply($customers, $params->search(), ['names' => ['name'], 'phones' => ['phone']]);
 
-        return ApiResponse::success($paginated->items(), meta: [
-            'current_page' => $paginated->currentPage(),
-            'per_page' => $paginated->perPage(),
-            'total' => $paginated->total(),
-            'last_page' => $paginated->lastPage(),
-            'segment' => $segment ?: 'all',
-        ]);
+        $paginated = $sort->apply($customers, [])->paginate($params->perPage());
+
+        return $this->paginated($paginated, meta: ['segment' => $segment ?: 'all'], sort: $sort);
     }
 
     public function customerCohorts(Request $request): JsonResponse
@@ -201,9 +225,13 @@ class ReportController extends Controller
 
     private function range(Request $request): array
     {
+        // Batch 68 — through `ListParams`, so a malformed date is a 422 rather than the
+        // 500 `$request->date()` threw, and a reversed range is refused by name.
+        [$from, $to] = $this->listParams($request)->dates();
+
         return [
-            BusinessTime::fromInput($request->date('filter.date_from')) ?? BusinessTime::startOfDaysAgo(30),
-            BusinessTime::fromInput($request->date('filter.date_to'), endOfDay: true) ?? BusinessTime::endOfToday(),
+            $from ?? BusinessTime::startOfDaysAgo(30),
+            $to ?? BusinessTime::endOfToday(),
         ];
     }
 }

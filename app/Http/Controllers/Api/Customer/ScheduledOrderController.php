@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Customer;
 
 use App\Actions\Customer\ScheduleOrderAction;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\ScheduleOrderRequest;
 use App\Http\Resources\Shared\ScheduledOrderResource;
@@ -14,21 +15,22 @@ use Illuminate\Http\Request;
 /** «طلباتي المجدولة» — the customer's own half of the scheduling feature. */
 class ScheduledOrderController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $rows = ScheduledOrder::query()
-            ->where('user_id', $request->user()->id)
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q
-                ->where('status', $request->string('filter.status')->value()))
-            ->orderBy('scheduled_for')
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['scheduled_for', 'created_at'], 'scheduled_for');
 
-        return ApiResponse::success(ScheduledOrderResource::collection($rows->getCollection()), meta: [
-            'current_page' => $rows->currentPage(),
-            'per_page' => $rows->perPage(),
-            'total' => $rows->total(),
-            'last_page' => $rows->lastPage(),
-        ]);
+        $query = ScheduledOrder::query()->where('user_id', $request->user()->id);
+
+        $this->whereInList($query, 'status', $params->enum('status', [
+            ScheduledOrder::STATUS_SCHEDULED, ScheduledOrder::STATUS_RELEASED, ScheduledOrder::STATUS_FAILED, ScheduledOrder::STATUS_CANCELLED,
+        ]));
+
+        $rows = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($rows, ScheduledOrderResource::collection($rows->getCollection()), sort: $sort);
     }
 
     public function store(ScheduleOrderRequest $request, ScheduleOrderAction $action): JsonResponse

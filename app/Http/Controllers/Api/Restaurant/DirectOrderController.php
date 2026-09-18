@@ -6,10 +6,14 @@ use App\Actions\Restaurant\CancelDirectOrderAction;
 use App\Actions\Restaurant\CreateDirectOrderAction;
 use App\Actions\Restaurant\MarkOrderReadyAction;
 use App\Actions\Restaurant\QuoteDirectOrderAction;
+use App\Enums\OrderStatus;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\CreateDirectOrderRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
+use App\Support\Lists\ListSearch;
 use App\Support\OrderParties;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +21,8 @@ use Illuminate\Http\Request;
 /** doc 08 §6.2 — the restaurant buys a delivery, not a marketplace order. */
 class DirectOrderController extends Controller
 {
+    use FiltersLists;
+
     public function quote(Request $request, QuoteDirectOrderAction $action): JsonResponse
     {
         $validated = $request->validate([
@@ -65,25 +71,34 @@ class DirectOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'status'], '-created_at');
+        $statuses = array_map(fn (OrderStatus $s) => $s->value, OrderStatus::cases());
 
-        $orders = $restaurant->orders()
+        $query = $restaurant->orders()->getQuery()
             ->where('origin', 'restaurant_direct')
-            ->with(OrderParties::relations())
-            ->when($request->string('filter.status')->isNotEmpty(), fn ($q) => $q->where('status', $request->string('filter.status')))
-            ->when($request->date('filter.date_from'), fn ($q, $d) => $q->whereDate('business_date', '>=', $d))
-            ->when($request->date('filter.date_to'), fn ($q, $d) => $q->whereDate('business_date', '<=', $d))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->with(OrderParties::relations());
 
-        return ApiResponse::success(array_map(
+        $this->whereInList($query, 'orders.status', $params->enum('status', $statuses));
+
+        // `business_date` is already the place's own calendar day, so the typed dates
+        // compare against it as dates.
+        [$from, $to] = $params->dates();
+        $query->when($from, fn ($q) => $q->where('orders.business_date', '>=', BusinessTime::localDate($from)))
+            ->when($to, fn ($q) => $q->where('orders.business_date', '<=', BusinessTime::localDate($to)));
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['order_number'],
+            'names' => ['guest_customer_name'],
+            'phones' => ['guest_customer_phone', 'guest_customer_phone_alt'],
+        ]);
+
+        $orders = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($orders, array_map(
             fn (Order $o) => OrderParties::present($o->revealPickupOtp(), 'restaurant'),
             $orders->items(),
-        ), meta: [
-            'current_page' => $orders->currentPage(),
-            'per_page' => $orders->perPage(),
-            'total' => $orders->total(),
-            'last_page' => $orders->lastPage(),
-        ]);
+        ), sort: $sort);
     }
 
     public function show(Request $request, Order $order): JsonResponse

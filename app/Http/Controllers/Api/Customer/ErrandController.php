@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Customer;
 use App\Actions\Errand\CreateErrandAction;
 use App\Actions\Errand\ErrandLifecycleAction;
 use App\Actions\Errand\QuoteErrandAction;
+use App\Enums\ErrandStatus;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Errand\QuoteErrandRequest;
 use App\Http\Requests\Errand\StoreErrandRequest;
@@ -17,6 +19,8 @@ use Illuminate\Http\Request;
 /** doc 40 — «اطلب كابتن»: the customer's half. */
 class ErrandController extends Controller
 {
+    use FiltersLists;
+
     public function quote(QuoteErrandRequest $request, QuoteErrandAction $action): JsonResponse
     {
         return ApiResponse::success($action->execute(
@@ -40,21 +44,18 @@ class ErrandController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $errands = ErrandRequest::query()
-            ->where('user_id', $request->user()->id)
-            ->with(['driver.user'])
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at'], '-created_at');
 
-        return ApiResponse::success(
-            ErrandRequestResource::collection($errands->items()),
-            meta: [
-                'current_page' => $errands->currentPage(),
-                'per_page' => $errands->perPage(),
-                'total' => $errands->total(),
-                'last_page' => $errands->lastPage(),
-            ],
-        );
+        $query = ErrandRequest::query()
+            ->where('user_id', $request->user()->id)
+            ->with(['driver.user']);
+
+        $this->whereInList($query, 'errand_requests.status', $params->enum('status', array_column(ErrandStatus::cases(), 'value')));
+
+        $errands = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($errands, ErrandRequestResource::collection($errands->items()), sort: $sort);
     }
 
     public function show(Request $request, ErrandRequest $errand): JsonResponse

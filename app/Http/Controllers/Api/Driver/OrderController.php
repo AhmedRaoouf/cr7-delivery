@@ -10,14 +10,15 @@ use App\Actions\Driver\RejectOfferAction;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Driver\CancelTripRequest;
 use App\Http\Requests\Driver\DeliverRequest;
 use App\Http\Requests\Driver\PickupRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
-use App\Support\BusinessTime;
 use App\Support\DriverTrip;
+use App\Support\Lists\ListSearch;
 use App\Support\OrderParties;
 use App\Support\RollupStatus;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +27,8 @@ use Illuminate\Http\Request;
 /** doc 08 §5 — the driver's trip lifecycle. */
 class OrderController extends Controller
 {
+    use FiltersLists;
+
     public function accept(Request $request, int $order, AcceptOfferAction $action): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
@@ -181,47 +184,54 @@ class OrderController extends Controller
     public function history(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'delivered_at', 'driver_earning'], '-created_at');
+        $statuses = array_map(fn (OrderStatus $s) => $s->value, OrderStatus::cases());
 
-        // `filter[from]` is DRV-27's «اليوم / هذا الأسبوع / هذا الشهر» chip, and it
-        // is applied here rather than in the app because the two cannot both be
-        // right once the list pages: a client that drops rows out of a page it
-        // was handed reports a `total` that counts rows it hid, and a range
-        // narrow enough to empty a whole page makes the scroll stop on a list
-        // that has more behind it.
+        // `filter[from]` is DRV-27's «اليوم / هذا الأسبوع / هذا الشهر» chip, and it is
+        // applied here rather than in the app because the two cannot both be right once the
+        // list pages: a client that drops rows out of a page it was handed reports a
+        // `total` that counts rows it hid, and a range narrow enough to empty a whole page
+        // makes the scroll stop on a list that has more behind it.
         //
-        // The date compared is the one the trip finished on, falling back to
-        // when it was raised for a trip that never did — the same rule the app
-        // used, so «اليوم» still holds an order taken at 23:50 and delivered
-        // after midnight.
-        // «اليوم» on `DRV-27` is the captain's day, which starts at midnight in
-        // Gamasa and not at 02:00 there.
-        $from = BusinessTime::fromInput($request->date('filter.from'));
+        // The date compared is the one the trip finished on, falling back to when it was
+        // raised for a trip that never did — the same rule the app used, so «اليوم» still
+        // holds an order taken at 23:50 and delivered after midnight. «اليوم» on `DRV-27` is
+        // the captain's day, which starts at midnight in Gamasa and not at 02:00 there.
+        // `date_from` / `date_to` (batch 68) are the same rule with an end.
+        $since = $params->date('from');
+        [$from, $to] = $params->dates();
+        $from = $from ?? $since;
 
-        $status = $request->string('filter.status');
+        $status = $params->enum('status', $statuses);
 
-        $orders = $driver->orders()
+        $query = $driver->orders()->getQuery()
             ->with('restaurant')
-            // `DRV-27` is finished work — its own filters are «كل الحالات /
-            // المسلَّمة / الملغاة», and its card has exactly two things it can
-            // say. Handing it a live order made it say «تم التسليم» over an
-            // order the captain had not collected yet, complete with the
-            // earning and «لم يقيمك». The order being carried is served by
-            // `/driver/orders/active` and drawn by the home screen; this list
-            // is the archive.
-            ->when($status->isEmpty(), fn ($q) => $q->whereIn('status', self::HISTORY_STATUSES))
-            ->when($status->isNotEmpty(), fn ($q) => $q->where('status', $status))
-            ->when($from, fn ($q) => $q->where(fn ($scope) => $scope
-                ->where('delivered_at', '>=', $from)
-                ->orWhere(fn ($fallback) => $fallback->whereNull('delivered_at')->where('created_at', '>=', $from))))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+            // `DRV-27` is finished work — its own filters are «كل الحالات / المسلَّمة /
+            // الملغاة», and its card has exactly two things it can say. Handing it a live
+            // order made it say «تم التسليم» over an order the captain had not collected
+            // yet, complete with the earning and «لم يقيمك». The order being carried is
+            // served by `/driver/orders/active` and drawn by the home screen; this list is
+            // the archive.
+            ->whereIn('orders.status', $status === [] ? self::HISTORY_STATUSES : $status);
 
-        return ApiResponse::success(array_map(self::forCaptain(...), $orders->items()), meta: [
-            'current_page' => $orders->currentPage(),
-            'per_page' => $orders->perPage(),
-            'total' => $orders->total(),
-            'last_page' => $orders->lastPage(),
+        $this->whereInList($query, 'orders.payment_method', $params->enum('payment_method', ['cash', 'vodafone_cash', 'instapay']));
+
+        $finished = fn (string $op, $moment) => fn ($q) => $q->where(fn ($scope) => $scope
+            ->where('orders.delivered_at', $op, $moment)
+            ->orWhere(fn ($fallback) => $fallback->whereNull('orders.delivered_at')->where('orders.created_at', $op, $moment)));
+
+        $query->when($from, fn ($q) => $finished('>=', $from)($q))
+            ->when($to, fn ($q) => $finished('<=', $to)($q));
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['order_number'],
+            'names' => ['restaurant_name_snapshot'],
         ]);
+
+        $orders = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($orders, array_map(self::forCaptain(...), $orders->items()), sort: $sort);
     }
 
     private function transition(Request $request, Order $order, array $allowedFrom, OrderStatus $to, array $extra): void

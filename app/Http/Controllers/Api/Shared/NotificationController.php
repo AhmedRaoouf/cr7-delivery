@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Shared;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Support\ApiResponse;
@@ -11,19 +12,24 @@ use Illuminate\Http\Request;
 /** doc 08 §4 / §6 — GET /notifications, POST /notifications/{id}/read, /read-all, GET /unread-count. Identical for every client, scoped to the caller. */
 class NotificationController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $notifications = $request->user()->notifications()
-            ->when($request->boolean('filter.unread'), fn ($q) => $q->whereNull('read_at'))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at'], '-created_at');
 
-        return ApiResponse::success($notifications->items(), meta: [
-            'current_page' => $notifications->currentPage(),
-            'per_page' => $notifications->perPage(),
-            'total' => $notifications->total(),
-            'last_page' => $notifications->lastPage(),
-        ]);
+        $query = $request->user()->notifications()->getQuery();
+
+        if (($unread = $params->bool('unread')) !== null) {
+            $unread ? $query->whereNull('read_at') : $query->whereNotNull('read_at');
+        }
+
+        $this->whereInList($query, 'type', $params->list('type'));
+
+        $notifications = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($notifications, sort: $sort);
     }
 
     public function markRead(Request $request, Notification $notification): JsonResponse

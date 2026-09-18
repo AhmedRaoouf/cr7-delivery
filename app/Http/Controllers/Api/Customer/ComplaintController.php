@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api\Customer;
 
 use App\Actions\Customer\CreateComplaintAction;
+use App\Enums\ComplaintStatus;
 use App\Enums\UserType;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreComplaintRequest;
 use App\Models\Complaint;
 use App\Support\ApiResponse;
 use App\Support\ComplaintNotifier;
+use App\Support\Lists\ListSearch;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,16 +26,26 @@ use Illuminate\Http\Request;
  */
 class ComplaintController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
-        $complaints = $request->user()->complaints()->latest()->paginate($request->integer('per_page', 20));
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'updated_at'], '-created_at');
 
-        return ApiResponse::success($complaints->items(), meta: [
-            'current_page' => $complaints->currentPage(),
-            'per_page' => $complaints->perPage(),
-            'total' => $complaints->total(),
-            'last_page' => $complaints->lastPage(),
+        $query = $request->user()->complaints()->getQuery();
+
+        $this->whereInList($query, 'complaints.status', $params->enum('status', array_column(ComplaintStatus::cases(), 'value')));
+
+        ListSearch::apply($query, $params->search(), [
+            'id' => false,
+            'refs' => ['ticket_number'],
+            'names' => ['subject'],
         ]);
+
+        $complaints = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($complaints, sort: $sort);
     }
 
     public function store(StoreComplaintRequest $request, CreateComplaintAction $action): JsonResponse

@@ -9,6 +9,7 @@ use App\Models\Cuisine;
 use App\Models\Product;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
+use App\Support\Lists\ListParams;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -72,10 +73,10 @@ class ProductController extends Controller
                 ->where('is_active', true)
                 ->when($cityId, fn ($rq, $id) => $rq->where('city_id', $id))
                 ->whereHas('cuisines', fn ($cq) => $cq->where('cuisines.id', $cuisine->id)))
-            ->when($request->string('search')->isNotEmpty(), fn ($q) => ArabicSearch::apply(
+            ->when(($search = ListParams::of($request)->search()) !== '', fn ($q) => ArabicSearch::apply(
                 $q,
                 ['name_ar', 'name_en', 'description_ar', 'description_en'],
-                ArabicSearch::tokens((string) $request->string('search')->value()),
+                ArabicSearch::tokens($search),
             ))
             ->when($request->string('sort')->value(), function ($q, $sort) {
                 match ($sort) {

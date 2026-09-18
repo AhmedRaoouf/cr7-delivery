@@ -8,6 +8,7 @@ use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Customer\RateOrderGroupAction;
 use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\CancelOrderRequest;
 use App\Http\Requests\Customer\CreateOrderRequest;
@@ -20,6 +21,7 @@ use App\Models\Product;
 use App\Support\ApiResponse;
 use App\Support\DriverLiveness;
 use App\Support\LateCancellationFee;
+use App\Support\Lists\ListSearch;
 use App\Support\Locale;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\RatingState;
@@ -31,6 +33,8 @@ use Illuminate\Support\Facades\Log;
 /** doc 08 §4 — checkout & orders. `{id}` in every route below is an order_groups.id. */
 class OrderController extends Controller
 {
+    use FiltersLists;
+
     public function __construct(private readonly NotificationDispatcher $notifications) {}
 
     public function store(CreateOrderRequest $request, CreateOrderAction $action): JsonResponse
@@ -42,27 +46,37 @@ class OrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $statusGroup = $request->input('filter.status_group');
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'total'], '-created_at');
+        $groups = $params->enum('status_group', ['active', 'completed', 'cancelled']);
 
-        $groups = $request->user()->orderGroups()
-            ->with('orders.restaurant')
-            ->when($statusGroup, fn ($q) => $q->whereHas('orders', function ($oq) use ($statusGroup) {
-                match ($statusGroup) {
-                    'active' => $oq->whereNotIn('status', ['delivered', 'cancelled']),
-                    'completed' => $oq->where('status', 'delivered'),
-                    'cancelled' => $oq->where('status', 'cancelled'),
-                    default => null,
-                };
-            }))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        $query = $request->user()->orderGroups()->getQuery()->with('orders.restaurant');
 
-        return ApiResponse::success(OrderGroupListResource::collection($groups->getCollection()), meta: [
-            'current_page' => $groups->currentPage(),
-            'per_page' => $groups->perPage(),
-            'total' => $groups->total(),
-            'last_page' => $groups->lastPage(),
+        if ($groups !== []) {
+            $query->whereHas('orders', function ($oq) use ($groups) {
+                $oq->where(function ($any) use ($groups) {
+                    foreach ($groups as $group) {
+                        match ($group) {
+                            'active' => $any->orWhereNotIn('status', ['delivered', 'cancelled']),
+                            'completed' => $any->orWhere('status', 'delivered'),
+                            'cancelled' => $any->orWhere('status', 'cancelled'),
+                        };
+                    }
+                });
+            });
+        }
+
+        $this->whereBetweenDates($query, 'order_groups.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'id' => false,
+            'refs' => ['group_number'],
+            'relations' => ['orders' => ['refs' => ['order_number'], 'names' => ['restaurant_name_snapshot']]],
         ]);
+
+        $page = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($page, OrderGroupListResource::collection($page->getCollection()), sort: $sort);
     }
 
     public function show(Request $request, OrderGroup $orderGroup): JsonResponse

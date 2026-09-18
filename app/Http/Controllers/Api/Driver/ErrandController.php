@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Driver;
 
 use App\Actions\Errand\ErrandLifecycleAction;
 use App\Enums\ErrandStatus;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\ErrandRequestResource;
 use App\Models\Driver;
@@ -24,6 +25,8 @@ use Illuminate\Http\Request;
  */
 class ErrandController extends Controller
 {
+    use FiltersLists;
+
     public function board(Request $request): JsonResponse
     {
         $driver = $this->driver($request);
@@ -69,26 +72,22 @@ class ErrandController extends Controller
     public function mine(Request $request): JsonResponse
     {
         $driver = $this->driver($request);
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at'], '-created_at');
 
-        $errands = ErrandRequest::query()
+        $query = ErrandRequest::query()
             ->where(fn ($q) => $q
                 ->where('driver_id', $driver->id)
                 ->orWhere(fn ($q) => $q
                     ->where('offered_driver_id', $driver->id)
                     ->where('status', ErrandStatus::Offered->value)))
-            ->with('driver.user')
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->with('driver.user');
 
-        return ApiResponse::success(
-            ErrandRequestResource::collection($errands->items()),
-            meta: [
-                'current_page' => $errands->currentPage(),
-                'per_page' => $errands->perPage(),
-                'total' => $errands->total(),
-                'last_page' => $errands->lastPage(),
-            ],
-        );
+        $this->whereInList($query, 'errand_requests.status', $params->enum('status', array_column(ErrandStatus::cases(), 'value')));
+
+        $errands = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($errands, ErrandRequestResource::collection($errands->items()), sort: $sort);
     }
 
     public function show(Request $request, ErrandRequest $errand): JsonResponse

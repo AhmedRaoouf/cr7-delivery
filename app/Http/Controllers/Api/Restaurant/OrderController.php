@@ -7,13 +7,16 @@ use App\Actions\Restaurant\ExtendPrepTimeAction;
 use App\Actions\Restaurant\MarkOrderReadyAction;
 use App\Actions\Restaurant\RejectOrderAction;
 use App\Actions\Restaurant\StartPreparingAction;
+use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\AcceptOrderRequest;
 use App\Http\Requests\Restaurant\RejectOrderRequest;
 use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\BoardQueue;
+use App\Support\Lists\ListSearch;
 use App\Support\OrderParties;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,38 +24,51 @@ use Illuminate\Http\Request;
 /** doc 08 §6.1 — the board: six queues mapped onto sub-order statuses. */
 class OrderController extends Controller
 {
+    use FiltersLists;
+
     /** Moved to App\Support\BoardQueue so the broadcast path reads the same map. */
     private const QUEUES = BoardQueue::QUEUES;
 
     public function index(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $queue = $request->input('filter.queue');
+        $params = $this->listParams($request);
+        $sort = $params->sort(['created_at', 'total', 'status', 'prep_due_at'], '-created_at');
+        $statuses = array_map(fn (OrderStatus $s) => $s->value, OrderStatus::cases());
 
-        // `RES-10` renders a search box, a status select and a date range. Until now
+        // `RES-10` renders a search box, a status select and a date range. Until batch 57
         // only `queue` reached the query, so all three were decoration: an operator
         // narrowing to «تم التسليم» in March got the same unfiltered page back.
-        $status = $request->input('filter.status');
-        $search = trim((string) $request->input('filter.q', ''));
-        $from = $request->input('filter.date_from');
-        $to = $request->input('filter.date_to');
+        $query = $restaurant->orders()->getQuery()
+            ->with(['items.options', ...OrderParties::relations()]);
 
-        $orders = $restaurant->orders()
-            ->with(['items.options', ...OrderParties::relations()])
-            ->when($queue && isset(self::QUEUES[$queue]), fn ($q) => $q->whereIn('status', self::QUEUES[$queue]))
-            ->when(is_string($status) && $status !== '', fn ($q) => $q->where('status', $status))
-            ->when($search !== '', fn ($q) => $q->where(function ($sub) use ($search) {
-                $sub->where('order_number', 'like', '%'.$search.'%')
-                    ->orWhere('restaurant_order_ref', 'like', '%'.$search.'%')
-                    ->orWhere('customer_name_snapshot', 'like', '%'.$search.'%')
-                    ->orWhere('delivery_contact_phone', 'like', '%'.$search.'%');
-            }))
-            // On `created_at`, not `delivered_at`: the same range has to mean the same
-            // thing on a board queue where nothing has been delivered yet.
-            ->when(is_string($from) && $from !== '', fn ($q) => $q->whereDate('created_at', '>=', $from))
-            ->when(is_string($to) && $to !== '', fn ($q) => $q->whereDate('created_at', '<=', $to))
-            ->latest()
-            ->paginate($request->integer('per_page', 20));
+        // Several queues are the union of their statuses, not an intersection.
+        if (($queues = $params->enum('queue', array_keys(self::QUEUES))) !== []) {
+            $query->whereIn('orders.status', collect($queues)->flatMap(fn (string $q) => self::QUEUES[$q])->unique()->values()->all());
+        }
+
+        $this->whereInList($query, 'orders.status', $params->enum('status', $statuses));
+        $this->whereInList($query, 'orders.payment_method', $params->enum('payment_method', ['cash', 'vodafone_cash', 'instapay']));
+        $this->whereInList($query, 'orders.origin', $params->enum('origin', ['app', 'restaurant_direct'], ['direct' => 'restaurant_direct']));
+
+        if ($params->bool('overdue') === true) {
+            $query->where('orders.status', 'preparing')
+                ->whereNotNull('orders.prep_due_at')
+                ->where('orders.prep_due_at', '<', now());
+        }
+
+        // On `created_at`, not `delivered_at`: the same range has to mean the same thing
+        // on a board queue where nothing has been delivered yet. A Cairo day (batch 68 —
+        // it was `whereDate` on the UTC column).
+        $this->whereBetweenDates($query, 'orders.created_at', $params->dates());
+
+        ListSearch::apply($query, $params->search(), [
+            'refs' => ['order_number', 'restaurant_order_ref'],
+            'names' => ['customer_name_snapshot', 'guest_customer_name'],
+            'phones' => ['delivery_contact_phone', 'guest_customer_phone'],
+        ]);
+
+        $orders = $sort->apply($query, [])->paginate($params->perPage());
 
         // `RES-03` reads the code straight off the card. Order::$hidden keeps it off
         // every other payload; this is the one reader entitled to it.
@@ -63,12 +79,7 @@ class OrderController extends Controller
             $orders->items(),
         );
 
-        return ApiResponse::success($items, meta: [
-            'current_page' => $orders->currentPage(),
-            'per_page' => $orders->perPage(),
-            'total' => $orders->total(),
-            'last_page' => $orders->lastPage(),
-        ]);
+        return $this->paginated($orders, $items, sort: $sort);
     }
 
     public function newCount(Request $request): JsonResponse

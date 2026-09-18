@@ -2,26 +2,40 @@
 
 namespace App\Http\Controllers\Api\Driver;
 
+use App\Http\Controllers\Api\Restaurant\SettlementController as RestaurantSettlementController;
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Settlement;
 use App\Support\ApiResponse;
+use App\Support\BusinessTime;
 use App\Support\DeliveryCommission;
 use App\Support\DriverLedger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 
 /** doc 08 §5 — GET /driver/earnings, /settlements, /stats. */
 class EarningsController extends Controller
 {
+    use FiltersLists;
+
     public function earnings(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
-        $from = $request->date('from') ?? Carbon::now()->subDays(30)->startOfDay();
-        $to = $request->date('to') ?? Carbon::now()->endOfDay();
+        // Batch 68 — `filter[date_from]` / `filter[date_to]` beside the bare `from` / `to`
+        // the app sends, all read on the Cairo clock (the bare ones were parsed as UTC, so
+        // «اليوم» started at 02:00 in Gamasa), and a malformed one is a 422, not a 500.
+        $params = $this->listParams($request);
+        [$from, $to] = $params->dates();
+        $from ??= $params->date('from') ?? BusinessTime::startOfDaysAgo(30);
+        $to ??= $params->date('to', endOfDay: true) ?? BusinessTime::endOfToday();
 
         $transactions = $driver->transactions()->whereBetween('created_at', [$from, $to])->latest()->get();
+
+        // `filter[type]` narrows the rows the screen lists; the sums above them stay the
+        // window's own, or the balances would appear to move with a chip.
+        $types = $params->enum('type', ['order_earning', 'bonus', 'deduction', 'cash_settlement', 'cash_collected', 'cash_handover', 'payout', 'place_advance']);
+        $listed = $types === [] ? $transactions : $transactions->whereIn('type', $types)->values();
 
         return ApiResponse::success([
             ...DriverLedger::balances($driver),
@@ -36,7 +50,7 @@ class EarningsController extends Controller
             'cash_handed_over' => round(abs((float) $transactions->where('type', 'cash_handover')->sum('amount')), 2),
             'paid_out' => round(abs((float) $transactions->where('type', 'payout')->sum('amount')), 2),
             'commission_rate' => DeliveryCommission::rate(),
-            'breakdown' => $transactions->map(fn ($t) => [
+            'breakdown' => $listed->map(fn ($t) => [
                 'id' => $t->id,
                 'order_id' => $t->order_id,
                 'type' => $t->type,
@@ -110,19 +124,19 @@ class EarningsController extends Controller
     public function settlements(Request $request): JsonResponse
     {
         $driver = $request->user()->driver()->firstOrFail();
+        $params = $this->listParams($request);
+        $sort = $params->sort(['period_end', 'created_at'], '-period_end');
 
-        $settlements = Settlement::query()
+        $query = Settlement::query()
             ->where('party_type', 'driver')
-            ->where('party_id', $driver->id)
-            ->latest('period_end')
-            ->paginate($request->integer('per_page', 20));
+            ->where('party_id', $driver->id);
 
-        return ApiResponse::success($settlements->items(), meta: [
-            'current_page' => $settlements->currentPage(),
-            'per_page' => $settlements->perPage(),
-            'total' => $settlements->total(),
-            'last_page' => $settlements->lastPage(),
-        ]);
+        $this->whereInList($query, 'status', $params->enum('status', ['draft', 'pending', 'paid']));
+        RestaurantSettlementController::overlapping($query, $params->dates());
+
+        $settlements = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($settlements, sort: $sort);
     }
 
     public function stats(Request $request): JsonResponse

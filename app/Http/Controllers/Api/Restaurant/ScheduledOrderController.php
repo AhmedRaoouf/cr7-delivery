@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Shared\ScheduledOrderResource;
 use App\Models\ScheduledOrder;
-use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,22 +18,23 @@ use Illuminate\Http\Request;
  */
 class ScheduledOrderController extends Controller
 {
+    use FiltersLists;
+
     public function index(Request $request): JsonResponse
     {
         $restaurantId = $request->user()->restaurant()->value('id');
+        $params = $this->listParams($request);
+        $sort = $params->sort(['scheduled_for'], 'scheduled_for');
 
-        $rows = ScheduledOrder::query()
+        $query = ScheduledOrder::query()
             ->whereHas('restaurants', fn ($q) => $q->where('restaurants.id', $restaurantId))
             ->where('status', ScheduledOrder::STATUS_SCHEDULED)
-            ->with('customer')
-            ->orderBy('scheduled_for')
-            ->paginate($request->integer('per_page', 20));
+            ->with('customer');
 
-        return ApiResponse::success(ScheduledOrderResource::collection($rows->getCollection()), meta: [
-            'current_page' => $rows->currentPage(),
-            'per_page' => $rows->perPage(),
-            'total' => $rows->total(),
-            'last_page' => $rows->lastPage(),
-        ]);
+        $this->whereBetweenDates($query, 'scheduled_orders.scheduled_for', $params->dates());
+
+        $rows = $sort->apply($query, [])->paginate($params->perPage());
+
+        return $this->paginated($rows, ScheduledOrderResource::collection($rows->getCollection()), sort: $sort);
     }
 }

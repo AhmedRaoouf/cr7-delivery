@@ -74,7 +74,7 @@ class OtpController extends Controller
     /** `GET /admin/otp/blocks?filter[search]=&filter[status]=active|all&page=&per_page=` */
     public function index(Request $request): JsonResponse
     {
-        $search = preg_replace('/\D+/', '', PhoneNumber::normalise($request->string('filter.search')->value())) ?? '';
+        $search = self::searchDigits($request->string('filter.search')->value());
         $all = $request->string('filter.status')->value() === 'all';
         $perPage = max(1, min(100, $request->integer('per_page', 20) ?: 20));
 
@@ -168,5 +168,32 @@ class OtpController extends Controller
         ]);
 
         return ApiResponse::success($block->fresh()->load('creator:id,name')->toApi(), 'تم رفع الحظر عن الرقم');
+    }
+
+    /**
+     * What an operator typed into the search box, as the digits a stored number would
+     * contain: `+20 102`, `0020102` and `0102` all look for `0102`. A whole number is
+     * normalised the way it was stored; a fragment only loses its country code.
+     */
+    private static function searchDigits(string $raw): string
+    {
+        $raw = trim($raw);
+
+        if ($raw === '') {
+            return '';
+        }
+
+        if (PhoneNumber::isValid($raw)) {
+            return PhoneNumber::normalise($raw);
+        }
+
+        $digits = preg_replace('/\D+/', '', strtr($raw, ['٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9'])) ?? '';
+
+        if (preg_match('/^(\+|00)\s*20/', $raw) === 1) {
+            $digits = '0'.substr($digits, str_starts_with($digits, '0020') ? 4 : 2);
+        }
+
+        return $digits;
     }
 }

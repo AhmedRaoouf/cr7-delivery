@@ -97,6 +97,14 @@ final class SettingsCatalog
                 'fields' => [
                     ['key' => 'payment.cash_enabled', 'type' => 'bool', 'default' => true, 'public' => true,
                         'label_ar' => 'الدفع عند الاستلام', 'label_en' => 'Cash on delivery'],
+                    // Operator, 2026-09-18: «عايز لو الاوردر فوق الالف جنيه لازم تحويل فودافون
+                    // كاش او انستا باي». Read by `CashLimit`. Zero is a value here (D-131): it
+                    // means «no limit», never «not set yet».
+                    ['key' => 'payment.cash_max_total', 'type' => 'decimal', 'default' => 1000, 'min' => 0, 'max' => 100000,
+                        'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP', 'public' => true,
+                        'label_ar' => 'أقصى قيمة للطلب عند الدفع نقدًا', 'label_en' => 'Largest order payable in cash',
+                        'helper_ar' => 'الطلب الذي يتجاوز هذه القيمة يُدفع بفودافون كاش أو إنستا باي فقط، والطلب المساوي لها يُقبل نقدًا. صفر يلغي الحد.',
+                        'helper_en' => 'An order above this amount can be paid only by Vodafone Cash or InstaPay; an order of exactly this amount may still be paid in cash. Zero removes the limit.'],
                     ['key' => 'payment.vodafone_cash_enabled', 'type' => 'bool', 'default' => true, 'public' => true,
                         'label_ar' => 'فودافون كاش', 'label_en' => 'Vodafone Cash'],
                     ['key' => 'payment.vodafone_cash_number', 'type' => 'phone', 'default' => null, 'nullable' => true, 'public' => true,
@@ -569,6 +577,22 @@ final class SettingsCatalog
 
             if ($touches(...$methods) && ! collect($methods)->contains(fn ($k) => (bool) $after($k))) {
                 $errors['payment.cash_enabled'] = ['يجب أن تبقى طريقة دفع واحدة على الأقل مفعّلة'];
+            }
+
+            // A cash limit sends every order above it to a transfer — so with both
+            // transfers off, an order above the limit could not be paid at all. Refused
+            // on whichever side of the pair this edit moved.
+            $transfers = ['payment.vodafone_cash_enabled', 'payment.instapay_enabled'];
+
+            if ($touches('payment.cash_max_total', ...$transfers)
+                && (float) $after('payment.cash_max_total') > 0
+                && ! collect($transfers)->contains(fn ($k) => (bool) $after($k))) {
+                if (array_key_exists('payment.cash_max_total', $clean) && (float) $clean['payment.cash_max_total'] > 0) {
+                    $errors['payment.cash_max_total'] = ['فعّل فودافون كاش أو إنستا باي أولًا، أو اجعل الحد صفرًا — فلن يمكن دفع الطلب الأكبر من الحد بأي طريقة'];
+                } else {
+                    $switchedOff = collect($transfers)->first(fn ($k) => array_key_exists($k, $clean)) ?? 'payment.vodafone_cash_enabled';
+                    $errors[$switchedOff] = ['لا يمكن إيقاف آخر طريقة تحويل مع وجود حد للدفع النقدي — اجعل الحد صفرًا أولًا'];
+                }
             }
 
             if ($touches('payment.vodafone_cash_enabled', 'payment.vodafone_cash_number')

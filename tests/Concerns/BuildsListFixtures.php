@@ -205,7 +205,7 @@ trait BuildsListFixtures
             'amount' => $attributes['total'] ?? 120,
         ]);
 
-        return Order::query()->create($attributes + [
+        $order = Order::query()->create($attributes + [
             'order_group_id' => $group->id,
             'order_number' => $number,
             'idempotency_key' => (string) Str::uuid(),
@@ -226,6 +226,14 @@ trait BuildsListFixtures
             'delivery_fee_share' => 20,
             'total' => 120,
         ]);
+
+        // Whatever `$fillable` leaves out (`created_at`, the timestamps) is still what the
+        // test asked for.
+        if ($attributes !== []) {
+            $order->forceFill($attributes)->saveQuietly();
+        }
+
+        return $order;
     }
 
     protected function complaintAbout(Order $order, array $attributes = []): Complaint

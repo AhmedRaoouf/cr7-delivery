@@ -208,6 +208,21 @@ class ReviewAccessTest extends TestCase
         Artisan::call('cr7:review-accounts', ['--password' => 'Review#Pass2026']);
     }
 
+    public function test_the_command_never_resets_a_real_customers_password_on_a_listed_number(): void
+    {
+        $this->seedLocation();
+        $real = User::query()->create(['phone' => self::CUSTOMER, 'name' => 'أحمد', 'type' => UserType::Customer, 'password' => Hash::make('theirs-1234'), 'is_active' => true]);
+
+        try {
+            Artisan::call('cr7:review-accounts', ['--password' => 'Review#Pass2026']);
+            $this->fail('expected the command to refuse');
+        } catch (\RuntimeException) {
+            // expected
+        }
+
+        $this->assertTrue(Hash::check('theirs-1234', $real->fresh()->password));
+    }
+
     public function test_the_command_refuses_when_the_allowlist_is_not_configured(): void
     {
         config(['services.review.phones' => null]);

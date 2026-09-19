@@ -38,6 +38,9 @@ use Illuminate\Support\Facades\Hash;
  */
 class ReviewAccountsCommand extends Command
 {
+    /** What marks an account as one of ours: an existing account without it is somebody's, and is left alone. */
+    private const NAME_PREFIX = 'حساب مراجعة المتجر';
+
     protected $signature = 'cr7:review-accounts
         {--password= : the password all three accounts sign in with (10+ characters, letters and digits)}';
 
@@ -72,7 +75,7 @@ class ReviewAccountsCommand extends Command
 
         [$customerPhone, $driverPhone, $placePhone] = $phones;
 
-        $customer = $this->account($customerPhone, UserType::Customer, 'حساب مراجعة المتجر — عميل', $password);
+        $customer = $this->account($customerPhone, UserType::Customer, self::NAME_PREFIX.' — عميل', $password);
         $address = UserAddress::query()->firstOrCreate(
             ['user_id' => $customer->id, 'label' => 'home'],
             [
@@ -88,7 +91,7 @@ class ReviewAccountsCommand extends Command
         );
         $customer->forceFill(['default_address_id' => $address->id])->save();
 
-        $captain = $this->account($driverPhone, UserType::Driver, 'حساب مراجعة المتجر — كابتن', $password);
+        $captain = $this->account($driverPhone, UserType::Driver, self::NAME_PREFIX.' — كابتن', $password);
         Driver::query()->firstOrCreate(
             ['user_id' => $captain->id],
             [
@@ -104,7 +107,7 @@ class ReviewAccountsCommand extends Command
             ],
         );
 
-        $owner = $this->account($placePhone, UserType::Restaurant, 'حساب مراجعة المتجر — مطعم', $password);
+        $owner = $this->account($placePhone, UserType::Restaurant, self::NAME_PREFIX.' — مطعم', $password);
         $restaurant = Restaurant::query()->updateOrCreate(
             ['slug' => 'store-review-demo-place'],
             [
@@ -157,8 +160,10 @@ class ReviewAccountsCommand extends Command
     {
         $existing = User::query()->where('phone', $phone)->first();
 
-        if ($existing !== null && $existing->type !== $type) {
-            throw new \RuntimeException("{$phone} already belongs to a {$existing->type->value} account; refusing to touch it.");
+        // A number on the allowlist that already belongs to a real person must never have
+        // its password reset by this command — only an account this command made is touched.
+        if ($existing !== null && (! str_starts_with((string) $existing->name, self::NAME_PREFIX) || $existing->type !== $type)) {
+            throw new \RuntimeException("{$phone} already belongs to an account this command did not create; refusing to touch it.");
         }
 
         $user = $existing ?? new User(['phone' => $phone]);

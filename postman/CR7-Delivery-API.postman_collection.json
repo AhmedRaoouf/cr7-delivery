@@ -7088,6 +7088,47 @@
                     ]
                 },
                 {
+                    "name": "Media",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/restaurant/media/picker",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/media/picker",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "media",
+                                        "picker"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Notifications",
                     "item": [
                         {
@@ -8326,6 +8367,165 @@
                                             "language": "json"
                                         }
                                     }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/restaurant/products/{product}/gallery",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/products/:product/gallery",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "gallery",
+                                            "type": "file",
+                                            "src": []
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "PUT /api/v1/restaurant/products/{product}/gallery/order",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/products/:product/gallery/order",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery",
+                                        "order"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"order\": [\n        \"own:<sha1>\",\n        \"own:<sha1>\"\n    ],\n    \"expected_version\": \"<gallery_version>\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/restaurant/products/{product}/gallery/{ref}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "restaurant"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{restaurant_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/restaurant/products/:product/gallery/:ref",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery",
+                                        ":ref"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "ref",
+                                            "value": ""
+                                        }
+                                    ]
                                 }
                             }
                         },
@@ -12700,6 +12900,678 @@
                     ]
                 },
                 {
+                    "name": "Lookups",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/lookups/{kind}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/lookups/:kind",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "lookups",
+                                        ":kind"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "kind",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Media",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/media",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/media",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/media/available",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/available",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "available"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/media/available",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/available",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "available"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/media/meta",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/meta",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "meta"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/media/picker",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/picker",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "picker"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/media/tags",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/tags",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "tags"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/media/tags",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/tags",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "tags"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "PATCH /api/v1/admin/media/tags/{tag}",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/tags/:tag",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "tags",
+                                        ":tag"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "tag",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/media/tags/{tag}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/tags/:tag",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        "tags",
+                                        ":tag"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "tag",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/media/{media}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/:media",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        ":media"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "media",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "PATCH /api/v1/admin/media/{media}",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/:media",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        ":media"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "media",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/media/{media}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/:media",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        ":media"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "media",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/media/{media}/restore",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/media/:media/restore",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "media",
+                                        ":media",
+                                        "restore"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "media",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Notifications",
                     "item": [
                         {
@@ -13819,6 +14691,178 @@
                     ]
                 },
                 {
+                    "name": "Otp",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/otp/blocks",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/otp/blocks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "otp",
+                                        "blocks"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/otp/blocks",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/otp/blocks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "otp",
+                                        "blocks"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/otp/blocks/{block}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/otp/blocks/:block",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "otp",
+                                        "blocks",
+                                        ":block"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "block",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/otp/usage",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/otp/usage",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "otp",
+                                        "usage"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     "name": "Pages",
                     "item": [
                         {
@@ -14319,6 +15363,289 @@
                                         "permissions"
                                     ],
                                     "variable": []
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Place Groups",
+                    "item": [
+                        {
+                            "name": "GET /api/v1/admin/place-groups",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups"
+                                    ],
+                                    "variable": []
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/place-groups",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups"
+                                    ],
+                                    "variable": []
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "GET /api/v1/admin/place-groups/{placeGroup}",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups/:placeGroup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups",
+                                        ":placeGroup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "placeGroup",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "PATCH /api/v1/admin/place-groups/{placeGroup}",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups/:placeGroup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups",
+                                        ":placeGroup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "placeGroup",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/place-groups/{placeGroup}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups/:placeGroup",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups",
+                                        ":placeGroup"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "placeGroup",
+                                            "value": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "PUT /api/v1/admin/place-groups/{placeGroup}/places",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/place-groups/:placeGroup/places",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "place-groups",
+                                        ":placeGroup",
+                                        "places"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "placeGroup",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -16863,6 +18190,183 @@
                                             "language": "json"
                                         }
                                     }
+                                }
+                            }
+                        },
+                        {
+                            "name": "POST /api/v1/admin/restaurants/{restaurant}/products/{product}/gallery",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/restaurants/:restaurant/products/:product/gallery",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "restaurants",
+                                        ":restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "restaurant",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "gallery",
+                                            "type": "file",
+                                            "src": []
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "PUT /api/v1/admin/restaurants/{restaurant}/products/{product}/gallery/order",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/restaurants/:restaurant/products/:product/gallery/order",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "restaurants",
+                                        ":restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery",
+                                        "order"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "restaurant",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"order\": [\n        \"own:<sha1>\",\n        \"own:<sha1>\"\n    ],\n    \"expected_version\": \"<gallery_version>\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "DELETE /api/v1/admin/restaurants/{restaurant}/products/{product}/gallery/{ref}",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept-Language",
+                                        "value": "ar"
+                                    },
+                                    {
+                                        "key": "X-App",
+                                        "value": "admin"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{admin_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/admin/restaurants/:restaurant/products/:product/gallery/:ref",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "admin",
+                                        "restaurants",
+                                        ":restaurant",
+                                        "products",
+                                        ":product",
+                                        "gallery",
+                                        ":ref"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "restaurant",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "product",
+                                            "value": ""
+                                        },
+                                        {
+                                            "key": "ref",
+                                            "value": ""
+                                        }
+                                    ]
                                 }
                             }
                         },

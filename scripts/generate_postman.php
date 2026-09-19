@@ -163,6 +163,9 @@ function fileFieldsFor(string $method, string $uri): ?array
         'PATCH api/v1/restaurant/categories/{category}' => ['image'],
         'POST api/v1/restaurant/products' => ['image', 'gallery'],
         'PATCH api/v1/restaurant/products/{product}' => ['image', 'gallery'],
+        // Batch 72 — append pictures to one product's gallery (files; `gallery_media[]` refs are text).
+        'POST api/v1/restaurant/products/{product}/gallery' => ['gallery'],
+        'POST api/v1/admin/restaurants/{restaurant}/products/{product}/gallery' => ['gallery'],
         'PATCH api/v1/restaurant/me' => ['logo', 'cover'],
         'PATCH api/v1/auth/me' => ['avatar'],
         'POST api/v1/admin/banners' => ['image_ar', 'image_en'],
@@ -242,6 +245,10 @@ function exampleBody(string $method, string $uri): ?array
         'POST api/v1/admin/restaurants/{restaurant}/direct-orders' => ['enabled' => true],
         'POST api/v1/admin/restaurants/{restaurant}/categories' => ['name_ar' => 'قسم', 'name_en' => 'Category'],
         'POST api/v1/admin/restaurants/{restaurant}/products' => ['menu_category_id' => 1, 'name_ar' => 'منتج', 'name_en' => 'Product', 'price' => 100],
+        // Batch 72 — the per-picture gallery API. `order` is the full list of `gallery_items[].ref`,
+        // `expected_version` the `gallery_version` you last read (omit it for last-write-wins).
+        'PUT api/v1/restaurant/products/{product}/gallery/order' => ['order' => ['own:<sha1>', 'own:<sha1>'], 'expected_version' => '<gallery_version>'],
+        'PUT api/v1/admin/restaurants/{restaurant}/products/{product}/gallery/order' => ['order' => ['own:<sha1>', 'own:<sha1>'], 'expected_version' => '<gallery_version>'],
         'POST api/v1/admin/drivers' => ['city_id' => 1, 'name' => 'Driver', 'phone' => '01088888880', 'vehicle_type' => 'motorcycle', 'earning_type' => 'fixed', 'earning_value' => 15, 'zone_ids' => [1]],
         'POST api/v1/admin/drivers/{driver}/status' => ['is_active' => true],
         'POST api/v1/admin/drivers/{driver}/earning-rule' => ['earning_type' => 'fixed', 'earning_value' => 20],

@@ -348,6 +348,8 @@ scope. A filter naming an out-of-scope id (`filter[restaurant_id]=<not mine>`) r
 | sort | `sort_order` (default), `name`, `price`, `sold_count`, `rating_avg`, `created_at` |
 | paging | 20 / 100, total: yes |
 
+Every row (and `show`, `store`, `update`) also carries **`gallery_items`** and **`gallery_version`** — see §1.27c.
+
 ### 1.22 `GET /admin/finance/drivers`
 
 | search | captain name (folded) / phone |
@@ -418,6 +420,51 @@ words that name a usage/source/visibility; `filter[usage]`, `filter[source]` (`u
 `date_from`/`date_to`, `sort` = `created_at|name|bytes|source|visibility`. `GET /admin/media/available` is filtered by
 `filter[source]` (`backend|app|dashboard`), `filter[usage]`, `filter[folder]`, `q`; `meta.folders` lists the folders.
 
+Every item these lists (and `GET /admin/media/{id}`, `GET /admin/media/picker` and `GET /restaurant/media/picker`)
+return carries **`thumb_url`** — the picture at ≈ 384 px wide; see §1.27c.
+
+### 1.27c Product gallery and thumbnails (batch 72)
+
+**Payload additions** (restaurant and admin product endpoints only — the customer API is unchanged):
+`gallery` stays the list of URLs, exactly as before; beside it
+
+```json
+"gallery_items": [{ "ref": "own:9f2c…", "url": "https://…/storage/products/a.jpg",
+                    "thumb_url": "https://…/img/384/storage/products/a.jpg?v=1789…", "position": 0 }],
+"gallery_version": "5d41402abc4b2a76b9719d911017c592"
+```
+
+`ref` = `own:` + `sha1(url)` (the picker's own-picture handle); `gallery_version` = md5 of the stored JSON list — it
+changes on any add, remove or reorder. The cap is **12** pictures per product (`Product::GALLERY_MAX`).
+
+**Per-picture endpoints** — restaurant `X-App: restaurant` (own products only, a rival's is `404`) and the admin mirror
+under `/admin/restaurants/{restaurant}/products/{product}/gallery…` (`permission:products.update`, scoped: a restaurant
+outside the admin's scope is `404`). Each answers the whole product (`200`, with `gallery_items` / `gallery_version`).
+
+| Request | Body | Effect |
+|---|---|---|
+| `POST …/gallery` | multipart `gallery[]` files (image, ≤ 5 MB) and/or `gallery_media[]` refs (`asset:N` / `own:…`, resolved as the picker does); optional `expected_version` | **appends** — refs first, then files, each in the order sent; a URL already present is skipped |
+| `DELETE …/gallery/{ref}?expected_version=` | — | removes that entry (it must be in **this** product's gallery); the file is deleted after the commit unless the library or another field still shows it |
+| `PUT …/gallery/order` | `{"order":["own:…",…],"expected_version":"…"}` | reorders; `order` must be **exactly** the current entries, each once. Never deletes |
+
+Errors: `422 validation_failed` (bad body, or > 12 in a replace), `422 media_not_allowed` (a ref the actor may not use),
+`422 gallery_full` (`meta.max`) on an append, `422 gallery_order_invalid` (not a permutation), `404 gallery_item_not_found`,
+`409 gallery_changed` — **`expected_version` was sent and is no longer current**; its `meta` carries the *current*
+`gallery_items` and `gallery_version` so the client can re-render without another request. Omitting `expected_version`
+is allowed and means last-write-wins. Every mutation runs in one transaction with the product row locked `FOR UPDATE`.
+
+**The replace path is unchanged for old clients** — `PATCH …/products/{id}` with `gallery[]` / `gallery_media[]` still
+replaces the gallery; what changed: the stored order is the order sent (refs first, then uploads), a picture named twice
+is stored once, > 12 is `422 validation_failed`, an empty `gallery` key no longer wipes it (`remove_gallery` does),
+dropped files are deleted after the commit (library / shared files are never deleted), and `expected_version` is honoured.
+
+**Thumbnails.** `thumb_url` is `<host>/img/384/<path>?v=<mtime>` — the existing `/img/{width}/…` resizer, now also
+serving `storage/…` (the uploads disk, so library and uploaded pictures), `media/system/…` and `shipped/…`, besides
+`catalog/…`. Widths are the allowlist `96·192·384·768·1200`; the resized file is written to `public/img/{width}/…` so the
+web server serves it from disk afterwards; `Cache-Control: public, max-age=31536000, immutable`. A picture that cannot be
+resized (remote host, GIF, missing file, a name the route would refuse) is answered **as its own `url`** — `thumb_url`
+is always fetchable. Deleting a file also removes its cached thumbnails.
+
 ### 1.28 Admin lists that are **not** paginated and take no filters (unchanged)
 
 `banners`, `cuisines`, `faqs`, `pages`, `home-popups` (`active_only`), `store-categories`
@@ -459,6 +506,8 @@ words that name a usage/source/visibility; `filter[usage]`, `filter[source]` (`u
 | filters | `menu_category_id` · `is_available`, `is_featured` (new) |
 | sort | `sort_order` (default), `name`, `price`, `sold_count`, `created_at` |
 | paging | **30** / 100, total: yes |
+
+Every row (and `show`, `store`, `update`) also carries **`gallery_items`** and **`gallery_version`** — see §1.27c.
 
 ### 2.4 `GET /restaurant/categories` — not paginated
 

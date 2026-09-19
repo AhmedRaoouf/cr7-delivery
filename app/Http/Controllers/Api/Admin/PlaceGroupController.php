@@ -6,10 +6,9 @@ use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
 use App\Models\MediaAudience;
 use App\Models\PlaceGroup;
-use App\Models\Restaurant;
 use App\Support\ApiResponse;
-use App\Support\Lists\ListSearch;
 use App\Support\AuditLogger;
+use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

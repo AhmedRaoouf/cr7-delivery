@@ -448,7 +448,7 @@ class MediaLibraryTest extends TestCase
         $this->assertSame([$grouped->id], $ids('q='.urlencode('الصيف')), 'assigned-group search');
         $this->assertContains($cover->id, $ids('q=cover'), 'usage word');
 
-        $this->assertEqualsCanonicalizing([$cover->id], $ids("filter[usage]=cover"));
+        $this->assertEqualsCanonicalizing([$cover->id], $ids('filter[usage]=cover'));
         $this->assertEqualsCanonicalizing([$cover->id], $ids("filter[place_id]={$place->id}"));
         $this->assertEqualsCanonicalizing([$grouped->id], $ids("filter[group_id]={$group->id}"));
         $this->assertEqualsCanonicalizing([$hidden->id], $ids('filter[visibility]=hidden'));

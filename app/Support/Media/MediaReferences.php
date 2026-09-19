@@ -2,6 +2,7 @@
 
 namespace App\Support\Media;
 
+use App\Support\FileUploader;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  * The library and the fields that use it are joined **only by the URL string**, so this is
  * the one place that can say «this file is still in use». Two callers depend on it:
  *
- *  - {@see \App\Support\FileUploader::deletePublic()} — a file two rows share (a library
+ *  - {@see FileUploader::deletePublic()} — a file two rows share (a library
  *    picture chosen for two products, an own picture reused) must survive the first row
  *    replacing it;
  *  - «delete the physical asset» — refused while anything still shows the picture.

@@ -28,6 +28,7 @@ use App\Support\Media\ShippedAssets;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -338,7 +339,7 @@ class MediaController extends Controller
     /**
      * «type:id» → name, for every audience on the given assets — three queries for the page.
      *
-     * @param  \Illuminate\Support\Collection<int, MediaAsset>  $assets
+     * @param  Collection<int, MediaAsset>  $assets
      * @return array<string, string>
      */
     private function audienceNames($assets): array

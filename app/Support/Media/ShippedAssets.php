@@ -2,7 +2,6 @@
 
 namespace App\Support\Media;
 
-use App\Enums\MediaUsage;
 use App\Enums\MediaVisibility;
 use App\Exceptions\ApiException;
 use App\Models\MediaAsset;

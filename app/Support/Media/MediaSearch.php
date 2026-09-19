@@ -9,6 +9,7 @@ use App\Models\MediaAudience;
 use App\Models\PlaceGroup;
 use App\Models\Restaurant;
 use App\Support\ArabicSearch;
+use App\Support\Lists\ListSearch;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
  * words that name its usage type, source and visibility.
  *
  * Words are AND-ed and each word is OR-ed across the haystacks, the same shape as
- * {@see \App\Support\Lists\ListSearch} — and wrapped in one group so it never escapes the
+ * {@see ListSearch} — and wrapped in one group so it never escapes the
  * caller's other filters.
  */
 final class MediaSearch

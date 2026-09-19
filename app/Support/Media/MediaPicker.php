@@ -3,13 +3,12 @@
 namespace App\Support\Media;
 
 use App\Enums\MediaField;
-use App\Enums\MediaUsage;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
 use App\Models\MediaAsset;
 use App\Models\Restaurant;
 use App\Models\User;
-use App\Support\Lists\ListSearch;
+use App\Support\ArabicSearch;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -56,8 +55,8 @@ final class MediaPicker
             $own = OwnImages::of($place)->where('usage', $usage);
 
             if ($term !== '') {
-                $needle = \App\Support\ArabicSearch::normalize($term);
-                $own = $own->filter(fn (array $o) => str_contains(\App\Support\ArabicSearch::normalize($o['name']), $needle));
+                $needle = ArabicSearch::normalize($term);
+                $own = $own->filter(fn (array $o) => str_contains(ArabicSearch::normalize($o['name']), $needle));
             }
 
             foreach ($own as $o) {

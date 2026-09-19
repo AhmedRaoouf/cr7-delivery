@@ -3,10 +3,11 @@
 namespace App\Support\Media;
 
 use App\Models\MediaAsset;
+use App\Support\FileUploader;
 
 /**
  * The «may this stored file be deleted» rule (doc 71 §6), asked by
- * {@see \App\Support\FileUploader::deletePublic()} before it touches a disk.
+ * {@see FileUploader::deletePublic()} before it touches a disk.
  */
 final class MediaFiles
 {

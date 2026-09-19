@@ -1,8 +1,11 @@
 <?php
 
+use App\Support\Media\MediaLibrarySync;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * D-160 — the reusable media library (doc 71).
@@ -100,28 +103,28 @@ return new class extends Migration
         // the roles that hold every permission.
         $now = now();
         foreach (['media.view', 'media.manage'] as $name) {
-            $id = \Illuminate\Support\Facades\DB::table('permissions')->where('name', $name)->where('guard_name', 'web')->value('id');
+            $id = DB::table('permissions')->where('name', $name)->where('guard_name', 'web')->value('id');
 
             if ($id === null) {
-                $id = \Illuminate\Support\Facades\DB::table('permissions')->insertGetId([
+                $id = DB::table('permissions')->insertGetId([
                     'name' => $name, 'guard_name' => 'web', 'group' => 'media', 'created_at' => $now, 'updated_at' => $now,
                 ]);
             }
 
-            $roleId = \Illuminate\Support\Facades\DB::table('roles')->where('name', 'super_admin')->value('id');
+            $roleId = DB::table('roles')->where('name', 'super_admin')->value('id');
 
             if ($roleId !== null) {
-                \Illuminate\Support\Facades\DB::table('role_has_permissions')->insertOrIgnore([
+                DB::table('role_has_permissions')->insertOrIgnore([
                     'permission_id' => $id, 'role_id' => $roleId,
                 ]);
             }
         }
 
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // The protected default picture and the system tags, from the registry — the same
         // idempotent call `php artisan media:sync` makes.
-        \App\Support\Media\MediaLibrarySync::run();
+        MediaLibrarySync::run();
     }
 
     public function down(): void

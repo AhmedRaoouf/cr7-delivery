@@ -180,6 +180,27 @@ and neither does CR7 — a timeout is `pending_verification` there, credits rese
 The plan is a **credit balance** (`GET /sms/balance`); `ADM-46`'s gateway card shows
 it. Keep `otp.daily_budget` / `otp.hourly_budget` below what the plan can pay for.
 
+### 6.0a Store-review numbers (`OTP_REVIEW_PHONES` / `OTP_REVIEW_CODE`)
+
+A Google Play or App Store reviewer cannot receive an SMS. **Do not use `otp.mode = test` for that** — it
+makes one code valid for every number. Two `.env` lines instead:
+
+```
+OTP_REVIEW_PHONES=01099900101,01099900102,01099900103   # customer, captain, place — in that order
+OTP_REVIEW_CODE=<six digits, not 123456>
+```
+
+then `php artisan config:cache`. Those numbers — and no others — are sent the fixed code with **no gateway
+call** (ZADX is not billed, the send budget does not count it: `sms_sends.kind = review`), logged as
+`[OTP][review]` in the daily log (never with the code), never echoed in a response. Never covered:
+a password change, an address's second number, any account that is an admin. Both lines empty = off;
+a code that is not six digits also turns it off. `App\Support\ReviewAccess` is the whole feature.
+
+`php artisan cr7:review-accounts --password='…'` creates/reset the three accounts on those numbers
+(idempotent; it refuses a number that already belongs to an account it did not create). The demo place
+is `is_active = false` — no customer can see it, no order can reach it — and dispatch leaves the review
+captain out. Remove the two `.env` lines and delete the three users when review is over.
+
 ### 6.1 Prove the gateway without moving a customer
 
 `cr7:sms-doctor` sends through the gateway's own channel directly (`ZadxChannel` when

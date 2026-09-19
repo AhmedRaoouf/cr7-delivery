@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Media\ProductGallery;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +11,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Product extends Model
 {
     use SoftDeletes;
+
+    /** How many pictures one product's gallery may hold — the single place the cap lives. */
+    public const GALLERY_MAX = 12;
 
     protected $fillable = [
         'restaurant_id', 'menu_category_id', 'name_ar', 'name_en',
@@ -31,6 +35,31 @@ class Product extends Model
             'is_available' => 'boolean',
             'is_featured' => 'boolean',
         ];
+    }
+
+    /**
+     * Batch 72 — the per-picture view of `gallery`: `[{ref, url, thumb_url, position}]`.
+     *
+     * Appended **per instance** ({@see self::withGalleryMeta()}) and only on the
+     * restaurant and admin management payloads; the customer API never carries it.
+     *
+     * @return list<array{ref: string, url: string, thumb_url: string, position: int}>
+     */
+    public function getGalleryItemsAttribute(): array
+    {
+        return ProductGallery::items($this);
+    }
+
+    /** The optimistic-lock token of `gallery` — changes whenever the list or its order does. */
+    public function getGalleryVersionAttribute(): string
+    {
+        return ProductGallery::version(ProductGallery::urls($this));
+    }
+
+    /** Publish `gallery_items` and `gallery_version` on this instance's JSON. */
+    public function withGalleryMeta(): static
+    {
+        return $this->append(['gallery_items', 'gallery_version']);
     }
 
     public function restaurant(): BelongsTo

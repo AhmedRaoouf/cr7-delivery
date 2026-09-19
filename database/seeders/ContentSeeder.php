@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Faq;
 use App\Models\StaticPage;
+use App\Support\Legal\LegalContent;
 use Illuminate\Database\Seeder;
 
 /**
@@ -11,9 +12,9 @@ use Illuminate\Database\Seeder;
  * Without these rows CUS-45, CUS-46 and CUS-47 return 404.
  *
  * Modern Standard Arabic only (D-44), western digits with an LTR isolate (doc 13 §4).
- * The copy below is a working draft the operator should have reviewed before launch —
- * it is not legal advice, and the commission and cancellation numbers in it must match
- * whatever is finally agreed.
+ * The copy is a working draft the operator should have reviewed before launch — it is not
+ * legal advice. `terms` and `privacy` live in `LegalContent` (batch 72) and are shared with
+ * the public web pages; `about` and the FAQ are below.
  */
 class ContentSeeder extends Seeder
 {
@@ -34,78 +35,9 @@ class ContentSeeder extends Seeder
     private function pages(): array
     {
         return [
-            [
-                'slug' => 'terms',
-                'title_ar' => 'الشروط والأحكام',
-                'title_en' => 'Terms and conditions',
-                'body_ar' => <<<'AR'
-                    ## استخدام التطبيق
-                    باستخدامك تطبيق CR7 Delivery فإنك توافق على هذه الشروط. التطبيق وسيط بين العميل والمطعم والكابتن، ويتولى توصيل الطلب وتحصيل قيمته.
-
-                    ## الطلبات والأسعار
-                    الأسعار المعروضة هي أسعار المطعم وقت الطلب، وتشمل قيمة الأصناف. تُضاف إليها رسوم التوصيل ورسوم الخدمة، ويظهر كل بند في ملخّص الطلب قبل التأكيد.
-                    لا يُعتمد الطلب إلا بعد رد المطعم عليه وتأكيدك أنت للمبلغ النهائي.
-
-                    ## الإلغاء
-                    يمكنك إلغاء الطلب قبل أن يبدأ المطعم في التحضير. بعد بدء التحضير لا يمكن الإلغاء من داخل التطبيق، ويمكنك التواصل مع خدمة العملاء.
-
-                    ## الدفع
-                    الدفع نقدًا عند الاستلام أو تحويلًا عبر فودافون كاش أو إنستا باي. في حالة التحويل يجب رفع إثبات الدفع خلال المهلة المحددة في الطلب.
-
-                    ## المسؤولية
-                    المطعم مسؤول عن جودة الطعام وسلامته. المنصة مسؤولة عن التوصيل وعن معالجة الشكاوى المتعلقة به.
-                    AR,
-                'body_en' => <<<'EN'
-                    ## Using the app
-                    By using CR7 Delivery you agree to these terms. The app is an intermediary between the customer, the restaurant and the captain; it handles delivery and collects payment.
-
-                    ## Orders and prices
-                    Prices shown are the restaurant's price at the time of ordering and cover the items only. A delivery fee and a service fee are added on top, and every line appears in the order summary before you confirm.
-                    An order is not final until the restaurant has answered it and you have confirmed the final amount.
-
-                    ## Cancellation
-                    You may cancel before the restaurant starts preparing. After that the app cannot cancel it — contact support.
-
-                    ## Payment
-                    Cash on delivery, or a transfer via Vodafone Cash or InstaPay. For a transfer, proof of payment must be uploaded within the deadline shown on the order.
-
-                    ## Liability
-                    The restaurant is responsible for the quality and safety of the food. The platform is responsible for delivery and for handling delivery-related complaints.
-                    EN,
-                'is_active' => true,
-            ],
-            [
-                'slug' => 'privacy',
-                'title_ar' => 'سياسة الخصوصية',
-                'title_en' => 'Privacy policy',
-                'body_ar' => <<<'AR'
-                    ## ما الذي نجمعه
-                    الاسم ورقم الهاتف والبريد الإلكتروني إن أضفته، وعناوين التوصيل التي تحفظها، وسجل طلباتك.
-
-                    ## الموقع الجغرافي
-                    يُستخدم موقعك لتحديد المطاعم التي تصل إليك ولحساب رسوم التوصيل ولتتبّع الطلب أثناء الرحلة. يمكنك رفض الإذن، وعندها تختار عنوانك يدويًا.
-
-                    ## مع من نشاركه
-                    يصل المطعم اسمك الأول وأصناف طلبك. يصل الكابتن اسمك وعنوانك ورقم هاتفك أثناء الرحلة فقط. لا نبيع بياناتك لأي جهة.
-
-                    ## الاحتفاظ والحذف
-                    تُحفظ بيانات الطلبات للأغراض المحاسبية. يمكنك طلب حذف حسابك من داخل التطبيق، ويُحذف ما لا يلزم الاحتفاظ به قانونًا.
-                    AR,
-                'body_en' => <<<'EN'
-                    ## What we collect
-                    Your name, phone number, email if you add one, the delivery addresses you save, and your order history.
-
-                    ## Location
-                    Your location is used to find restaurants that reach you, to price delivery, and to track an order in transit. You may decline the permission and pick your address manually instead.
-
-                    ## Who we share it with
-                    The restaurant receives your first name and the items you ordered. The captain receives your name, address and phone number, for the duration of the trip only. We do not sell your data.
-
-                    ## Retention and deletion
-                    Order records are kept for accounting purposes. You can request account deletion from inside the app; everything not legally required to keep is removed.
-                    EN,
-                'is_active' => true,
-            ],
+            // Batch 72 — `terms` and `privacy` come from `LegalContent`, the one source the public
+            // web pages share. ⚠️ A human must review that text before store submission.
+            ...array_map(fn (array $page) => $page + ['is_active' => true], LegalContent::inAppPages()),
             [
                 'slug' => 'about',
                 'title_ar' => 'عن CR7 Delivery',

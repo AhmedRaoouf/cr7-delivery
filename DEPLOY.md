@@ -337,6 +337,32 @@ chmod 600 storage/app/firebase/service-account.json
 
 ---
 
+## 9c. The public legal pages and the in-app copy (batch 72)
+
+`/privacy`, `/terms`, `/delete-account` and `/support` are served by the API's own host (Arabic, then English, one URL
+each) — the URLs to paste into the Google Play and App Store listings. Their text is
+`app/Support/Legal/LegalContent.php`. ⚠️ **A human must review that text before store submission** (entity name, retention
+promises, the 30-day erasure window, the governing-law sentence, the age limit).
+
+The contact block on each page reads the `support.email`, `support.whatsapp`, `support.phone`, `support.phone_alt` and
+`support.hours_note` settings — check them on the panel first: the seeded values are placeholders.
+
+`GET /pages/privacy` and `/pages/terms` (the in-app copy) come from the `static_pages` table, which a server seeded
+before batch 72 still holds in its old, shorter form. After the deploy:
+
+```bash
+php artisan content:sync-legal      # rewrites the terms + privacy rows only (not about, not the FAQ)
+```
+
+**Account deletion (written requests).** `DELETE /auth/account` is customers only and refuses with `409
+active_order_blocks_deletion` while an order, errand or scheduled order is open. A customer who cannot open the app asks
+in writing; once the phone number is verified the office runs `php artisan cr7:erase-account <phone>` — the same erasure
+the app button runs. Captain and restaurant deletions stay manual (wallet, documents, settlements): the public page promises
+them within 30 days, which is an **operator commitment**, not something the code enforces.
+
+No migration. The `/img/{width}/…` resizer now also reads the uploads disk, so `public/img/` must stay writable by the
+web user (it already had to be for the catalogue art).
+
 ## 10. Telescope
 
 Telescope watches every request the API answers — the customer app, the captain

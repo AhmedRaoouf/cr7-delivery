@@ -125,8 +125,11 @@ class FileUploader
      * Best effort by design: rows seeded with `/catalog/...` URLs point at files this
      * application never uploaded, and a delete must not fail because the old image was
      * not ours to remove.
+     *
+     * `$holders` — see {@see MediaFiles::isProtected()}: pass `0` when the row that used to
+     * name the file has already been saved without it (a delete after a commit).
      */
-    public static function deletePublic(?string $url): void
+    public static function deletePublic(?string $url, int $holders = 1): void
     {
         if ($url === null || $url === '') {
             return;
@@ -144,12 +147,13 @@ class FileUploader
         // Doc 71 — a library file is never deleted by whoever stopped using it, and neither
         // is a file another field still shows. Replacing a product's picture must not take
         // a shared one from the next product.
-        if (MediaFiles::isProtected($disk, $path, $url)) {
+        if (MediaFiles::isProtected($disk, $path, $url, $holders)) {
             return;
         }
 
         try {
             Storage::disk($disk)->delete($path);
+            ImageResizer::forget(ImageResizer::DISK_ROOT.'/'.$path);
         } catch (\Throwable $e) {
             Log::warning('upload delete failed', ['disk' => $disk, 'path' => $path, 'error' => $e->getMessage()]);
         }

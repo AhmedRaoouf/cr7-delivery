@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LegalPageController;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\FileUploader;
@@ -114,14 +115,26 @@ Route::withoutMiddleware([
 
         abort_if($file === null, 404);
 
+        // Typed by extension, never by sniffing the bytes (as `/storage/{path}` above): a
+        // resize of an upload is served from the API's own origin.
+        $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', 'avif' => 'image/avif'];
+        $type = $types[strtolower(pathinfo($file, PATHINFO_EXTENSION))] ?? null;
+
+        abort_if($type === null, 404);
+
         return response()->file($file, [
+            'Content-Type' => $type,
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
             // A year: the URL carries a `?v=` fingerprint that changes with the
             // source, so a stale copy cannot outlive the picture it is of.
             'Cache-Control' => 'public, max-age=31536000, immutable',
         ]);
     })
         ->where('width', implode('|', ImageResizer::WIDTHS))
-        ->where('path', 'catalog/[A-Za-z0-9/_\-\.]+')
+        // Batch 72 — beyond the catalogue: the media library's own art (`media/system`), the
+        // shipped app and dashboard pictures, and the uploads disk (`storage/…`).
+        ->where('path', '(?:catalog|media/system|shipped|storage)/[A-Za-z0-9/_\-\.]+') // = ImageResizer::ROUTE_PATTERN
         ->name('images.resized');
 
     /**
@@ -180,6 +193,18 @@ Route::withoutMiddleware([
             'deepLink' => "cr7delivery://p/{$product->id}",
         ]);
     })->whereNumber('product')->name('share.product');
+
+    /**
+     * Batch 72 — the public legal pages the Google Play and App Store listings link to.
+     *
+     * Arabic then English on one URL (no language negotiation: the CDN strips `Vary`), no
+     * external asset, cacheable for an hour. The text is `App\Support\Legal\LegalContent`.
+     */
+    foreach (['privacy', 'terms', 'delete-account', 'support'] as $legalPage) {
+        Route::get('/'.$legalPage, [LegalPageController::class, 'show'])
+            ->defaults('page', $legalPage)
+            ->name('legal.'.$legalPage);
+    }
 
     /**
      * The iOS half of the App Links proof.

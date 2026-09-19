@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Concerns\FiltersLists;
-use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductRequest;
@@ -41,6 +40,7 @@ class ProductController extends Controller
         ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
 
         $products = $sort->apply($query, ['name' => 'products.name_ar'])->paginate($params->perPage());
+        $products->getCollection()->each->withGalleryMeta();
 
         return $this->paginated($products, sort: $sort);
     }
@@ -49,33 +49,25 @@ class ProductController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        return ApiResponse::success($product->load('optionGroups.options'));
+        return ApiResponse::success($product->load('optionGroups.options')->withGalleryMeta());
     }
 
     public function store(StoreProductRequest $request, Restaurant $restaurant): JsonResponse
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products', media: MediaField::ProductImage);
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', media: MediaField::ProductGallery);
+        $product = $this->createProductWithGallery($restaurant, $request, $request->validated());
 
-        $product = $restaurant->products()->create($data);
-
-        return ApiResponse::success($product, 'تم إنشاء المنتج بنجاح', status: 201);
+        return ApiResponse::success($product->withGalleryMeta(), 'تم إنشاء المنتج بنجاح', status: 201);
     }
 
     public function update(UpdateProductRequest $request, Restaurant $restaurant, Product $product): JsonResponse
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product, MediaField::ProductImage);
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product, MediaField::ProductGallery);
+        $product = $this->updateProductWithGallery($request, $product, $request->validated());
 
-        $product->update($data);
-
-        return ApiResponse::success($product, 'تم تحديث المنتج بنجاح');
+        return ApiResponse::success($product->withGalleryMeta(), 'تم تحديث المنتج بنجاح');
     }
 
     public function toggleAvailability(Request $request, Restaurant $restaurant, Product $product): JsonResponse

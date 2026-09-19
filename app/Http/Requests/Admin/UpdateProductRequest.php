@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\ValidatesProductGallery;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateProductRequest extends FormRequest
 {
+    use ValidatesProductGallery;
+
     public function authorize(): bool
     {
         return $this->user()->can('products.update');
@@ -22,8 +25,7 @@ class UpdateProductRequest extends FormRequest
             'description_ar' => ['nullable', 'string'],
             'description_en' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
-            'gallery' => ['nullable', 'array'],
-            'gallery.*' => ['image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            ...$this->galleryRules(),
             'price' => ['sometimes', 'required', 'numeric', 'min:0'],
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],

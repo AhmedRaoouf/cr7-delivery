@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Concerns;
 use App\Enums\MediaField;
 use App\Enums\UserType;
 use App\Exceptions\ApiException;
+use App\Models\Product;
 use App\Models\Restaurant;
-use App\Support\Media\MediaPicker;
 use App\Support\FileUploader;
+use App\Support\Media\MediaPicker;
+use App\Support\Media\ProductGallery;
 use App\Support\PdfPages;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -68,6 +70,24 @@ trait HandlesUploads
         return $data;
     }
 
+    /**
+     * The `gallery` column of a product, from `gallery[]` uploads and `gallery_media[]` refs.
+     *
+     * **Replace semantics** (unchanged, and what every client older than batch 72 relies on):
+     * naming any picture replaces the whole gallery, and naming none leaves it alone. What
+     * batch 72 fixed around it:
+     *
+     *  - the stored order is the order sent — the picked refs in the order given, then the
+     *    uploaded files — and a picture named twice is stored once;
+     *  - more than {@see Product::GALLERY_MAX} pictures is a `422 validation_failed`;
+     *  - a `gallery` key that arrived empty (`gallery=` in a multipart body reads as null) no
+     *    longer wipes the stored list — `remove_gallery` is the only way to empty it;
+     *  - nothing is deleted here. Dropped files are removed after the commit by
+     *    {@see ProductGallery::locked()}, and `$stored` reports the files this call wrote so
+     *    a failed write can take them back.
+     *
+     * @param  list<string>  $stored  filled with the URLs of the files uploaded by this call
+     */
     private function withPublicGallery(
         array $data,
         Request $request,
@@ -75,8 +95,9 @@ trait HandlesUploads
         string $folder,
         ?Model $existing = null,
         ?MediaField $media = null,
+        array &$stored = [],
     ): array {
-        unset($data['remove_'.$field]);
+        unset($data['remove_'.$field], $data[$field.'_media'], $data['expected_version']);
 
         // Doc 71 — `<field>_media[]` refs from the picker, alongside any uploads.
         $picked = [];
@@ -89,25 +110,91 @@ trait HandlesUploads
             }
         }
 
-        if ($request->hasFile($field) || $picked !== []) {
-            $data[$field] = [
-                ...($request->hasFile($field)
-                    ? array_map(fn ($file) => FileUploader::storePublic($file, $folder), $request->file($field))
-                    : []),
-                ...$picked,
-            ];
+        $picked = array_values(array_unique($picked));
+        $files = $request->hasFile($field) ? array_values((array) $request->file($field)) : [];
+
+        if ($files !== [] || $picked !== []) {
+            if (count($picked) + count($files) > Product::GALLERY_MAX) {
+                throw ProductGallery::tooMany();
+            }
+
+            $urls = $picked;
+
+            foreach ($files as $file) {
+                $stored[] = $urls[] = FileUploader::storePublic($file, $folder);
+            }
+
+            $data[$field] = array_values(array_unique($urls));
 
             return $data;
         }
 
         if ($this->wantsRemoval($request, $field)) {
-            foreach ((array) ($existing?->getAttribute($field) ?? []) as $url) {
-                FileUploader::deletePublic(is_string($url) ? $url : null);
-            }
             $data[$field] = [];
+
+            return $data;
         }
 
+        // Nothing said about the gallery: leave the column alone.
+        unset($data[$field]);
+
         return $data;
+    }
+
+    /** Whether this request names a gallery write at all (so `expected_version` applies). */
+    private function touchesGallery(Request $request): bool
+    {
+        return $request->hasFile('gallery')
+            || $this->wantsRemoval($request, 'gallery')
+            || array_filter((array) $request->input('gallery_media', []), fn ($ref) => is_string($ref) && $ref !== '') !== [];
+    }
+
+    /**
+     * A new product, its gallery written by {@see self::withPublicGallery()}.
+     *
+     * @param  array<string, mixed>  $data  the validated request
+     */
+    private function createProductWithGallery(Restaurant $restaurant, Request $request, array $data): Product
+    {
+        $stored = [];
+
+        try {
+            $data = $this->withPublicUpload($data, $request, 'image', 'products', media: MediaField::ProductImage);
+            $data = $this->withPublicGallery($data, $request, 'gallery', 'products', media: MediaField::ProductGallery, stored: $stored);
+
+            return $restaurant->products()->create($data);
+        } catch (\Throwable $e) {
+            foreach ($stored as $url) {
+                FileUploader::deletePublic($url, holders: 0);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * A product PATCH: the whole update in one transaction under a row lock, a stale
+     * `expected_version` refused with `409 gallery_changed`, and the pictures the update
+     * dropped deleted after the commit.
+     *
+     * @param  array<string, mixed>  $data  the validated request
+     */
+    private function updateProductWithGallery(Request $request, Product $product, array $data): Product
+    {
+        $stored = [];
+
+        return ProductGallery::locked(
+            $product,
+            $request->input('expected_version'),
+            $this->touchesGallery($request),
+            $stored,
+            function (Product $locked) use ($request, $data, &$stored): void {
+                $data = $this->withPublicUpload($data, $request, 'image', 'products', $locked, MediaField::ProductImage);
+                $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $locked, MediaField::ProductGallery, $stored);
+
+                $locked->update($data);
+            },
+        );
     }
 
     /**

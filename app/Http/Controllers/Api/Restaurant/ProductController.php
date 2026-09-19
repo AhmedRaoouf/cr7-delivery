@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Restaurant;
 
 use App\Http\Controllers\Concerns\FiltersLists;
-use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
@@ -41,6 +40,7 @@ class ProductController extends Controller
         ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
 
         $products = $sort->apply($query, ['name' => 'products.name_ar'])->paginate($params->perPage(30));
+        $products->getCollection()->each->withGalleryMeta();
 
         return $this->paginated($products, sort: $sort);
     }
@@ -49,33 +49,25 @@ class ProductController extends Controller
     {
         $this->ensureOwned($request, $product);
 
-        return ApiResponse::success($product->load('optionGroups.options'));
+        return ApiResponse::success($product->load('optionGroups.options')->withGalleryMeta());
     }
 
     public function store(StoreRestaurantProductRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
-        $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products', media: MediaField::ProductImage);
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', media: MediaField::ProductGallery);
+        $product = $this->createProductWithGallery($restaurant, $request, $request->validated());
 
-        $product = $restaurant->products()->create($data);
-
-        return ApiResponse::success($product, 'تم إنشاء المنتج بنجاح', status: 201);
+        return ApiResponse::success($product->withGalleryMeta(), 'تم إنشاء المنتج بنجاح', status: 201);
     }
 
     public function update(StoreRestaurantProductRequest $request, Product $product): JsonResponse
     {
         $this->ensureOwned($request, $product);
 
-        $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product, MediaField::ProductImage);
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product, MediaField::ProductGallery);
+        $product = $this->updateProductWithGallery($request, $product, $request->validated());
 
-        $product->update($data);
-
-        return ApiResponse::success($product->fresh(), 'تم تحديث المنتج بنجاح');
+        return ApiResponse::success($product->fresh()->withGalleryMeta(), 'تم تحديث المنتج بنجاح');
     }
 
     public function destroy(Request $request, Product $product): JsonResponse

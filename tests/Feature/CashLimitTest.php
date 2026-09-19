@@ -23,12 +23,14 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Operator, 2026-09-18: «عايز لو الاوردر فوق الالف جنيه لازم تحويل فودافون كاش او انستا باي».
+ * Operator, 2026-09-19 (D-158, supersedes D-154): «عايز الكاش يتمنع لو الإجمالي أكبر من أو
+ * يساوي الحد».
  *
  * Every door a customer's basket can be paid through, checked against
  * `payment.cash_max_total`: the quote, placing, scheduling (and its release), and
  * «ادفع نقدًا بدلًا من ذلك» on a transfer already under way. The amount is always the
- * group's `total` as the pricer computes it, and «فوق الألف» is strictly above.
+ * group's `total` as the pricer computes it, and the limit itself is refused, not just what
+ * is above it.
  *
  * The fixture's arithmetic: one place, a delivery fee of ‪20‬ and a service fee of ‪5‬, the
  * first-order perk off — so a single product at ‪975‬ is a total of exactly ‪1000‬.
@@ -37,7 +39,7 @@ class CashLimitTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const AR_REFUSAL = "الدفع نقدًا متاح للطلبات حتى \u{202A}1,000\u{202C} ج.م — اختر فودافون كاش أو إنستا باي";
+    private const AR_REFUSAL = "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,000\u{202C} ج.م — اختر فودافون كاش أو إنستا باي";
 
     private User $customer;
 
@@ -66,23 +68,42 @@ class CashLimitTest extends TestCase
     public function test_the_default_limit_is_one_thousand(): void
     {
         $this->assertSame(1000.0, CashLimit::max());
-        $this->assertTrue(CashLimit::allows(1000));
+        $this->assertTrue(CashLimit::allows(999.99));
+        $this->assertFalse(CashLimit::allows(1000));
         $this->assertFalse(CashLimit::allows(1000.01));
     }
 
-    public function test_cash_at_exactly_the_limit_is_taken(): void
+    public function test_cash_one_piastre_under_the_limit_is_taken(): void
+    {
+        $this->basketOf(974.99);
+
+        $quote = $this->quote('cash')->assertOk();
+        $this->assertEquals(999.99, $quote->json('data.total'));
+        $this->assertSame([], $quote->json('data.blockers'));
+
+        $this->place('cash', 'under-the-limit')->assertCreated();
+
+        $group = OrderGroup::query()->sole();
+        $this->assertSame('cash', $group->payment_method->value);
+        $this->assertEquals(999.99, (float) $group->total);
+    }
+
+    public function test_cash_at_exactly_the_limit_is_refused(): void
     {
         $this->basketOf(975);
 
         $quote = $this->quote('cash')->assertOk();
         $this->assertEquals(1000, $quote->json('data.total'));
-        $this->assertSame([], $quote->json('data.blockers'));
+        $this->assertSame('cash_not_allowed', $quote->json('data.blockers.0.code'));
+        $this->assertSame(self::AR_REFUSAL, $quote->json('data.blockers.0.message'));
+        $this->assertEquals(1000, $quote->json('data.blockers.0.cash_max_total'));
+        $this->assertEquals(1000, $quote->json('data.blockers.0.total'));
 
-        $this->place('cash', 'at-the-limit')->assertCreated();
+        $this->place('cash', 'at-the-limit')
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'cash_not_allowed');
 
-        $group = OrderGroup::query()->sole();
-        $this->assertSame('cash', $group->payment_method->value);
-        $this->assertEquals(1000, (float) $group->total);
+        $this->assertSame(0, OrderGroup::query()->count());
     }
 
     public function test_cash_one_piastre_above_the_limit_is_refused_by_name_with_the_numbers(): void
@@ -213,8 +234,8 @@ class CashLimitTest extends TestCase
 
     public function test_a_scheduled_cash_order_is_judged_again_when_it_is_released(): void
     {
-        // Taken at 1000 when it was scheduled; the limit is lowered before its time.
-        $this->basketOf(975);
+        // Taken at 975 when it was scheduled; the limit is lowered before its time.
+        $this->basketOf(950);
         $this->schedule('cash')->assertCreated();
 
         Settings::set(CashLimit::SETTING, 500, 'payment');
@@ -277,7 +298,7 @@ class CashLimitTest extends TestCase
 
         // Not «اختر فودافون كاش» to someone the checkout will refuse it to.
         $this->assertSame(
-            "الدفع نقدًا متاح للطلبات حتى \u{202A}1,000\u{202C} ج.م — قلّل محتوى السلة لإتمام الطلب",
+            "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,000\u{202C} ج.م — قلّل محتوى السلة لإتمام الطلب",
             $quote->json('data.blockers.0.message'),
         );
     }
@@ -290,13 +311,13 @@ class CashLimitTest extends TestCase
 
         $this->quote('cash')->assertOk()->assertJsonPath(
             'data.blockers.0.message',
-            "الدفع نقدًا متاح للطلبات حتى \u{202A}1,250.50\u{202C} ج.م — اختر فودافون كاش",
+            "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,250.50\u{202C} ج.م — اختر فودافون كاش",
         );
 
         $this->withHeader('Accept-Language', 'en')
             ->postJson('/api/v1/orders', ['address_id' => $this->address->id, 'payment_method' => 'cash'], ['Idempotency-Key' => 'english'])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Cash is available for orders up to 1,250.50 EGP — choose Vodafone Cash');
+            ->assertJsonPath('message', 'Cash is available for orders under 1,250.50 EGP — choose Vodafone Cash');
     }
 
     // ------------------------------------------ «ادفع نقدًا بدلًا من ذلك»
@@ -314,7 +335,7 @@ class CashLimitTest extends TestCase
         $this->postJson("/api/v1/orders/{$group->id}/payment/method")
             ->assertStatus(422)
             ->assertJsonPath('error', 'cash_not_allowed')
-            ->assertJsonPath('message', "الدفع نقدًا متاح للطلبات حتى \u{202A}1,000\u{202C} ج.م — أكمل التحويل لإتمام طلبك")
+            ->assertJsonPath('message', "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,000\u{202C} ج.م — أكمل التحويل لإتمام طلبك")
             ->assertJsonPath('meta.cash_max_total', 1000)
             ->assertJsonPath('meta.total', 1225);
 

@@ -7,11 +7,12 @@ use App\Exceptions\ApiException;
 use App\Models\User;
 
 /**
- * Operator, 2026-09-18: «عايز لو الاوردر فوق الالف جنيه لازم تحويل فودافون كاش او انستا باي».
+ * Operator, 2026-09-19 (D-158, supersedes D-154): «عايز الكاش يتمنع لو الإجمالي أكبر من أو
+ * يساوي الحد — يعني أوردر ‪1000‬ جنيه أو أكتر لازم فودافون كاش أو إنستا باي». D-154 had drawn
+ * the line one piastre later — a basket of exactly the limit still paid cash.
  *
- * A basket whose total is **above** `payment.cash_max_total` cannot be paid in cash — the
- * customer transfers by Vodafone Cash or InstaPay instead. A basket of exactly the limit
- * still may, because «فوق الألف» is above a thousand, not at it. `0` means no limit (D-131:
+ * A basket whose total is **at or above** `payment.cash_max_total` cannot be paid in cash —
+ * the customer transfers by Vodafone Cash or InstaPay instead. `0` means no limit (D-131:
  * zero is a value the operator chose, never a placeholder).
  *
  * The amount compared is the one payment D-05 describes: the order group's `total` —
@@ -40,12 +41,12 @@ final class CashLimit
         return round(max(0.0, SettingsCatalog::float(self::SETTING)), 2);
     }
 
-    /** Whether cash may pay [total] — strictly above the limit is refused. */
+    /** Whether cash may pay [total] — at or above the limit is refused (D-158). */
     public static function allows(float $total): bool
     {
         $max = self::max();
 
-        return $max <= 0 || round($total, 2) - $max < 0.005;
+        return $max <= 0 || $max - round($total, 2) > 0.005;
     }
 
     /**
@@ -85,7 +86,7 @@ final class CashLimit
     }
 
     /**
-     * «الدفع نقدًا متاح للطلبات حتى ‪1,000‬ ج.م — اختر فودافون كاش أو إنستا باي».
+     * «الدفع نقدًا متاح للطلبات أقل من ‪1,000‬ ج.م — اختر فودافون كاش أو إنستا باي».
      *
      * Names only the transfers the customer can actually use. With none — both switched
      * off, or the account held to cash (`users.cash_only_until`) — it says the one thing
@@ -130,14 +131,14 @@ final class CashLimit
         ));
     }
 
-    /** «الدفع نقدًا متاح للطلبات حتى ‪1,000‬ ج.م». */
+    /** «الدفع نقدًا متاح للطلبات أقل من ‪1,000‬ ج.م». */
     private static function lead(): string
     {
         $amount = self::amount(self::max());
 
         return self::english()
-            ? "Cash is available for orders up to {$amount} EGP"
-            : "الدفع نقدًا متاح للطلبات حتى \u{202A}{$amount}\u{202C} ج.م";
+            ? "Cash is available for orders under {$amount} EGP"
+            : "الدفع نقدًا متاح للطلبات أقل من \u{202A}{$amount}\u{202C} ج.م";
     }
 
     /** `1,000` for a round limit, `1,250.50` for one that is not. */

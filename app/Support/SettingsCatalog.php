@@ -97,14 +97,15 @@ final class SettingsCatalog
                 'fields' => [
                     ['key' => 'payment.cash_enabled', 'type' => 'bool', 'default' => true, 'public' => true,
                         'label_ar' => 'الدفع عند الاستلام', 'label_en' => 'Cash on delivery'],
-                    // Operator, 2026-09-18: «عايز لو الاوردر فوق الالف جنيه لازم تحويل فودافون
-                    // كاش او انستا باي». Read by `CashLimit`. Zero is a value here (D-131): it
-                    // means «no limit», never «not set yet».
+                    // Operator, 2026-09-19 (D-158): «عايز الكاش يتمنع لو الإجمالي أكبر من أو
+                    // يساوي الحد» — supersedes D-154's one-piastre-later line. Read by
+                    // `CashLimit`. Zero is a value here (D-131): it means «no limit», never
+                    // «not set yet».
                     ['key' => 'payment.cash_max_total', 'type' => 'decimal', 'default' => 1000, 'min' => 0, 'max' => 100000,
                         'suffix_ar' => 'ج.م', 'suffix_en' => 'EGP', 'public' => true,
                         'label_ar' => 'أقصى قيمة للطلب عند الدفع نقدًا', 'label_en' => 'Largest order payable in cash',
-                        'helper_ar' => 'الطلب الذي يتجاوز هذه القيمة يُدفع بفودافون كاش أو إنستا باي فقط، والطلب المساوي لها يُقبل نقدًا. صفر يلغي الحد.',
-                        'helper_en' => 'An order above this amount can be paid only by Vodafone Cash or InstaPay; an order of exactly this amount may still be paid in cash. Zero removes the limit.'],
+                        'helper_ar' => 'الطلب الذي يساوي هذه القيمة أو يتجاوزها يُدفع بفودافون كاش أو إنستا باي فقط. صفر يلغي الحد.',
+                        'helper_en' => 'An order at or above this amount can be paid only by Vodafone Cash or InstaPay. Zero removes the limit.'],
                     ['key' => 'payment.vodafone_cash_enabled', 'type' => 'bool', 'default' => true, 'public' => true,
                         'label_ar' => 'فودافون كاش', 'label_en' => 'Vodafone Cash'],
                     ['key' => 'payment.vodafone_cash_number', 'type' => 'phone', 'default' => null, 'nullable' => true, 'public' => true,

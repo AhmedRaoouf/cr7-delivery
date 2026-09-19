@@ -79,10 +79,11 @@ final class LegalContent
                 الدفع نقدًا عند الاستلام، أو تحويلًا يدويًا عبر فودافون كاش أو إنستا باي إلى أرقام المنصة المعروضة في التطبيق. يتم التحويل خارج التطبيق. لا نجمع ولا نحفظ بيانات أي بطاقة مصرفية، ولا نرى إلا صورة الإيصال ورقم العملية اللذين ترفعهما أنت. الخدمة توصيل طعام مادي فقط.
 
                 ## الاحتفاظ والحذف
-                يمكن للعميل حذف حسابه من داخل التطبيق: شاشة الحساب ← «حذف الحساب». أما حسابات الكباتن والمطاعم فتديرها الإدارة، ويُطلب حذفها بمراسلتنا. عند الحذف يُغلق الحساب فورًا، ويُستبدل اسمك بـ«مستخدم محذوف»، ويُستبدل هاتفك وبريدك بقيم مجهولة، ويُفصل ربط صورتك الشخصية بالحساب، وتُحذف رموز الإشعارات وتنتهي كل جلسات الدخول.
-                نحتفظ بسجلات الطلبات والمدفوعات والتسويات، بما فيها عنوان التوصيل المدوّن على الطلب، وبالشكاوى والتقييمات، وللكباتن بسجل الرحلات والمحفظة، وذلك لأغراض المحاسبة والضرائب وتسوية النزاعات ومنع الاحتيال وما يفرضه القانون. تبقى هذه السجلات مرتبطة بمعرّف داخلي لم يعد يحمل اسمك ولا هاتفك ولا بريدك.
-                زر الحذف في التطبيق لا يمحو تلقائيًا عناوينك المحفوظة ولا الصور والوثائق التي رفعتها. إن أردت محوها أو إخفاء هويتها فاطلب ذلك عبر صفحة حذف الحساب وسنحذف ما لا يلزمنا الاحتفاظ به قانونًا.
-                لإجراءات الحذف بالتفصيل، بما فيها الطلب بالمراسلة لمن لا يستطيع فتح التطبيق، راجع صفحة حذف الحساب.
+                يمكن للعميل حذف حسابه من داخل التطبيق: شاشة الحساب ← «حذف الحساب». لا يتم الحذف ما دام لديك طلب أو مشوار جارٍ أو طلب مجدول لم يُرسل بعد؛ انتظر اكتماله أو ألغِه أولًا.
+                عند الحذف يُمحى فورًا ونهائيًا: صورتك الشخصية، وعناوينك المحفوظة (بما فيها ما أزلته من القائمة سابقًا)، ومفضّلتك، وسلّتك، وإشعاراتك، وطلباتك المجدولة المنتهية، والصور المرفقة بشكاواك، ورموز الإشعارات، وكل جلسات الدخول، وبيانات التحقق من هاتفك والحسابات المرتبطة. ويُستبدل اسمك بـ«مستخدم محذوف»، ويُستبدل هاتفك وبريدك بقيم مجهولة، ويُزال تاريخ الميلاد والجنس، ويُغلق الحساب ولا يمكن الدخول به.
+                نحتفظ بسجلات الطلبات والمدفوعات والاستردادات والتسويات (المبالغ والمطعم والتوقيت والحالة)، وبصور إيصالات التحويل التي رفعتها وإيصالات مشتريات المشاوير، وبنص الشكاوى وعدد نجوم التقييمات، لأغراض المحاسبة والضرائب وتسوية النزاعات ومنع الاحتيال وما يفرضه القانون. غير أن هذه السجلات تفقد ما يدل عليك: يصبح اسمك عليها «مستخدم محذوف»، ويُزال رقم التواصل والملاحظات وتعليمات التوصيل وتعليقات التقييم، ويُستبدل عنوان الشارع باسم المنطقة، ويُقرَّب موضع الدبوس إلى نحو [[1]] كم، وتُمحى عناوين المشاوير وتفاصيلها. وتبقى مرتبطة بمعرّف داخلي لم يعد يحمل اسمك ولا هاتفك ولا بريدك.
+                وتُحذف عدّادات الرسائل النصية المخصصة لمنع إساءة الاستخدام تلقائيًا بعد [[30]] يومًا، وتبقى السجلات التقنية الأمنية للخادم (عنوان IP وتوقيت الطلبات) لمدة محدودة.
+                حسابات الكباتن والمطاعم تديرها الإدارة ولا تُحذف من التطبيق، ولا يستطيع من فقد هاتفه أو التطبيق الحذف من التطبيق. لهؤلاء طريقة الطلب المكتوب في صفحة حذف الحساب، وتُنفَّذ يدويًا خلال مدة أقصاها [[30]] يومًا بعد التحقق من هويتك.
 
                 ## حماية البيانات
                 تنتقل البيانات بين التطبيق والخادم عبر اتصال مشفّر (HTTPS). تُحفظ كلمات المرور مشفّرة، وتُحفظ وثائق الكباتن وإيصالات الدفع في تخزين خاص، ويقتصر الاطلاع على البيانات على من تتطلبه مهمته بحسب صلاحياته. لا توجد وسيلة نقل أو تخزين آمنة تمامًا، ونعمل على تقليل المخاطر باستمرار.
@@ -144,10 +145,11 @@ final class LegalContent
                 You pay in cash on delivery, or by a manual Vodafone Cash or InstaPay transfer to the platform's numbers shown in the app. The transfer happens outside the app. We do not collect or store any bank-card details; we see only the receipt image and transaction number that you upload. The service is physical food delivery only.
 
                 ## Retention and deletion
-                A customer can delete their account inside the app: Account screen → Delete account. Captain and restaurant accounts are managed by the office and are deleted on request by writing to us. When an account is deleted, the account is closed immediately, your name is replaced with "Deleted user", your phone number and email are replaced with anonymous values, your profile photo is unlinked from the account, and your push tokens and all sign-in sessions are removed.
-                We keep order, payment and settlement records — including the delivery address printed on an order — and complaints and ratings, and for captains the trip history and wallet, for accounting, tax, dispute resolution, fraud prevention and legal obligations. These records stay attached to an internal identifier that no longer carries your name, phone number or email.
-                The Delete button does not automatically erase your saved addresses or the photos and documents you uploaded. If you want them erased or anonymised, ask us on the Delete account page and we will remove what we are not legally required to keep.
-                The Delete account page describes the procedure in full, including how to ask by message if you cannot open the app.
+                A customer can delete their account inside the app: Account screen → Delete account. Deletion does not go ahead while you have an order or errand in progress or a scheduled order that has not been sent yet; wait for it to finish or cancel it first.
+                When you delete, the following is erased at once and permanently: your profile photo, your saved addresses (including ones you removed from the list earlier), your favourites, your basket, your notifications, your finished scheduled orders, the photos attached to your complaints, your push tokens, every sign-in session, and your phone-verification and linked-account records. Your name is replaced with "Deleted user", your phone number and email are replaced with anonymous values, your date of birth and gender are removed, and the account is closed and cannot be signed in to.
+                We keep order, payment, refund and settlement records (amounts, restaurant, times, status), the receipt images you uploaded for transfers and the receipts of errand purchases, the text of complaints and the star count of ratings, for accounting, tax, dispute resolution, fraud prevention and legal obligations. These records lose what identifies you: your name on them becomes "Deleted user", the contact number, notes, delivery instructions and review comments are removed, the street address is replaced by the area name, the map pin is coarsened to about 1 km, and errand addresses and details are erased. They stay attached to an internal identifier that no longer carries your name, phone number or email.
+                SMS send counters used to prevent abuse are deleted automatically after 30 days, and the server's technical security logs (IP address, request times) are kept for a limited period.
+                Captain and restaurant accounts are managed by the office and cannot be deleted from the app, and someone who has lost their phone or the app cannot delete from it. For them there is the written request on the Delete account page, carried out by hand within 30 days at most after we verify your identity.
 
                 ## Security
                 Data travels between the app and the server over an encrypted connection (HTTPS). Passwords are stored hashed, captain documents and payment receipts are kept in private storage, and access to data is limited to those who need it for their role. No method of transmission or storage is perfectly secure, and we keep working to reduce the risk.
@@ -270,64 +272,76 @@ final class LegalContent
             'title_ar' => 'حذف الحساب',
             'title_en' => 'Delete your account',
             'body_ar' => self::ar(<<<'AR'
-                ## الطريقة الأولى: من داخل التطبيق
-                هذه أسرع طريقة، وهي متاحة لحسابات العملاء. أما حسابات الكباتن والمطاعم فتديرها الإدارة، فاستخدم الطريقة الثانية.
+                ## الطريقة الأولى: من داخل التطبيق (للعملاء)
+                هذه أسرع طريقة، والحذف فيها فوري.
                 1. افتح تطبيق CR7 Delivery وسجّل الدخول.
                 2. افتح شاشة الحساب ومرّر إلى أسفل القائمة ثم اختر «حذف الحساب».
                 3. اختر سبب الحذف إن أردت، واكتب كلمة التأكيد التي تظهر لك («حذف» في النسخة العربية) ثم أكّد.
-                لا يمكن حذف الحساب أثناء وجود طلب جارٍ؛ انتظر اكتماله أو ألغِه أولًا.
+                لا يتم الحذف ما دام لديك طلب جارٍ أو مشوار جارٍ أو طلب مجدول لم يُرسل بعد؛ ينتظر الحساب حتى يكتمل الطلب أو تُلغيه، ثم يمكنك الحذف.
 
                 ## الطريقة الثانية: بطلب مكتوب
-                إن كان حسابك حساب كابتن أو مطعم، أو لم تستطع فتح التطبيق (فقدت الهاتف، أو حذفت التطبيق، أو لا تستطيع تسجيل الدخول) فأرسل لنا رسالة عبر وسائل التواصل المعروضة أسفل هذه الصفحة تتضمن:
+                استخدمها إن لم تستطع فتح التطبيق (فقدت الهاتف، أو حذفت التطبيق، أو لا تستطيع تسجيل الدخول)، أو إن كان حسابك حساب كابتن أو مطعم. أرسل لنا رسالة عبر وسائل التواصل المعروضة أسفل هذه الصفحة تتضمن:
                 - رقم الهاتف المسجَّل به الحساب.
                 - نوع الحساب: عميل أو كابتن أو مطعم.
                 - عبارة «أطلب حذف حسابي».
-                - إن أردت أيضًا محو عناوينك المحفوظة والصور والوثائق التي رفعتها، فاذكر ذلك صراحة.
+                - للكباتن والمطاعم: ما تريد محوه من وثائق وصور، فنحذف ما لا يلزمنا الاحتفاظ به قانونًا.
 
                 ## كيف نتحقق من هويتك
                 لا نحذف حسابًا بناءً على رسالة وحدها. سنتصل بالرقم المسجَّل أو نرسل إليه رمز تحقق نصيًا، ولا ننفّذ الطلب إلا بعد التأكد من أنك صاحب الرقم. وقد نسألك عن معلومة يعرفها صاحب الحساب فقط، مثل آخر طلب أو اسم المطعم لحسابات المطاعم. لن نطلب منك كلمة المرور أبدًا.
-                ننفّذ الطلب بعد التحقق خلال مدة أقصاها [[30]] يومًا.
+                تُنفَّذ الطلبات المكتوبة يدويًا بعد التحقق، خلال مدة أقصاها [[30]] يومًا. وحذف حساب العميل بهذه الطريقة يمحو تمامًا ما يمحوه الحذف من التطبيق.
 
-                ## ما الذي يحدث عند الحذف
-                - يُغلق حسابك فورًا ولا يمكن الدخول به مرة أخرى.
-                - يُستبدل اسمك بـ«مستخدم محذوف»، ويُستبدل رقم هاتفك وبريدك الإلكتروني بقيم مجهولة، ويُفصل ربط صورتك الشخصية بالحساب.
-                - تُحذف رموز الإشعارات، وتنتهي كل جلسات تسجيل الدخول على جميع أجهزتك.
-                - يتحرر رقم هاتفك ويمكنك التسجيل به من جديد كحساب جديد.
+                ## ما الذي يُمحى فورًا عند الحذف
+                - صورتك الشخصية.
+                - عناوينك المحفوظة، بما فيها ما أزلته من القائمة سابقًا.
+                - مفضّلتك وسلّتك وإشعاراتك وطلباتك المجدولة المنتهية.
+                - الصور المرفقة بشكاواك.
+                - رموز الإشعارات وكل جلسات الدخول على جميع أجهزتك.
+                - بيانات التحقق من هاتفك وأي حساب مرتبط، وتاريخ ميلادك وجنسك.
+                - يُستبدل اسمك بـ«مستخدم محذوف»، ويُستبدل رقم هاتفك وبريدك الإلكتروني بقيم مجهولة، ويُغلق حسابك ولا يمكن الدخول به مرة أخرى، ويتحرر رقم هاتفك ويمكنك التسجيل به من جديد كحساب جديد.
 
                 ## ما الذي نحتفظ به ولماذا
-                - سجلات الطلبات والمدفوعات والتسويات، بما فيها عنوان التوصيل المدوّن على كل طلب، وكذلك الشكاوى والتقييمات، وللكباتن سجل الرحلات والمحفظة. نحتفظ بها للمحاسبة والضرائب وتسوية النزاعات ومنع الاحتيال وما يفرضه القانون.
-                - تظل هذه السجلات مرتبطة بمعرّف داخلي لم يعد يحمل اسمك ولا هاتفك ولا بريدك.
-                - عناوينك المحفوظة والصور والوثائق التي رفعتها (وثائق الكباتن وإيصالات الدفع وصور الشكاوى) لا تُمحى تلقائيًا بزر الحذف في التطبيق. اطلب محوها بالطريقة الثانية وسنحذف كل ما لا يلزمنا الاحتفاظ به قانونًا، ونخبرك بما بقي وسببه.
+                - سجلات الطلبات والمدفوعات والاستردادات والتسويات (المبالغ والمطعم والتوقيت والحالة) وصور إيصالات التحويل التي رفعتها وإيصالات مشتريات المشاوير، وكذلك نص الشكاوى وعدد نجوم التقييمات. نحتفظ بها للمحاسبة والضرائب وتسوية النزاعات ومنع الاحتيال وما يفرضه القانون.
+                - هذه السجلات تفقد ما يدل عليك: يصبح اسمك عليها «مستخدم محذوف»، ويُزال رقم التواصل والملاحظات وتعليمات التوصيل وتعليقات التقييم، ويُستبدل عنوان الشارع باسم المنطقة، ويُقرَّب موضع الدبوس إلى نحو [[1]] كم، وتُمحى عناوين المشاوير وتفاصيلها. وتظل مرتبطة بمعرّف داخلي لم يعد يحمل اسمك ولا هاتفك ولا بريدك.
+                - عدّادات الرسائل النصية لمنع إساءة الاستخدام تُحذف تلقائيًا بعد [[30]] يومًا، وتبقى السجلات التقنية الأمنية للخادم لمدة محدودة.
+
+                ## حسابات الكباتن والمطاعم
+                لا تُحذف هذه الحسابات من التطبيق لأن لها محفظة وتسويات مالية ووثائق تديرها الإدارة. عند طلبك المكتوب وبعد التحقق نغلق الحساب، ونحذف وثائقك وصورك وسجل مواقعك، ونحتفظ بالسجلات المالية وسجل الرحلات المطلوبة للمحاسبة والقانون. تُنفَّذ هذه الخطوات يدويًا خلال المدة المذكورة أعلاه.
                 AR),
             'body_en' => <<<'EN'
-                ## Option 1: inside the app
-                This is the fastest way, and it is available for customer accounts. Captain and restaurant accounts are managed by the office, so use Option 2.
+                ## Option 1: inside the app (customers)
+                This is the fastest way, and the deletion is immediate.
                 1. Open the CR7 Delivery app and sign in.
                 2. Open the Account screen, scroll to the bottom of the list and choose "Delete account".
                 3. Pick a reason if you like, type the confirmation word shown ("delete" in the English app, "حذف" in the Arabic app) and confirm.
-                An account cannot be deleted while an order is in progress; wait for it to finish or cancel it first.
+                Deletion does not go ahead while you have an order or errand in progress, or a scheduled order that has not been sent yet; once it is finished or cancelled you can delete.
 
                 ## Option 2: by written request
-                If yours is a captain or restaurant account, or you cannot open the app (you lost your phone, uninstalled it, or cannot sign in), send us a message through the contact channels shown at the bottom of this page, including:
+                Use this if you cannot open the app (you lost your phone, uninstalled it, or cannot sign in), or if yours is a captain or restaurant account. Send us a message through the contact channels at the bottom of this page, including:
                 - The phone number the account is registered under.
                 - The account type: customer, captain or restaurant.
                 - The sentence "I request the deletion of my account".
-                - If you also want your saved addresses and the photos and documents you uploaded erased, say so explicitly.
+                - For captains and restaurants: which documents and photos you want erased, and we will delete everything we are not legally required to keep.
 
                 ## How we verify it is you
                 We do not delete an account on the strength of a message alone. We will call the registered number or send a verification code to it by SMS, and we act only once we are satisfied that you hold that number. We may also ask a detail only the account holder would know, such as your last order, or the restaurant's name for a restaurant account. We will never ask for your password.
-                Once verified, we carry the request out within 30 days at most.
+                Written requests are carried out by hand after verification, within 30 days at most. Deleting a customer account this way erases exactly what deleting it in the app erases.
 
-                ## What happens when you delete
-                - Your account is closed at once and cannot be signed in to again.
-                - Your name is replaced with "Deleted user", your phone number and email are replaced with anonymous values, and your profile photo is unlinked from the account.
-                - Your push tokens are removed and every sign-in session on all your devices ends.
-                - Your phone number is released, so you can register with it again as a new account.
+                ## What is erased at once when you delete
+                - Your profile photo.
+                - Your saved addresses, including ones you removed from the list earlier.
+                - Your favourites, basket, notifications and finished scheduled orders.
+                - The photos attached to your complaints.
+                - Your push tokens and every sign-in session on all your devices.
+                - Your phone-verification and linked-account records, your date of birth and your gender.
+                - Your name is replaced with "Deleted user", your phone number and email are replaced with anonymous values, your account is closed and cannot be signed in to, and your phone number is released so you can register with it again as a new account.
 
                 ## What we keep, and why
-                - Order, payment and settlement records — including the delivery address printed on each order — plus complaints and ratings, and for captains the trip history and wallet. We keep them for accounting, tax, dispute resolution, fraud prevention and legal obligations.
-                - These records stay attached to an internal identifier that no longer carries your name, phone number or email.
-                - Your saved addresses and the photos and documents you uploaded (captain documents, payment receipts, complaint photos) are not erased automatically by the Delete button in the app. Ask for them under Option 2 and we will delete everything we are not legally required to keep, and tell you what remains and why.
+                - Order, payment, refund and settlement records (amounts, restaurant, times, status), the receipt images you uploaded for transfers and the receipts of errand purchases, the text of complaints and the star count of ratings. We keep them for accounting, tax, dispute resolution, fraud prevention and legal obligations.
+                - These records lose what identifies you: your name on them becomes "Deleted user", the contact number, notes, delivery instructions and review comments are removed, the street address is replaced by the area name, the map pin is coarsened to about 1 km, and errand addresses and details are erased. They stay attached to an internal identifier that no longer carries your name, phone number or email.
+                - SMS send counters used to prevent abuse are deleted automatically after 30 days, and the server's technical security logs are kept for a limited period.
+
+                ## Captain and restaurant accounts
+                These accounts are not deleted from the app because they carry a wallet, financial settlements and documents that the office manages. On your written request, after verification, we close the account, delete your documents, photos and location history, and keep the financial records and trip history that accounting and the law require. These steps are carried out by hand within the period stated above.
                 EN,
         ];
     }

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Actions\Auth\DeleteAccountAction;
 use App\Models\StaticPage;
 use App\Models\User;
+use App\Models\UserAddress;
+use App\Support\Auth\AccountErasure;
 use App\Support\Legal\LegalContent;
 use App\Support\Settings;
 use Database\Seeders\ContentSeeder;
@@ -202,8 +204,10 @@ class LegalPagesTest extends TestCase
 
     public function test_the_deletion_text_matches_what_the_delete_action_does(): void
     {
+        $this->seedLocation();
         $user = $this->makeCustomer();
         $user->update(['email' => 'someone@example.com']);
+        $this->makeAddress($user);
         $user->deviceTokens()->create(['token' => 't', 'platform' => 'android', 'app' => 'customer']);
         $id = $user->id;
 
@@ -211,19 +215,42 @@ class LegalPagesTest extends TestCase
 
         $row = User::withTrashed()->find($id);
         $page = LegalContent::deleteAccount();
+        $policy = LegalContent::privacy();
 
         // «Your name is replaced with "Deleted user"» — the very string the action writes.
-        $this->assertSame('مستخدم محذوف', $row->name);
-        $this->assertStringContainsString($row->name, $page['body_ar']);
-        // Phone and email are replaced by anonymous values, the account is closed, tokens go.
+        $this->assertSame(AccountErasure::DELETED_NAME, $row->name);
+        foreach ([$page['body_ar'], $policy['body_ar']] as $text) {
+            $this->assertStringContainsString('«'.AccountErasure::DELETED_NAME.'»', $text);
+        }
+        foreach ([$page['body_en'], $policy['body_en']] as $text) {
+            $this->assertStringContainsString('"Deleted user"', $text);
+        }
+
+        // What the text says is erased at once really is: the phone and email are anonymous, the
+        // account is closed, tokens and saved addresses are gone (the soft-deleted ones too).
         $this->assertStringStartsWith('deleted_', $row->phone);
         $this->assertStringEndsWith('@deleted.local', $row->email);
         $this->assertFalse((bool) $row->is_active);
         $this->assertTrue($row->trashed());
         $this->assertSame(0, $row->deviceTokens()->count());
-        // …and the text does not claim more than that: addresses and orders are kept (it says so).
-        $this->assertStringContainsString('لا تُمحى تلقائيًا', $page['body_ar']);
-        $this->assertStringContainsString('not erased automatically', $page['body_en']);
+        $this->assertSame(0, UserAddress::withTrashed()->where('user_id', $id)->count());
+
+        // The old caveat is gone, and every erased item the text names is one the action erases
+        // (each is asserted against the database in AccountDeletionTest).
+        $this->assertStringNotContainsString('لا تُمحى تلقائيًا', $page['body_ar'].$policy['body_ar']);
+        $this->assertStringNotContainsString('not erased automatically', $page['body_en'].$policy['body_en']);
+        foreach (['عناوينك المحفوظة', 'مفضّلتك', 'الصور المرفقة بشكاواك', 'رموز الإشعارات', 'إيصالات التحويل'] as $phrase) {
+            $this->assertStringContainsString($phrase, $page['body_ar'], $phrase);
+        }
+        foreach (['saved addresses', 'favourites', 'photos attached to your complaints', 'push tokens', 'receipt images'] as $phrase) {
+            $this->assertStringContainsString($phrase, $page['body_en'], $phrase);
+        }
+
+        // The 30 days are stated only for the written request, which is a manual process.
+        $this->assertStringContainsString('يدويًا', $page['body_ar']);
+        $this->assertStringContainsString('by hand', $page['body_en']);
+        $this->assertStringContainsString('طلب جارٍ', $page['body_ar']);
+        $this->assertStringContainsString('in progress', $page['body_en']);
     }
 
     // ── the renderer ────────────────────────────────────────────────────────────

@@ -465,6 +465,28 @@ web server serves it from disk afterwards; `Cache-Control: public, max-age=31536
 resized (remote host, GIF, missing file, a name the route would refuse) is answered **as its own `url`** — `thumb_url`
 is always fetchable. Deleting a file also removes its cached thumbnails.
 
+### 1.27d `DELETE /auth/account` — a customer deletes their account (batch 72)
+
+Customers only. A captain or a restaurant answers `403 account_deletion_by_request` (they ask in writing — see the public
+`/delete-account` page; the office runs `php artisan cr7:erase-account <phone>` for a customer who cannot open the app).
+
+| Response | When |
+|---|---|
+| `200 {success:true, message:"تم حذف الحساب بنجاح"}` | erased; every session of the account ended |
+| `409 {success:false, error:"active_order_blocks_deletion", message:"لديك طلب جارٍ. انتظر حتى يكتمل أو ألغِه قبل حذف الحساب.", meta:{active_orders, active_errands, scheduled_orders}}` | any order that is not `delivered`/`cancelled` (`delivery_issue` counts), any errand in `open/offered/assigned/picked_up`, or a scheduled order still `scheduled`. Nothing is changed |
+| `403 account_deletion_by_request` | the account is a captain, restaurant or admin |
+| `401` | a second call — the first one ended the session |
+
+One transaction, the user row locked, the active-work check repeated under the lock; files (profile photo, complaint
+photos) are deleted only after the commit. **Erased:** saved addresses (soft-deleted too), favourites, basket, notifications,
+finished scheduled orders, sessions/tokens, device tokens, social-account and verified-phone rows, OTP/reset rows for the old
+phone/email, complaint photos, the profile photo, birth date and gender. **Blanked on the records that stay:** on every
+order, order group and errand — name → «مستخدم محذوف», contact phone, notes, instructions and cancellation note removed, street
+address → the area, pin rounded to 2 decimals (~1 km), errand addresses/details erased, review comments removed. **Kept:**
+orders, payments, refunds, wallet/settlement rows, transfer and purchase receipts, complaint text, rating stars, promo usage,
+audit logs; SMS counters are pruned at 30 days. Restaurant and captain views of the order keep rendering, with the
+anonymised name.
+
 ### 1.28 Admin lists that are **not** paginated and take no filters (unchanged)
 
 `banners`, `cuisines`, `faqs`, `pages`, `home-popups` (`active_only`), `store-categories`

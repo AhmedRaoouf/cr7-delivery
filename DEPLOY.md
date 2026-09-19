@@ -354,6 +354,12 @@ before batch 72 still holds in its old, shorter form. After the deploy:
 php artisan content:sync-legal      # rewrites the terms + privacy rows only (not about, not the FAQ)
 ```
 
+**Account deletion (written requests).** `DELETE /auth/account` is customers only and refuses with `409
+active_order_blocks_deletion` while an order, errand or scheduled order is open. A customer who cannot open the app asks
+in writing; once the phone number is verified the office runs `php artisan cr7:erase-account <phone>` — the same erasure
+the app button runs. Captain and restaurant deletions stay manual (wallet, documents, settlements): the public page promises
+them within 30 days, which is an **operator commitment**, not something the code enforces.
+
 No migration. The `/img/{width}/…` resizer now also reads the uploads disk, so `public/img/` must stay writable by the
 web user (it already had to be for the catalogue art).
 

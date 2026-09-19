@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  * |---|---|
  * | **Erased** (hard delete) | saved addresses (soft-deleted ones too), favourites, the basket, notifications, scheduled orders that are over, sign-in sessions and tokens, linked social accounts, verified-phone rows, pending password-reset and OTP rows for the old phone, complaint photos, the profile photo |
  * | **Blanked** on records that stay | on every order, order group and errand of the customer: name → «مستخدم محذوف», contact phone, notes and instructions removed, the street address replaced by the area, the pin coarsened to ~1 km; review comments removed |
- * | **Kept** | the orders, payments, refunds, wallet/settlement rows and the platform fee they carry (accounting, tax, disputes); complaint and rating rows (their text stays, their photos go); promo-usage rows; SMS send counters (auto-pruned at 30 days); audit logs |
+ * | **Kept** | the orders, payments, refunds, wallet/settlement rows and the platform fee they carry (accounting, tax, disputes); transfer-receipt and errand-purchase-receipt images; complaint and rating rows (the complaint text stays, its photos go; the rating's comment goes); promo-usage rows; SMS send counters (auto-pruned at 30 days); audit logs |
  *
  * Nothing that another party's record points at is removed: the restaurant and the captain
  * still see the order, with the anonymised name and the area, and every foreign key holds.
@@ -170,6 +170,7 @@ final class AccountErasure
                         'delivery_longitude' => DB::raw('ROUND(delivery_longitude, 2)'),
                         'customer_note' => null,
                         'delivery_instructions' => null,
+                        'cancellation_note' => null,
                     ]);
                 }
             });

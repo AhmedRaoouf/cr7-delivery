@@ -399,4 +399,28 @@ class AccountDeletionTest extends TestCase
         $this->assertSame(1, $other->deviceTokens()->count());
         $this->assertSame('أحمد', $other->fresh()->name);
     }
+
+    // ── the written-request path ────────────────────────────────────────────────
+
+    public function test_the_office_command_runs_the_same_erasure_and_refuses_what_the_api_refuses(): void
+    {
+        $this->seedPersonalData();
+        $phone = $this->customer->phone;
+
+        $this->artisan('cr7:erase-account', ['phone' => '+2'.$phone, '--force' => true])->assertSuccessful();
+
+        $this->assertSame(0, UserAddress::withTrashed()->where('user_id', $this->customer->id)->count());
+        $this->assertSame('مستخدم محذوف', User::withTrashed()->find($this->customer->id)->name);
+
+        // A captain, a stranger, and an account with an order in flight are all refused.
+        $this->artisan('cr7:erase-account', ['phone' => $this->driver->user->phone, '--force' => true])->assertFailed();
+        $this->artisan('cr7:erase-account', ['phone' => '01000000001', '--force' => true])->assertFailed();
+
+        $busy = $this->makeCustomer();
+        $group = OrderGroup::query()->find($this->order->order_group_id);
+        $this->order->update(['user_id' => $busy->id, 'status' => 'preparing']);
+        $group->update(['user_id' => $busy->id]);
+        $this->artisan('cr7:erase-account', ['phone' => $busy->phone, '--force' => true])->assertFailed();
+        $this->assertNull(User::withTrashed()->find($busy->id)->deleted_at);
+    }
 }

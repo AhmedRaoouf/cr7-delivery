@@ -178,6 +178,7 @@ class ErrandDispatcher
             ->with('user')
             ->where('is_active', true)
             ->where('is_online', true)
+            ->tap(fn ($q) => ReviewAccess::exceptFromDrivers($q))
             // doc 63 gate 4, from the errand's side: a captain carrying orders is offered
             // no errands. Read from the trip itself rather than from `is_available`, which
             // is only a copy of it.

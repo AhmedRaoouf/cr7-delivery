@@ -14,6 +14,7 @@ use App\Support\DispatchService;
 use App\Support\DriverLedger;
 use App\Support\DriverTrip;
 use App\Support\Notifications\NotificationDispatcher;
+use App\Support\ReviewAccess;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -38,6 +39,8 @@ class ErrandLifecycleAction
      */
     public function accept(Driver $driver, ErrandRequest $errand): ErrandRequest
     {
+        ReviewAccess::refuseRealWork($driver->user);
+
         // doc 63 gate 4, from the errand's side: a captain carrying orders cannot take an
         // errand. Read from the trip, not from `active_order_id` — that column is the
         // trip's focus now and only ever a copy.

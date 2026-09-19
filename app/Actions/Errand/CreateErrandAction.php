@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Models\ErrandRequest;
 use App\Models\User;
 use App\Support\ErrandDispatcher;
+use App\Support\ReviewAccess;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,6 +34,8 @@ class CreateErrandAction
     /** @param array<string, mixed> $data */
     public function execute(User $user, array $data): ErrandRequest
     {
+        ReviewAccess::refuseRealWork($user);
+
         $open = ErrandRequest::query()
             ->where('user_id', $user->id)
             ->whereIn('status', array_column(ErrandStatus::active(), 'value'))

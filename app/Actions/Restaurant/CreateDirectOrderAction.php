@@ -15,6 +15,7 @@ use App\Support\DispatchService;
 use App\Support\OrderNumber;
 use App\Support\Otp;
 use App\Support\SettingsCatalog;
+use App\Support\ReviewAccess;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -31,6 +32,8 @@ class CreateDirectOrderAction
 
     public function execute(User $user, Restaurant $restaurant, array $data, string $idempotencyKey): Order
     {
+        ReviewAccess::refuseRealWork($user);
+
         $existing = Order::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existing) {
             return $existing;

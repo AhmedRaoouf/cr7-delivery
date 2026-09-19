@@ -15,6 +15,7 @@ use App\Support\CheckoutPricer;
 use App\Support\OrderNumber;
 use App\Support\Otp;
 use App\Support\SettingsCatalog;
+use App\Support\ReviewAccess;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,6 +34,8 @@ class CreateOrderAction
      */
     public function execute(User $user, array $data, string $idempotencyKey, ?Cart $cart = null): OrderGroup
     {
+        ReviewAccess::refuseRealWork($user);
+
         $existing = OrderGroup::query()->where('idempotency_key', $idempotencyKey)->where('user_id', $user->id)->first();
         if ($existing) {
             return $existing->load(['orders.restaurant', 'payment']);

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\BusinessTime;
 use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
+use App\Support\ReviewAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -37,6 +38,8 @@ class ScheduleOrderAction
 
     public function execute(User $user, array $data): ScheduledOrder
     {
+        ReviewAccess::refuseRealWork($user);
+
         $when = Carbon::parse($data['scheduled_for']);
 
         if ($when->lt(now()->addMinutes(self::MIN_LEAD_MINUTES))) {

@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Support\ApiResponse;
 use App\Support\Geo;
+use App\Support\ReviewAccess;
 use App\Support\UploadedImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,11 @@ class ErrandController extends Controller
     public function board(Request $request): JsonResponse
     {
         $driver = $this->driver($request);
+
+        // The review captain sees an empty board: a real customer's errand is never shown to them.
+        if (ReviewAccess::isReviewAccount($request->user())) {
+            return ApiResponse::success(ErrandRequestResource::collection(collect()));
+        }
 
         $errands = ErrandRequest::query()
             ->where('status', ErrandStatus::Open->value)

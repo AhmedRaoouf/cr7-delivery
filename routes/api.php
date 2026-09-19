@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\ProductGalleryController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
 use App\Http\Controllers\Api\Admin\ProductOptionGroupController;
 use App\Http\Controllers\Api\Admin\PromoCodeController;
@@ -77,6 +78,7 @@ use App\Http\Controllers\Api\Restaurant\ComplaintController as RestaurantComplai
 use App\Http\Controllers\Api\Restaurant\DirectOrderController as RestaurantDirectOrderController;
 use App\Http\Controllers\Api\Restaurant\OrderController as RestaurantOrderController;
 use App\Http\Controllers\Api\Restaurant\ProductController as RestaurantProductController;
+use App\Http\Controllers\Api\Restaurant\ProductGalleryController as RestaurantProductGalleryController;
 use App\Http\Controllers\Api\Restaurant\ProductOptionController as RestaurantProductOptionController;
 use App\Http\Controllers\Api\Restaurant\ProductOptionGroupController as RestaurantProductOptionGroupController;
 use App\Http\Controllers\Api\Restaurant\RatingController as RestaurantRatingController;
@@ -394,6 +396,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/products/{product}/availability', [RestaurantProductController::class, 'availability']);
         Route::post('/products/bulk-availability', [RestaurantProductController::class, 'bulkAvailability']);
 
+        // Batch 72 — one picture at a time. `gallery/order` is a PUT and `gallery/{ref}` a
+        // DELETE, so neither shadows the other.
+        Route::post('/products/{product}/gallery', [RestaurantProductGalleryController::class, 'store']);
+        Route::put('/products/{product}/gallery/order', [RestaurantProductGalleryController::class, 'order']);
+        Route::delete('/products/{product}/gallery/{ref}', [RestaurantProductGalleryController::class, 'destroy']);
+
         Route::get('/products/{product}/option-groups', [RestaurantProductOptionGroupController::class, 'index']);
         Route::post('/products/{product}/option-groups', [RestaurantProductOptionGroupController::class, 'store']);
         Route::patch('/products/{product}/option-groups/{optionGroup}', [RestaurantProductOptionGroupController::class, 'update']);
@@ -592,6 +600,13 @@ Route::prefix('v1')->group(function () {
         Route::patch('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'update'])->middleware('permission:products.update')->scopeBindings();
         Route::post('/restaurants/{restaurant}/products/{product}/availability', [ProductController::class, 'toggleAvailability'])->middleware('permission:products.toggle_availability')->scopeBindings();
         Route::delete('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:products.delete')->scopeBindings();
+
+        // Batch 72 — the per-picture gallery API, the admin mirror of the restaurant's.
+        Route::middleware('permission:products.update')->scopeBindings()->group(function () {
+            Route::post('/restaurants/{restaurant}/products/{product}/gallery', [ProductGalleryController::class, 'store']);
+            Route::put('/restaurants/{restaurant}/products/{product}/gallery/order', [ProductGalleryController::class, 'order']);
+            Route::delete('/restaurants/{restaurant}/products/{product}/gallery/{ref}', [ProductGalleryController::class, 'destroy']);
+        });
 
         Route::middleware('permission:products.update')->scopeBindings()->group(function () {
             Route::get('/products/{product}/option-groups', [ProductOptionGroupController::class, 'index']);

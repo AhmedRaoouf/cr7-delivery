@@ -409,6 +409,15 @@ Light rows for dropdowns and typeaheads, scoped like the list they feed.
 zones), `filter[is_active]`, `limit` 1…200 (default 50). Sorted by name. **No paging, no
 `meta.total`** — `meta.count` and `meta.truncated` (true when `limit` cut the list).
 
+### 1.27b `GET /admin/media` and `GET /admin/media/available` (doc 71)
+
+`GET /admin/media` — paged (`per_page` ≤ 100, default 24), `q` folds names, filename, tags, assigned places/groups and the
+words that name a usage/source/visibility; `filter[usage]`, `filter[source]` (`uploaded|shipped|system`),
+`filter[visibility]` (`global|restricted|hidden`, alias `shared`), `filter[tag]` (slug), `filter[place_id]`,
+`filter[group_id]`, `filter[store_category_id]`, `filter[unused]`, `filter[state]` (`active|removed|all`),
+`date_from`/`date_to`, `sort` = `created_at|name|bytes|source|visibility`. `GET /admin/media/available` is filtered by
+`filter[source]` (`backend|app|dashboard`), `filter[usage]`, `filter[folder]`, `q`; `meta.folders` lists the folders.
+
 ### 1.28 Admin lists that are **not** paginated and take no filters (unchanged)
 
 `banners`, `cuisines`, `faqs`, `pages`, `home-popups` (`active_only`), `store-categories`

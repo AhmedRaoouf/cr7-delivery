@@ -153,6 +153,7 @@ class FileUploader
 
         try {
             Storage::disk($disk)->delete($path);
+            ImageResizer::forget(ImageResizer::DISK_ROOT.'/'.$path);
         } catch (\Throwable $e) {
             Log::warning('upload delete failed', ['disk' => $disk, 'path' => $path, 'error' => $e->getMessage()]);
         }

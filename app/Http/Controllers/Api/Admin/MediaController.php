@@ -19,6 +19,7 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
 use App\Support\AuditLogger;
+use App\Support\ImageResizer;
 use App\Support\Media\MediaLibrary;
 use App\Support\Media\MediaPicker;
 use App\Support\Media\MediaReferences;
@@ -189,6 +190,7 @@ class MediaController extends Controller
         // that lives in `public/`.
         if ($asset->disk !== 'web') {
             Storage::disk($asset->disk)->delete($asset->path);
+            ImageResizer::forget(ImageResizer::DISK_ROOT.'/'.$asset->path);
         }
 
         AuditLogger::record($request->user(), 'media.purge', $asset);

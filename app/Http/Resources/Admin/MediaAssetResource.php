@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Admin;
 
 use App\Models\MediaAsset;
+use App\Support\Media\ThumbUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +32,7 @@ class MediaAssetResource extends JsonResource
             'name_en' => $this->name_en,
             'filename' => $this->filename,
             'url' => $this->url,
+            'thumb_url' => ThumbUrl::for($this->url),
             'mime' => $this->mime,
             'width' => $this->width,
             'height' => $this->height,

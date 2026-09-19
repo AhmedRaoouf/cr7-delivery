@@ -31,8 +31,30 @@ class ImageResizer
     /** The only widths that can be asked for. */
     public const WIDTHS = [96, 192, 384, 768, 1200];
 
-    /** Where a resize may read from. Everything else is a 404. */
-    private const ROOTS = ['catalog'];
+    /** The width every list thumbnail is asked for (a grid cell, a gallery strip). */
+    public const THUMB_WIDTH = 384;
+
+    /**
+     * Where a resize may read from. Everything else is a 404.
+     *
+     * The first three are folders under `public/`; `storage` is the **uploads disk** — what
+     * a place or an admin uploaded, which lives outside `public/` and is served at
+     * `/storage/…` — and it is read through the disk, never by a path the caller composes.
+     * Batch 72: the media library's pictures are uploads, so its thumbnails come from here.
+     */
+    private const ROOTS = ['catalog', 'media/system', 'shipped', 'storage'];
+
+    /** The upload disk's folder, as it appears in a resize path (`/img/384/storage/…`). */
+    public const DISK_ROOT = 'storage';
+
+    /** What `/img/{width}/{path}` accepts as `{path}` — the route and `ThumbUrl` share it. */
+    public const ROUTE_PATTERN = '#^(?:catalog|media/system|shipped|storage)/[A-Za-z0-9/_\-\.]+$#';
+
+    /** The only source types a resize can decode; anything else is answered as itself. */
+    public const RESIZABLE = ['jpg', 'jpeg', 'png', 'webp'];
+
+    /** What a resize path may end in at all — a narrow GIF or AVIF is still served as itself. */
+    public const SERVABLE = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
 
     public const CACHE_ROOT = 'img';
 
@@ -49,8 +71,9 @@ class ImageResizer
     }
 
     /**
-     * Resize `public/{$path}` to `$width` and return the file that holds it,
-     * or null when there is nothing to resize.
+     * Resize the picture `$path` names — a file under `public/` or on the uploads disk, see
+     * [ROOTS] — to `$width` and return the file that holds it, or null when there is
+     * nothing to resize.
      *
      * Returns the **original** when it is already narrower than the bucket:
      * upscaling a 256 px icon to 384 spends bytes to lose sharpness.
@@ -61,9 +84,9 @@ class ImageResizer
             return null;
         }
 
-        $source = public_path($path);
+        $source = self::source($path);
 
-        if (! is_file($source)) {
+        if ($source === null) {
             return null;
         }
 
@@ -111,6 +134,46 @@ class ImageResizer
     }
 
     /**
+     * The local file a resize path names, or null when there is none (or it escapes its root).
+     *
+     * A `storage/…` path is resolved through the uploads disk, and only when that disk keeps
+     * its files on this machine; a remote disk has nothing to decode here, so the caller
+     * falls back to the original URL.
+     */
+    public static function source(string $path): ?string
+    {
+        // A picture, by its name: nothing else under these roots is ever read (a text file
+        // on the uploads disk, a PHP file that shares a folder with the art).
+        if (! self::isSafe($path) || ! in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::SERVABLE, true)) {
+            return null;
+        }
+
+        if (! str_starts_with($path, self::DISK_ROOT.'/')) {
+            $file = public_path($path);
+
+            return is_file($file) ? $file : null;
+        }
+
+        $disk = Storage::disk(FileUploader::disk());
+        $relative = substr($path, strlen(self::DISK_ROOT) + 1);
+
+        if (! method_exists($disk, 'path') || ! $disk->exists($relative)) {
+            return null;
+        }
+
+        // Absolute, a regular file, and still inside the disk's root — a symlink or a stray
+        // `..` that survived the string checks in `isSafe()` ends here.
+        $real = realpath($disk->path($relative));
+        $root = realpath($disk->path(''));
+
+        if ($real === false || $root === false || ! is_file($real) || ! str_starts_with($real, $root.DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return $real;
+    }
+
+    /**
      * The path may only name a file inside [ROOTS].
      *
      * Checked as a **string** rather than by resolving it, because
@@ -128,9 +191,13 @@ class ImageResizer
             return false;
         }
 
-        $root = explode('/', $path)[0];
+        foreach (self::ROOTS as $root) {
+            if (str_starts_with($path, $root.'/') && strlen($path) > strlen($root) + 1) {
+                return true;
+            }
+        }
 
-        return in_array($root, self::ROOTS, true);
+        return false;
     }
 
     /** @return \GdImage|null */

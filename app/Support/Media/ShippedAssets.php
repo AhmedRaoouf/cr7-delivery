@@ -205,6 +205,7 @@ final class ShippedAssets
             'source' => $defaults['source'],
             'folder' => $folder,
             'url' => asset($relative),
+            'thumb_url' => ThumbUrl::for(asset($relative)),
             'bytes' => (int) $bytes,
             'usage_types' => $usage,
             'tags' => array_values(array_unique($tags)),

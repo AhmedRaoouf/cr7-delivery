@@ -272,5 +272,7 @@
     "تم إيقاف رموز التحقق لهذا الرقم مؤقتًا": "Verification codes for this number are paused for now",
     "خدمة رسائل التحقق متوقفة مؤقتًا، حاول لاحقًا": "Verification messages are paused for now, please try again later",
     "تم حظر الرقم": "Number blocked",
-    "تم رفع الحظر عن الرقم": "Number unblocked"
+    "تم رفع الحظر عن الرقم": "Number unblocked",
+    "لديك طلب جارٍ. انتظر حتى يكتمل أو ألغِه قبل حذف الحساب.": "You have an order in progress. Wait for it to finish, or cancel it, before deleting your account.",
+    "يتم حذف حسابات الكباتن والمطاعم بطلب مكتوب إلى الدعم — راجع صفحة حذف الحساب.": "Captain and restaurant accounts are deleted by written request to support — see the Delete account page."
 }

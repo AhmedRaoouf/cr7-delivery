@@ -12,6 +12,7 @@ use App\Support\BasketLimit;
 use App\Support\CashLimit;
 use App\Support\FirstOrderPerk;
 use App\Support\MapStyles;
+use App\Support\Media\MediaLibrary;
 use App\Support\Otp;
 use App\Support\OtpGuard;
 use App\Support\PaymentMethods;
@@ -100,6 +101,8 @@ class ConfigController extends Controller
             // into the app so rotating the token is a server edit, not a store
             // release. Built for the request's locale — `maps.language` says which.
             'maps' => MapStyles::payload(),
+            // doc 71 — the protected default picture for a product, category or cover with none.
+            'media' => ['placeholder_url' => MediaLibrary::placeholderUrl()],
             // D-106 / D-107. `static_otp` is only ever non-null while `otp.mode =
             // test` on ADM-46, and then it is already public — the app prints it as
             // «كود التجربة». It never applies to an admin's reset or to a password

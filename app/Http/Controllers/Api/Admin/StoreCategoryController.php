@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStoreCategoryRequest;
@@ -52,10 +53,9 @@ class StoreCategoryController extends Controller
         $data = $request->validated();
         $data['slug'] = $this->uniqueSlug($data['slug'] ?? $data['name_en']);
 
-        foreach (['image', 'icon'] as $field) {
-            $data[$field] = $request->hasFile($field)
-                ? FileUploader::storePublic($request->file($field), 'store-categories')
-                : ($data[$field] ?? null);
+        foreach (['image' => MediaField::StoreCategoryImage, 'icon' => MediaField::StoreCategoryIcon] as $field => $media) {
+            $data = $this->withPublicUpload($data, $request, $field, 'store-categories', media: $media);
+            $data[$field] ??= null;
         }
 
         $category = StoreCategory::create($data);
@@ -79,8 +79,8 @@ class StoreCategoryController extends Controller
         // Through `withPublicUpload` since 2026-09-08, for `remove_image` /
         // `remove_icon`: the old branch could only ever *replace*, so a category given
         // the wrong artwork had to keep some.
-        foreach (['image', 'icon'] as $field) {
-            $data = $this->withPublicUpload($data, $request, $field, 'store-categories', $storeCategory);
+        foreach (['image' => MediaField::StoreCategoryImage, 'icon' => MediaField::StoreCategoryIcon] as $field => $media) {
+            $data = $this->withPublicUpload($data, $request, $field, 'store-categories', $storeCategory, $media);
         }
 
         $storeCategory->update($data);

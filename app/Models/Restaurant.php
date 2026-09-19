@@ -66,6 +66,11 @@ class Restaurant extends Model
         return $this->belongsTo(StoreCategory::class);
     }
 
+    public function placeGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(PlaceGroup::class, 'place_group_restaurant');
+    }
+
     public function cuisines(): BelongsToMany
     {
         return $this->belongsToMany(Cuisine::class, 'cuisine_restaurant');

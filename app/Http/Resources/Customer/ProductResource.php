@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Customer;
 
 use App\Support\Locale;
+use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,7 +18,7 @@ class ProductResource extends JsonResource
             'id' => $this->id,
             'name' => $this->{"name_{$locale}"},
             'description' => $this->{"description_{$locale}"},
-            'image' => $this->image,
+            'image' => MediaLibrary::orPlaceholder($this->image),
             'price' => (float) $this->price,
             'discount_price' => $this->discount_price !== null ? (float) $this->discount_price : null,
             'is_available' => $this->is_available,

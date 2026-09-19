@@ -32,6 +32,7 @@ class RolesSeeder extends Seeder
                 'complaints.view', 'complaints.reply', 'complaints.update', 'complaints.assign',
                 'reports.sales', 'reports.restaurants', 'reports.products', 'reports.drivers', 'reports.zones',
                 'reports.export', 'reports.customers', 'ops.health',
+                'media.view', 'media.manage',
             ],
 
             'finance' => [

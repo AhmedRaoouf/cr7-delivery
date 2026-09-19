@@ -1,0 +1,33 @@
+{
+  "_comment": "System media registry (doc 71 §7). `php artisan media:sync` upserts these by system_key — idempotent. File properties are always refreshed from the file; names, usage, tags and visibility are written only when the row is first created, so an Admin's edits survive a re-sync.",
+  "assets": [
+    {
+      "system_key": "default_placeholder",
+      "disk": "web",
+      "path": "media/system/default-placeholder.webp",
+      "name_ar": "الصورة الافتراضية",
+      "name_en": "Default placeholder",
+      "usage_types": ["product", "category", "cover", "fallback"],
+      "tags": ["placeholder"],
+      "visibility": "global"
+    }
+  ],
+  "tags": [
+    {"slug": "product", "name_ar": "منتج", "name_en": "Product"},
+    {"slug": "category", "name_ar": "تصنيف", "name_en": "Category"},
+    {"slug": "cover", "name_ar": "غلاف", "name_en": "Cover"},
+    {"slug": "logo", "name_ar": "شعار", "name_en": "Logo"},
+    {"slug": "banner", "name_ar": "بانر", "name_en": "Banner"},
+    {"slug": "icon", "name_ar": "أيقونة", "name_en": "Icon"},
+    {"slug": "placeholder", "name_ar": "صورة بديلة", "name_en": "Placeholder"},
+    {"slug": "food", "name_ar": "طعام", "name_en": "Food"},
+    {"slug": "restaurant", "name_ar": "مطعم", "name_en": "Restaurant"},
+    {"slug": "pharmacy", "name_ar": "صيدلية", "name_en": "Pharmacy"},
+    {"slug": "cafe", "name_ar": "كافيه", "name_en": "Cafe"},
+    {"slug": "grocery", "name_ar": "بقالة", "name_en": "Grocery"},
+    {"slug": "dessert", "name_ar": "حلويات", "name_en": "Dessert"},
+    {"slug": "drink", "name_ar": "مشروبات", "name_en": "Drink"},
+    {"slug": "illustration", "name_ar": "رسم توضيحي", "name_en": "Illustration"},
+    {"slug": "brand", "name_ar": "هوية", "name_en": "Brand"}
+  ]
+}

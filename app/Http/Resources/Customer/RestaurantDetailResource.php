@@ -4,6 +4,7 @@ namespace App\Http\Resources\Customer;
 
 use App\Support\Geo;
 use App\Support\Locale;
+use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,7 +25,7 @@ class RestaurantDetailResource extends JsonResource
             'description' => $this->{"description_{$locale}"},
             'slug' => $this->slug,
             'logo' => $this->logo,
-            'cover' => $this->cover,
+            'cover' => MediaLibrary::orPlaceholder($this->cover),
             'phone' => $this->phone,
             'whatsapp' => $this->whatsapp,
             'address' => $this->address,

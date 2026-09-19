@@ -4,6 +4,7 @@ namespace App\Http\Resources\Customer;
 
 use App\Support\Geo;
 use App\Support\Locale;
+use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,7 +24,7 @@ class RestaurantResource extends JsonResource
             'name' => $this->{"name_{$locale}"},
             'slug' => $this->slug,
             'logo' => $this->logo,
-            'cover' => $this->cover,
+            'cover' => MediaLibrary::orPlaceholder($this->cover),
             'cuisines' => $this->whenLoaded('cuisines', fn () => $this->cuisines->pluck("name_{$locale}")),
             'store_category' => $this->whenLoaded('storeCategory', fn () => $this->storeCategory === null ? null : [
                 'id' => $this->storeCategory->id,

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Exceptions\ApiException;
+use App\Support\Media\MediaFiles;
 use App\Support\Security\ImageMetadata;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -69,6 +70,15 @@ class FileUploader
 
     public static function storePublic(UploadedFile $file, string $folder): string
     {
+        return Storage::disk(self::disk())->url(self::storePublicPath($file, $folder));
+    }
+
+    /**
+     * {@see self::storePublic()}, answering with the stored path on the uploads disk —
+     * what the media library keeps beside the URL, so it can compute either later.
+     */
+    public static function storePublicPath(UploadedFile $file, string $folder): string
+    {
         // Resolution first, bytes second — see `ImageOptimizer`. It returns the original
         // file untouched whenever it cannot make it meaningfully smaller, so this is the
         // one line that shrinks every public image the platform stores, from every
@@ -93,7 +103,7 @@ class FileUploader
             throw new RuntimeException("Could not write {$folder}/{$name} to the {$disk} disk.");
         }
 
-        return Storage::disk($disk)->url($stored);
+        return $stored;
     }
 
     /** @return string the stored relative path (not a URL — the disk is not web-accessible). */
@@ -130,6 +140,13 @@ class FileUploader
         }
 
         $path = ltrim(substr($url, strlen($base)), '/');
+
+        // Doc 71 — a library file is never deleted by whoever stopped using it, and neither
+        // is a file another field still shows. Replacing a product's picture must not take
+        // a shared one from the next product.
+        if (MediaFiles::isProtected($disk, $path, $url)) {
+            return;
+        }
 
         try {
             Storage::disk($disk)->delete($path);

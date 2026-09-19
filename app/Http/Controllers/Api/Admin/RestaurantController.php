@@ -6,6 +6,7 @@ use App\Actions\Admin\CreateRestaurantAction;
 use App\Actions\Admin\ResetUserPasswordAction;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\FiltersLists;
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRestaurantRequest;
@@ -88,8 +89,8 @@ class RestaurantController extends Controller
         // Without this the validated array still holds the UploadedFile objects and the
         // action would try to persist them as column values.
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants');
-        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants');
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', media: MediaField::RestaurantLogo);
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', media: MediaField::RestaurantCover);
         $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus');
 
         $result = $action->execute($data);
@@ -105,8 +106,8 @@ class RestaurantController extends Controller
         $this->ensureInScope($request, $restaurant);
 
         $data = $this->guardCommission($request, $restaurant, $request->validated());
-        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
-        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant, MediaField::RestaurantLogo);
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant, MediaField::RestaurantCover);
         $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus', $restaurant);
         $restaurant->update(collect($data)->except('cuisine_ids')->all());
 

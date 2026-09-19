@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LegalPageController;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\FileUploader;
@@ -192,6 +193,18 @@ Route::withoutMiddleware([
             'deepLink' => "cr7delivery://p/{$product->id}",
         ]);
     })->whereNumber('product')->name('share.product');
+
+    /**
+     * Batch 72 — the public legal pages the Google Play and App Store listings link to.
+     *
+     * Arabic then English on one URL (no language negotiation: the CDN strips `Vary`), no
+     * external asset, cacheable for an hour. The text is `App\Support\Legal\LegalContent`.
+     */
+    foreach (['privacy', 'terms', 'delete-account', 'support'] as $legalPage) {
+        Route::get('/'.$legalPage, [LegalPageController::class, 'show'])
+            ->defaults('page', $legalPage)
+            ->name('legal.'.$legalPage);
+    }
 
     /**
      * The iOS half of the App Links proof.

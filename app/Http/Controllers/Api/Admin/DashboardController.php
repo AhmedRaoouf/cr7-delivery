@@ -92,7 +92,9 @@ class DashboardController extends Controller
             'sales' => $sales,
             'statuses' => $statuses,
             'payment_methods' => $paymentMethods,
-            'peak_hours' => $peakHours,
+            // Always an object keyed by hour: a run of hours from 0 (or none at all)
+            // would otherwise serialise as a JSON list and fail the dashboards' schema.
+            'peak_hours' => (object) $peakHours->all(),
         ]);
     }
 

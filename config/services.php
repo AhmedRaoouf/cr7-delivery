@@ -142,4 +142,15 @@ return [
         'timeout' => (int) (env('ZADX_TIMEOUT') ?: 15),
     ],
 
+    /*
+     * Store-review accounts (Google Play "App access", App Store review). The numbers
+     * listed here — and only these — are sent one fixed six-digit code instead of an
+     * SMS. See App\Support\ReviewAccess. Both empty (the default) means the feature is
+     * off; a code that is not six digits also switches it off.
+     */
+    'review' => [
+        'phones' => env('OTP_REVIEW_PHONES') ?: null,
+        'code' => env('OTP_REVIEW_CODE') ?: null,
+    ],
+
 ];

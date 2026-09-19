@@ -14,6 +14,7 @@ use App\Support\OtpBudget;
 use App\Support\OtpGuard;
 use App\Support\OtpRequester;
 use App\Support\OtpVerifier;
+use App\Support\ReviewAccess;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -33,6 +34,10 @@ use Illuminate\Support\Facades\Log;
  * still live, and {@see OtpVerifier} only ever checks the latest — so a code
  * read off an old message, or guessed at across re-sends, is worth nothing once a new one
  * has gone out.
+ *
+ * **A store reviewer's number** ({@see ReviewAccess}) is answered one fixed code from
+ * `.env` and the gateway is not called either; it is logged as `[OTP][review]`, recorded
+ * as `kind = review` (which the send budget does not count) and never echoed.
  *
  * In test mode the gateway is **not called**: the code is the operator's test code, it is
  * stored hashed exactly like a real one so verification cannot tell the difference, and it
@@ -91,21 +96,26 @@ class SendOtpAction
             ? (Otp::testMode() ? Otp::testCode() : null)
             : Otp::echoable($purpose, $account);
 
+        // A store reviewer's number (see ReviewAccess): one fixed code, no gateway, no
+        // budget — and never echoed back, unlike the operator's test code.
+        $reviewCode = $shadow || $testCode !== null ? null : ReviewAccess::codeFor($phone, $purpose, $account);
+
         $kind = match (true) {
             $shadow => SmsSend::KIND_SHADOW,
             $testCode !== null => SmsSend::KIND_TEST,
+            $reviewCode !== null => SmsSend::KIND_REVIEW,
             default => SmsSend::KIND_REAL,
         };
 
         $owner = self::isOwnerSend($purpose, $account);
-        $breaker = $testCode === null && ! self::bypassesBudget($purpose, $account);
+        $breaker = $testCode === null && $reviewCode === null && ! self::bypassesBudget($purpose, $account);
 
         // One number at a time, so two requests racing each other cannot both slip under a
         // count that has room for one.
         $lock = Cache::lock('otp-send-lock:'.$phone, 10);
 
         try {
-            $code = $lock->block(5, function () use ($phone, $purpose, $account, $requester, $owner, $breaker, $kind, $testCode): string {
+            $code = $lock->block(5, function () use ($phone, $purpose, $account, $requester, $owner, $breaker, $kind, $testCode, $reviewCode): string {
                 OtpGuard::admit($phone, $purpose, $requester, $owner);
 
                 if ($breaker) {
@@ -122,7 +132,7 @@ class SendOtpAction
                     ->where('expires_at', '>', now())
                     ->update(['expires_at' => now()]);
 
-                $code = $testCode ?? Otp::authCode($purpose, $account);
+                $code = $testCode ?? $reviewCode ?? Otp::authCode($purpose, $account);
 
                 OtpCode::create([
                     'phone' => $phone,
@@ -152,6 +162,13 @@ class SendOtpAction
             $this->channel->send($phone, $code);
 
             OtpBudget::afterRealSend();
+        } elseif ($kind === SmsSend::KIND_REVIEW) {
+            // Said on every send, and never with the code: this is a store reviewer's
+            // number, nothing was sent and nothing was billed.
+            Log::info('[OTP][review] fixed review code issued — no SMS was sent and the gateway was not called.', [
+                'phone' => substr($phone, 0, 3).'••••'.substr($phone, -4),
+                'purpose' => $purpose->value,
+            ]);
         } elseif ($kind === SmsSend::KIND_TEST && app()->environment('production')) {
             Log::warning('[OTP] otp.mode is test in production — every customer, captain and place code is the operator\'s test code.');
         }

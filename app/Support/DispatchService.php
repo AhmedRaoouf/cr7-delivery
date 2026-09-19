@@ -121,6 +121,7 @@ class DispatchService
         $pool = Driver::query()
             ->where('is_active', true)
             ->where('is_online', true)
+            ->tap(fn ($q) => ReviewAccess::exceptFromDrivers($q))
             // doc 63 D-116 — «متصل وفاضي» is no longer the whole condition. A captain
             // carrying orders is still a candidate when this one fits their trip; the
             // trip gates below decide, not `active_order_id IS NULL`.
@@ -537,6 +538,11 @@ class DispatchService
             return 0;
         }
 
+        // A store reviewer's captain is never offered a real customer's order.
+        if (ReviewAccess::isReviewPhone((string) $driver->user?->phone)) {
+            return 0;
+        }
+
         $zoneIds = $driver->assignedZones()->pluck('service_zones.id')->all();
 
         $orders = Order::query()
@@ -714,6 +720,7 @@ class DispatchService
         $pool = Driver::query()
             ->where('is_active', true)
             ->where('is_online', true)
+            ->tap(fn ($q) => ReviewAccess::exceptFromDrivers($q))
             // A captain with no zone rows is unrestricted, not «matches no zone» — and
             // with `dispatch.allow_neighbour_zones` on, which is the seeded default,
             // a zone is not a filter here at all. «الناس كلها» was the ruling, and a

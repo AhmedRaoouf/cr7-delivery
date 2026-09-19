@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Model;
  *
  * @property string $phone
  * @property string $purpose
- * @property string $kind real|test|shadow
+ * @property string $kind real|test|shadow|review
  */
 class SmsSend extends Model
 {
@@ -24,6 +24,9 @@ class SmsSend extends Model
     public const KIND_TEST = 'test';
 
     public const KIND_SHADOW = 'shadow';
+
+    /** A store reviewer's number, answered the fixed review code — see ReviewAccess. */
+    public const KIND_REVIEW = 'review';
 
     public const UPDATED_AT = null;
 

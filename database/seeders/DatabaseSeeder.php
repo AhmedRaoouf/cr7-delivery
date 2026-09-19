@@ -38,6 +38,8 @@ class DatabaseSeeder extends Seeder
             // doc 17 — the real Gamasa catalogue. Without it every browse screen is
             // empty and nothing downstream of a product can be exercised at all.
             CatalogSeeder::class,
+            // doc 71 — the protected default picture; idempotent, never touches Admin's library.
+            MediaLibrarySeeder::class,
         ]);
     }
 }

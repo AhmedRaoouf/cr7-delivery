@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreMenuCategoryRequest;
@@ -30,7 +31,7 @@ class MenuCategoryController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', media: MediaField::CategoryImage);
         $category = $restaurant->menuCategories()->create($data);
 
         return ApiResponse::success($category, 'تم إنشاء القسم بنجاح', status: 201);
@@ -40,7 +41,7 @@ class MenuCategoryController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $menuCategory);
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $menuCategory, MediaField::CategoryImage);
         $menuCategory->update($data);
 
         return ApiResponse::success($menuCategory, 'تم تحديث القسم بنجاح');

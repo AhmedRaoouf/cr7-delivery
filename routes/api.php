@@ -19,6 +19,10 @@ use App\Http\Controllers\Api\Admin\ErrandController as AdminErrandController;
 use App\Http\Controllers\Api\Admin\FaqController as AdminFaqController;
 use App\Http\Controllers\Api\Admin\HomePopupController as AdminHomePopupController;
 use App\Http\Controllers\Api\Admin\LookupController;
+use App\Http\Controllers\Api\Admin\MediaController;
+use App\Http\Controllers\Api\Admin\MediaTagController;
+use App\Http\Controllers\Api\Admin\PlaceGroupController;
+use App\Http\Controllers\Api\Restaurant\MediaPickerController as RestaurantMediaPickerController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
@@ -360,6 +364,8 @@ Route::prefix('v1')->group(function () {
     Route::prefix('restaurant')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:restaurant', 'throttle.account'])->group(function () {
         Route::get('/me', [RestaurantMeController::class, 'show']);
         Route::patch('/me', [RestaurantMeController::class, 'update']);
+        // doc 71 — the pictures this place may choose from, for one image field.
+        Route::get('/media/picker', [RestaurantMediaPickerController::class, 'index']);
         Route::post('/open-status', [RestaurantMeController::class, 'openStatus']);
         Route::get('/opening-hours', [RestaurantMeController::class, 'openingHours']);
         Route::put('/opening-hours', [RestaurantMeController::class, 'updateOpeningHours']);
@@ -499,6 +505,34 @@ Route::prefix('v1')->group(function () {
         // Batch 68 — the filter pickers (ADMIN-LISTS.md §1.27): id + name, scoped like the
         // list each one narrows, open to every admin.
         Route::get('/lookups/{kind}', [LookupController::class, 'show'])->whereIn('kind', LookupController::KINDS);
+
+        // doc 71 — the media library. The picker is open to every admin (it is how an admin who
+        // may only edit products picks a picture for one); the library itself answers to
+        // `media.view` / `media.manage`, and the writes to a global scope — one shared pool.
+        Route::get('/media/picker', [MediaController::class, 'picker']);
+        Route::middleware('permission:media.view')->group(function () {
+            Route::get('/media', [MediaController::class, 'index']);
+            Route::get('/media/meta', [MediaController::class, 'meta']);
+            Route::get('/media/available', [MediaController::class, 'available']);
+            Route::get('/media/tags', [MediaTagController::class, 'index']);
+            Route::get('/media/{media}', [MediaController::class, 'show'])->whereNumber('media');
+            Route::get('/place-groups', [PlaceGroupController::class, 'index']);
+            Route::get('/place-groups/{placeGroup}', [PlaceGroupController::class, 'show']);
+        });
+        Route::middleware(['permission:media.manage', 'admin.global'])->group(function () {
+            Route::post('/media', [MediaController::class, 'store']);
+            Route::post('/media/available', [MediaController::class, 'addAvailable']);
+            Route::post('/media/tags', [MediaTagController::class, 'store']);
+            Route::patch('/media/tags/{tag}', [MediaTagController::class, 'update']);
+            Route::delete('/media/tags/{tag}', [MediaTagController::class, 'destroy']);
+            Route::patch('/media/{media}', [MediaController::class, 'update'])->whereNumber('media');
+            Route::delete('/media/{media}', [MediaController::class, 'destroy'])->whereNumber('media');
+            Route::post('/media/{media}/restore', [MediaController::class, 'restore'])->whereNumber('media');
+            Route::post('/place-groups', [PlaceGroupController::class, 'store']);
+            Route::patch('/place-groups/{placeGroup}', [PlaceGroupController::class, 'update']);
+            Route::put('/place-groups/{placeGroup}/places', [PlaceGroupController::class, 'syncPlaces']);
+            Route::delete('/place-groups/{placeGroup}', [PlaceGroupController::class, 'destroy']);
+        });
 
         // Locations & pricing
         Route::middleware('permission:locations.view')->group(function () {

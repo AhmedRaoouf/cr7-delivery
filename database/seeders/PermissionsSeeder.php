@@ -58,6 +58,9 @@ class PermissionsSeeder extends Seeder
                 'reports.sales', 'reports.restaurants', 'reports.products', 'reports.drivers',
                 'reports.zones', 'reports.export', 'reports.customers', 'ops.health',
             ],
+            'media' => [
+                'media.view', 'media.manage',
+            ],
             'system' => [
                 'users.view', 'users.manage', 'users.invite', 'users.suspend',
                 'roles.manage', 'roles.create', 'scope.manage', 'settings.view', 'settings.manage', 'audit.view',

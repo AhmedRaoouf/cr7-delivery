@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreHomePopupRequest;
@@ -51,9 +52,7 @@ class HomePopupController extends Controller
     {
         $data = $this->withoutStaleDestinations($request->validated());
 
-        if ($request->hasFile('image')) {
-            $data['image'] = FileUploader::storePublic($request->file('image'), 'home-popups');
-        }
+        $data = $this->withPublicUpload($data, $request, 'image', 'home-popups', media: MediaField::PopupImage);
 
         $popup = HomePopup::create($data);
 
@@ -83,7 +82,7 @@ class HomePopupController extends Controller
         // absent file means «leave it alone» and only the sibling boolean means «clear
         // it». Without that flag the dashboard could replace the artwork and never take
         // it off.
-        $data = $this->withPublicUpload($data, $request, 'image', 'home-popups', $homePopup);
+        $data = $this->withPublicUpload($data, $request, 'image', 'home-popups', $homePopup, MediaField::PopupImage);
 
         $homePopup->update($data);
 

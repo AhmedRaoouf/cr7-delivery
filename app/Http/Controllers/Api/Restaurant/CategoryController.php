@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Restaurant;
 
 use App\Http\Controllers\Concerns\FiltersLists;
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreCategoryRequest;
@@ -38,7 +39,7 @@ class CategoryController extends Controller
     public function store(StoreCategoryRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories');
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', media: MediaField::CategoryImage);
         $category = $restaurant->menuCategories()->create($data);
 
         return ApiResponse::success($category, 'تم إنشاء القسم بنجاح', status: 201);
@@ -47,7 +48,7 @@ class CategoryController extends Controller
     public function update(StoreCategoryRequest $request, MenuCategory $category): JsonResponse
     {
         $this->ensureOwned($request, $category);
-        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $category);
+        $data = $this->withPublicUpload($request->validated(), $request, 'image', 'categories', $category, MediaField::CategoryImage);
         $category->update($data);
 
         return ApiResponse::success($category->fresh(), 'تم تحديث القسم بنجاح');

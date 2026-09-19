@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Restaurant;
 
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\UpdateRestaurantMeRequest;
@@ -31,8 +32,8 @@ class RestaurantMeController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant);
-        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant);
+        $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant, MediaField::RestaurantLogo);
+        $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant, MediaField::RestaurantCover);
         // D-58's «المنيو» pill finally has a way in. Images or a PDF; a PDF
         // arrives as one file and is stored as one image per page.
         $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus', $restaurant);

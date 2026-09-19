@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreBannerRequest;
@@ -27,8 +28,8 @@ class BannerController extends Controller
     public function store(StoreBannerRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners');
-        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners');
+        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners', media: MediaField::BannerImage);
+        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners', media: MediaField::BannerImage);
 
         $banner = Banner::create($data);
 
@@ -38,8 +39,8 @@ class BannerController extends Controller
     public function update(StoreBannerRequest $request, Banner $banner): JsonResponse
     {
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners', $banner);
-        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners', $banner);
+        $data = $this->withPublicUpload($data, $request, 'image_ar', 'banners', $banner, MediaField::BannerImage);
+        $data = $this->withPublicUpload($data, $request, 'image_en', 'banners', $banner, MediaField::BannerImage);
 
         $banner->update($data);
 

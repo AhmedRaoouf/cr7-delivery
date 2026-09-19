@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Restaurant;
 
 use App\Http\Controllers\Concerns\FiltersLists;
+use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
@@ -56,8 +57,8 @@ class ProductController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products');
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products');
+        $data = $this->withPublicUpload($data, $request, 'image', 'products', media: MediaField::ProductImage);
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', media: MediaField::ProductGallery);
 
         $product = $restaurant->products()->create($data);
 
@@ -69,8 +70,8 @@ class ProductController extends Controller
         $this->ensureOwned($request, $product);
 
         $data = $request->validated();
-        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product);
-        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product);
+        $data = $this->withPublicUpload($data, $request, 'image', 'products', $product, MediaField::ProductImage);
+        $data = $this->withPublicGallery($data, $request, 'gallery', 'products', $product, MediaField::ProductGallery);
 
         $product->update($data);
 

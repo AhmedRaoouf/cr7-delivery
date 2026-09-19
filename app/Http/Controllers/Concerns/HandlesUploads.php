@@ -2,7 +2,11 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Enums\MediaField;
+use App\Enums\UserType;
 use App\Exceptions\ApiException;
+use App\Models\Restaurant;
+use App\Support\Media\MediaPicker;
 use App\Support\FileUploader;
 use App\Support\PdfPages;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +35,7 @@ trait HandlesUploads
         string $field,
         string $folder,
         ?Model $existing = null,
+        ?MediaField $media = null,
     ): array {
         // The flag is a transport detail; it is not a column on any model.
         unset($data['remove_'.$field]);
@@ -38,6 +43,19 @@ trait HandlesUploads
         if ($request->hasFile($field)) {
             $data[$field] = FileUploader::storePublic($request->file($field), $folder);
             FileUploader::deletePublic($existing?->getAttribute($field));
+
+            return $data;
+        }
+
+        // Doc 71 — a picture picked from the media library instead of uploaded. The
+        // server resolves the opaque `<field>_media` ref against the same rules the picker
+        // list used, and stores the URL exactly as an upload would.
+        if ($media !== null && ($url = $this->pickedMedia($request, $field, $media, $existing)) !== null) {
+            if ($existing?->getAttribute($field) !== $url) {
+                FileUploader::deletePublic($existing?->getAttribute($field));
+            }
+
+            $data[$field] = $url;
 
             return $data;
         }
@@ -56,14 +74,28 @@ trait HandlesUploads
         string $field,
         string $folder,
         ?Model $existing = null,
+        ?MediaField $media = null,
     ): array {
         unset($data['remove_'.$field]);
 
-        if ($request->hasFile($field)) {
-            $data[$field] = array_map(
-                fn ($file) => FileUploader::storePublic($file, $folder),
-                $request->file($field),
-            );
+        // Doc 71 — `<field>_media[]` refs from the picker, alongside any uploads.
+        $picked = [];
+
+        if ($media !== null) {
+            foreach ((array) $request->input($field.'_media', []) as $ref) {
+                if (is_string($ref) && $ref !== '') {
+                    $picked[] = MediaPicker::resolve($request->user(), $media, $ref, $this->mediaPlace($request, $existing));
+                }
+            }
+        }
+
+        if ($request->hasFile($field) || $picked !== []) {
+            $data[$field] = [
+                ...($request->hasFile($field)
+                    ? array_map(fn ($file) => FileUploader::storePublic($file, $folder), $request->file($field))
+                    : []),
+                ...$picked,
+            ];
 
             return $data;
         }
@@ -178,6 +210,46 @@ trait HandlesUploads
         $data[$field] = $kept;
 
         return $data;
+    }
+
+    /** The URL behind a `<field>_media` ref, or null when the request carries none. */
+    private function pickedMedia(Request $request, string $field, MediaField $media, ?Model $existing): ?string
+    {
+        $ref = $request->input($field.'_media');
+
+        if (! is_string($ref) || $ref === '') {
+            return null;
+        }
+
+        return MediaPicker::resolve($request->user(), $media, $ref, $this->mediaPlace($request, $existing));
+    }
+
+    /**
+     * The place a picker call is about: a place's own restaurant, or — for an admin — the
+     * restaurant in the route or the one being edited. Null when there is none yet (a
+     * restaurant being created), in which case only library pictures can be chosen.
+     */
+    private function mediaPlace(Request $request, ?Model $existing): ?Restaurant
+    {
+        $user = $request->user();
+
+        if ($user->type === UserType::Restaurant) {
+            return $user->restaurant()->first();
+        }
+
+        $routed = $request->route('restaurant');
+
+        if ($routed instanceof Restaurant) {
+            return $routed;
+        }
+
+        if ($existing instanceof Restaurant) {
+            return $existing;
+        }
+
+        $restaurantId = $existing?->getAttribute('restaurant_id');
+
+        return $restaurantId ? Restaurant::query()->find($restaurantId) : null;
     }
 
     private function withPrivateUpload(array $data, Request $request, string $field, string $folder): array

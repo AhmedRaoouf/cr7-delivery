@@ -21,6 +21,11 @@ class SmsGatewayStatus
     public function report(): array
     {
         $channel = (string) config('services.otp_channel', 'log');
+
+        if ($channel === 'zadx') {
+            return $this->zadx();
+        }
+
         $sms = (array) config('services.sms_misr', []);
         $live = (string) ($sms['environment'] ?? '2') === '1';
         $credentials = filled($sms['username'] ?? null) && filled($sms['password'] ?? null);
@@ -38,6 +43,44 @@ class SmsGatewayStatus
             'delivers' => $delivers,
             'note' => $this->note($channel, $live, $credentials, $sender, $arabicSafe),
         ];
+    }
+
+    /**
+     * ZADX has one environment — every send is real and spends a credit — so `environment`
+     * is always `live` and `delivers` is simply «the key, the secret and the sender are set».
+     * `balance` is the plan's remaining credits, read from the free `/sms/balance` call.
+     *
+     * @return array<string, mixed>
+     */
+    private function zadx(): array
+    {
+        $credentials = ZadxChannel::configured();
+        $sender = filled(config('services.zadx.sender'));
+
+        return [
+            'channel' => 'zadx',
+            'provider' => 'zadx',
+            'environment' => 'live',
+            'credentials_configured' => $credentials,
+            'sender_configured' => $sender,
+            'balance' => $credentials ? $this->zadxCredits() : null,
+            'delivers' => $credentials && $sender,
+            'note' => match (true) {
+                ! $credentials => 'مفتاح ZADX أو سرّه ناقص في ملف ‪.env‬ (ZADX_API_KEY / ZADX_API_SECRET).',
+                ! $sender => 'لا يوجد Sender ID في ملف ‪.env‬ (ZADX_SENDER_ID).',
+                default => 'البوابة تعمل وترسل رسائل حقيقية عبر ZADX. الرصيد بوحدة الرسائل (credits).',
+            },
+        ];
+    }
+
+    private function zadxCredits(): ?float
+    {
+        return Cache::remember('zadx:balance', 300, function (): ?float {
+            $balance = (new ZadxChannel)->balance();
+            $credits = $balance['remaining_credits'] ?? null;
+
+            return is_numeric($credits) ? (float) $credits : null;
+        });
     }
 
     private function note(string $channel, bool $live, bool $credentials, bool $sender, bool $arabicSafe): string

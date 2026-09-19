@@ -121,4 +121,25 @@ return [
         'message' => env('SMS_MISR_MESSAGE', 'كود التحقق الخاص بك في CR7 Delivery هو: :code'),
     ],
 
+    /*
+     * ZADX — the OTP gateway (smsportal.zadx.net). See App\Services\Otp\ZadxChannel.
+     * Key and secret are the pair the ZADX dashboard shows on the app's page
+     * (`pk_…` / `sk_…`). `?:`, not env()'s default argument: an empty `.env` line is
+     * an empty string, and the default would never fire (same trap as SMS Misr's).
+     */
+    'zadx' => [
+        'base_url' => env('ZADX_BASE_URL') ?: 'https://smsapi.zadx.net/api/v1',
+        'key' => env('ZADX_API_KEY') ?: null,
+        'secret' => env('ZADX_API_SECRET') ?: null,
+
+        // Must be assigned to the app. Empty lets ZADX use the app's default sender.
+        'sender' => env('ZADX_SENDER_ID') ?: 'ZADX',
+
+        // `ar` or `en` — the language of ZADX's own OTP template.
+        'locale' => env('ZADX_LOCALE') ?: 'ar',
+
+        // Seconds. The send is queued on ZADX's side and answers 202, so this is generous.
+        'timeout' => (int) (env('ZADX_TIMEOUT') ?: 15),
+    ],
+
 ];

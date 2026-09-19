@@ -38,6 +38,7 @@ use App\Services\Maps\Router;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
+use App\Services\Otp\ZadxChannel;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
 use App\Support\OtpRequester;
@@ -122,8 +123,9 @@ class AppServiceProvider extends ServiceProvider
             $this->app->register(TelescopeServiceProvider::class);
         }
 
-        // Flip with OTP_CHANNEL=sms_misr in .env once the account is live — no code change needed.
+        // Flip with OTP_CHANNEL=zadx (or sms_misr) in .env once the account is live — no code change needed.
         $this->app->bind(OtpChannel::class, match (config('services.otp_channel')) {
+            'zadx' => ZadxChannel::class,
             'sms_misr' => SmsMisrChannel::class,
             default => LogOtpChannel::class,
         });

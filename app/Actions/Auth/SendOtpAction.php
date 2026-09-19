@@ -144,7 +144,7 @@ class SendOtpAction
             // lands in storage/logs and nowhere else, `/auth/otp/send` answers 200, and
             // nobody receives anything. Said on every send, where it happens.
             if ($this->channel instanceof LogOtpChannel) {
-                Log::warning('[OTP] a real code was issued and OTP_CHANNEL is the log — nobody will receive it. Bind SMS Misr, or switch otp.mode to test on ADM-46 while there is no gateway.', [
+                Log::warning('[OTP] a real code was issued and OTP_CHANNEL is the log — nobody will receive it. Set OTP_CHANNEL to a real gateway (zadx), or switch otp.mode to test on ADM-46 while there is no gateway.', [
                     'purpose' => $purpose->value,
                 ]);
             }

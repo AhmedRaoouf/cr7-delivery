@@ -148,9 +148,42 @@ The SMS channel is built and bound: `SmsMisrChannel`, selected by
 and sign-in does not use it yet** — a test-environment send to the operator's
 phone came back `1901`, SMSID `186639970`.
 
+### 6.0 ZADX — the gateway production uses (D-159)
+
+`ZadxChannel`, selected by `OTP_CHANNEL=zadx`. It posts the six-digit code to
+`POST https://smsapi.zadx.net/api/v1/otp/send` — ZADX owns the message text — with
+`X-Api-Key`, `X-Api-Secret` and a fresh `Idempotency-Key` per send.
+
+```
+OTP_CHANNEL=zadx
+ZADX_API_KEY=pk_…
+ZADX_API_SECRET=sk_…
+ZADX_SENDER_ID=ZADX       # must be assigned to the app on the ZADX dashboard
+```
+
+```bash
+php artisan config:cache
+php artisan cr7:sms-doctor                       # balance + plan, free
+php artisan cr7:sms-doctor 010XXXXXXXX --force   # one real OTP, spends one credit
+```
+
+Unlike SMS Misr, ZADX answers **real HTTP statuses**: `401` credentials, `402`
+`no_active_subscription` / `quota_exhausted`, `403` `ip_not_allowed` /
+`sender_id_not_allowed` / `app_inactive` / `mode_not_allowed`, `429` the per-number
+(1/min, 5/hour) and per-app (60/min) limits, `502` the carrier. Every fault reaches
+the log as `zadx.send_failed` (with `code` and `meaning`) and the caller as
+`503 otp_send_failed`; a `429` becomes CR7's own `429 otp_send_rate_limited` with
+ZADX's `Retry-After`. A message is on ZADX's «Messages» page by the `message_id` in
+`zadx.response`. `zadx.low_credits` logs at ≤ 10 credits left. ZADX never resends,
+and neither does CR7 — a timeout is `pending_verification` there, credits reserved.
+
+The plan is a **credit balance** (`GET /sms/balance`); `ADM-46`'s gateway card shows
+it. Keep `otp.daily_budget` / `otp.hourly_budget` below what the plan can pay for.
+
 ### 6.1 Prove the gateway without moving a customer
 
-`cr7:sms-doctor` sends through `SmsMisrChannel` directly, never through the bound
+`cr7:sms-doctor` sends through the gateway's own channel directly (`ZadxChannel` when
+`OTP_CHANNEL=zadx` or `--provider=zadx`, else `SmsMisrChannel`), never through the bound
 channel, so everything below runs while customers still sign in as before.
 
 ```bash

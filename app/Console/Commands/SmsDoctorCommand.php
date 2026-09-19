@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Services\Otp\LogOtpChannel;
 use App\Services\Otp\OtpChannel;
 use App\Services\Otp\SmsMisrChannel;
+use App\Services\Otp\ZadxChannel;
 use App\Support\Otp;
 use App\Support\SettingsCatalog;
 use Illuminate\Console\Command;
@@ -36,12 +37,17 @@ class SmsDoctorCommand extends Command
     protected $signature = 'cr7:sms-doctor
         {phone? : send one verification message to this number}
         {--sender= : use this sender token for this run instead of SMS_MISR_SENDER}
+        {--provider= : zadx or sms_misr — defaults to whichever OTP_CHANNEL names, SMS Misr otherwise}
         {--force : send without asking}';
 
-    protected $description = 'Check the SMS Misr gateway, and optionally send one test message';
+    protected $description = 'Check the SMS gateway (ZADX or SMS Misr), and optionally send one test message';
 
     public function handle(): int
     {
+        if (($this->option('provider') ?: config('services.otp_channel')) === 'zadx') {
+            return $this->zadx();
+        }
+
         if (filled($this->option('sender'))) {
             config(['services.sms_misr.sender' => (string) $this->option('sender')]);
         }
@@ -260,5 +266,110 @@ class SmsDoctorCommand extends Command
         }
 
         return substr($value, 0, 6).'…  ('.strlen($value).' chars)';
+    }
+
+    /**
+     * ZADX — the same two questions, answered the same way: can the gateway send, and is
+     * sign-in using it. `/sms/balance` proves the key and secret and costs nothing; a
+     * phone number sends one real OTP through `ZadxChannel` directly, whatever channel is
+     * bound, and that spends one credit and counts against ZADX's 1-a-minute-per-number.
+     */
+    private function zadx(): int
+    {
+        $zadx = (array) config('services.zadx');
+
+        $this->info('ZADX');
+        $this->table(['key', 'value'], [
+            ['base url', $zadx['base_url'] ?? ''],
+            ['api key', $this->prefixOnly($zadx['key'] ?? null)],
+            ['api secret', $this->prefixOnly($zadx['secret'] ?? null)],
+            ['sender', ($zadx['sender'] ?? '') !== '' ? $zadx['sender'] : '— app default —'],
+            ['locale', $zadx['locale'] ?? ''],
+        ]);
+
+        $ready = ZadxChannel::configured();
+
+        if (! $ready) {
+            $this->error('✗ ZADX_API_KEY / ZADX_API_SECRET is empty.');
+        }
+
+        if ($ready) {
+            $this->newLine();
+            $this->info('balance lookup');
+
+            $status = 0;
+            $balance = (new ZadxChannel)->balance($status);
+
+            if ($balance === null) {
+                $ready = false;
+                $this->error($status === 401
+                    ? '✗ 401 — ZADX rejected the key or secret'
+                    : '✗ balance lookup failed (HTTP '.$status.')');
+            } else {
+                $this->info('✓ credentials accepted');
+                $this->line(sprintf(
+                    'plan %s · %s of %s credits left · expires %s',
+                    $balance['plan'] ?? '?',
+                    $balance['remaining_credits'] ?? '?',
+                    $balance['quota'] ?? '?',
+                    $balance['expires_at'] ?? '?',
+                ));
+
+                if (! ($balance['has_active_plan'] ?? false) || ($balance['remaining_credits'] ?? 0) <= 0) {
+                    $ready = false;
+                    $this->error('✗ no active plan or no credits left — every send will be refused');
+                }
+            }
+        }
+
+        $this->signInStatus();
+
+        $phone = $this->argument('phone');
+
+        if ($phone === null) {
+            $this->newLine();
+            $this->line('to send one message: php artisan cr7:sms-doctor 01012345678 --provider=zadx');
+
+            return $ready ? self::SUCCESS : self::FAILURE;
+        }
+
+        if (! $ready) {
+            $this->newLine();
+            $this->error('not sending — fix the gateway faults above first');
+
+            return self::FAILURE;
+        }
+
+        $this->newLine();
+        $this->warn('About to send one LIVE verification message to '.$phone.' through ZADX. This spends one credit.');
+
+        if (! $this->option('force') && ! $this->confirm('Send it?', false)) {
+            $this->line('nothing sent');
+
+            return self::SUCCESS;
+        }
+
+        // Fixed and obviously not real: a real code in a log file is a credential.
+        try {
+            (new ZadxChannel)->send((string) $phone, '000000');
+        } catch (\Throwable $e) {
+            $this->error('✗ send failed: '.$e->getMessage());
+            $this->line('ZADX\'s code and its meaning: storage/logs/laravel-YYYY-MM-DD.log, look for zadx.send_failed or zadx.rate_limited');
+
+            return self::FAILURE;
+        }
+
+        $this->info('✓ ZADX accepted it');
+        $this->line('Check the phone, and «Messages» on the ZADX dashboard. Accepted but not received is a delivery question for ZADX, not a fault here.');
+
+        Log::info('zadx.doctor', ['phone' => $phone]);
+
+        return self::SUCCESS;
+    }
+
+    /** `pk_` / `sk_` and a length — enough to see the right kind of value is set, nothing of the value. */
+    private function prefixOnly(?string $value): string
+    {
+        return blank($value) ? '— MISSING —' : substr($value, 0, 3).'…  ('.strlen($value).' chars)';
     }
 }

@@ -199,7 +199,10 @@ a code that is not six digits also turns it off. `App\Support\ReviewAccess` is t
 `php artisan cr7:review-accounts --password='…'` creates/reset the three accounts on those numbers
 (idempotent; it refuses a number that already belongs to an account it did not create). The demo place
 is `is_active = false` — no customer can see it, no order can reach it — and dispatch leaves the review
-captain out. Remove the two `.env` lines and delete the three users when review is over.
+captain out. A review account is also **refused at checkout** — order, scheduled order, errand, direct order all
+answer `403 review_account_demo_only` and write nothing (`ReviewAccess::refuseRealWork()`, doc 74 §7), and the
+review captain is not shown or offered a real errand. Remove the two `.env` lines and delete the three users when
+review is over.
 
 ### 6.1 Prove the gateway without moving a customer
 

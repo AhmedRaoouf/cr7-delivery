@@ -99,17 +99,11 @@ class CustomerRegistrationTest extends TestCase
         $this->assertSame(1, User::query()->where('phone', '01011122233')->count());
     }
 
-    public function test_a_phone_that_is_already_a_captain_cannot_register_as_a_customer(): void
+    public function test_a_phone_that_is_already_a_captain_is_never_sent_a_sign_up_code(): void
     {
         $captain = User::factory()->create(['phone' => '01011122233', 'type' => 'driver']);
 
-        $this->postJson('/api/v1/auth/otp/send', ['phone' => '01011122233', 'purpose' => 'register'])->assertOk();
-
-        $this->postJson('/api/v1/auth/otp/verify', [
-            'phone' => '01011122233',
-            'code' => '123456',
-            'purpose' => 'register',
-        ])
+        $this->postJson('/api/v1/auth/otp/send', ['phone' => '01011122233', 'purpose' => 'register'])
             ->assertStatus(409)
             ->assertJsonPath('error', 'phone_taken')
             ->assertJsonPath('message', 'هذا الرقم مسجل بالفعل — سجّل الدخول بكلمة المرور')
@@ -119,6 +113,30 @@ class CustomerRegistrationTest extends TestCase
             ->assertJsonMissingPath('meta.account_type');
 
         $this->assertSame(1, User::query()->where('phone', $captain->phone)->count());
+    }
+
+    public function test_a_registered_number_costs_no_code_no_row_and_no_budget_in_any_shape(): void
+    {
+        $channel = $this->fakeOtpChannel();
+        User::factory()->create(['phone' => '01011122233', 'type' => 'customer']);
+
+        foreach (['01011122233', '+201011122233', '201011122233', '+20 101 112 2233'] as $typed) {
+            $this->postJson('/api/v1/auth/otp/send', ['phone' => $typed, 'purpose' => 'register'])
+                ->assertStatus(409)
+                ->assertJsonPath('error', 'phone_taken');
+        }
+
+        $this->assertSame([], $channel->sent);
+        $this->assertSame(0, \App\Models\OtpCode::query()->where('phone', '01011122233')->count());
+        $this->assertSame(0, \App\Models\SmsSend::query()->where('phone', '01011122233')->count());
+    }
+
+    public function test_a_registered_number_still_signs_in_and_resets_by_code(): void
+    {
+        User::factory()->create(['phone' => '01011122233', 'type' => 'customer']);
+
+        $this->postJson('/api/v1/auth/otp/send', ['phone' => '01011122233', 'purpose' => 'login'])->assertOk();
+        $this->postJson('/api/v1/auth/otp/send', ['phone' => '01011122233', 'purpose' => 'reset'])->assertOk();
     }
 
     /**

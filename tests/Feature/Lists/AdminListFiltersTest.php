@@ -72,6 +72,21 @@ class AdminListFiltersTest extends TestCase
         $this->assertSame([$done->id, $issue->id], $ids(['driver_id' => (string) $captain->id]));
     }
 
+    /** The mobile place form fills its zone picker from this list — a city without its zones left it empty. */
+    public function test_the_cities_list_carries_each_cities_zones(): void
+    {
+        $zone = \App\Models\ServiceZone::create([
+            'city_id' => $this->city->id, 'name_ar' => 'وسط جمصة', 'name_en' => 'Gamasa Center',
+            'center_lat' => 31.3833, 'center_lng' => 31.4833, 'radius_km' => 3,
+            'delivery_fee' => 10, 'min_order_value' => 50, 'avg_delivery_minutes' => 30, 'is_active' => true,
+        ]);
+
+        $row = collect($this->getJson('/api/v1/admin/cities')->assertOk()->json('data'))
+            ->firstWhere('id', $this->city->id);
+
+        $this->assertContains($zone->id, array_column($row['service_zones'], 'id'));
+    }
+
     public function test_the_orders_download_honours_the_sort(): void
     {
         $this->orderFor($this->omar, ['total' => 90, 'restaurant_order_ref' => 'R-LOW']);

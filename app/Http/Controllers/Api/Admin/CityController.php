@@ -30,6 +30,10 @@ class CityController extends Controller
 
         ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
 
+        // The mobile place form fills its zone picker from this list, so a city arrives with
+        // its zones — without them the picker of a chosen city was empty.
+        $query->with(['serviceZones' => fn ($zones) => $zones->orderBy('name_ar')]);
+
         $cities = $sort->apply($query, ['name' => 'cities.name_ar'])->paginate($params->perPage());
 
         return $this->paginated($cities, sort: $sort);

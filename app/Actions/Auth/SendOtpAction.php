@@ -62,6 +62,13 @@ class SendOtpAction
     {
         $account ??= User::query()->where('phone', $phone)->first();
 
+        // A number that already holds an account is never sent a sign-up code: nothing
+        // leaves the server, no `sms_sends` row is written and the budget is not touched.
+        // `VerifyOtpAction` keeps its own check as the second line of defence.
+        if ($purpose === OtpPurpose::Register && $account !== null) {
+            throw RegisterCustomerAction::phoneTaken();
+        }
+
         return $this->issue($phone, $purpose, $account, $requester ?? OtpRequester::fromRequest(request()), shadow: false);
     }
 

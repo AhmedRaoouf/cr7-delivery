@@ -80,7 +80,7 @@ class ScheduleOrderAction
             throw CheckoutPricer::refusal($blockers);
         }
 
-        $lines = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get();
+        $lines = $cart->items()->with(['product', 'restaurant', 'options.productOption.group'])->get();
 
         return DB::transaction(function () use ($user, $cart, $data, $address, $quote, $when, $lines): ScheduledOrder {
             $scheduled = ScheduledOrder::create([
@@ -117,7 +117,22 @@ class ScheduleOrderAction
                         'product_name' => $item->product?->name_ar,
                         'quantity' => $item->quantity,
                         'unit_price' => (float) ($item->product?->discount_price ?? $item->product?->price ?? 0),
+                        // Names only, for the apps that already read this line.
                         'options' => $item->options->map(fn ($o) => $o->productOption?->name_ar)->filter()->values()->all(),
+                        // D-167 — what each choice added, and the line as it will be billed.
+                        // `unit_price × quantity` left the options out, so a scheduled
+                        // «كفتة نص كيلو» read as the price of the base dish.
+                        'option_details' => $item->options->filter(fn ($o) => $o->productOption !== null)->map(fn ($o) => [
+                            'option_id' => $o->productOption->id,
+                            'group_name' => $o->productOption->group?->name_ar,
+                            'group_name_en' => $o->productOption->group?->name_en,
+                            'name' => $o->productOption->name_ar,
+                            'name_en' => $o->productOption->name_en,
+                            'price_delta' => (float) $o->productOption->price_delta,
+                        ])->values()->all(),
+                        'options_total' => (float) $item->options->sum(fn ($o) => (float) ($o->productOption?->price_delta ?? 0)),
+                        'line_total' => round(((float) ($item->product?->discount_price ?? $item->product?->price ?? 0)
+                            + (float) $item->options->sum(fn ($o) => (float) ($o->productOption?->price_delta ?? 0))) * $item->quantity, 2),
                     ])->all(),
                     'subtotal' => $quote['subtotal'],
                     'delivery_fee' => $quote['delivery_fee'],

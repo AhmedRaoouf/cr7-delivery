@@ -330,6 +330,30 @@ class CatalogOptionsTest extends TestCase
         $this->assertSame(0, $customer->cart->items()->count());
     }
 
+    public function test_a_scheduled_basket_prices_its_options_for_the_customer_and_the_place(): void
+    {
+        [, $options] = $this->strengthGroup();
+        $customer = $this->makeCustomer();
+        $address = $this->makeAddress($customer);
+        $this->actingAsCustomer($customer)->postJson('/api/v1/cart/items', ['product_id' => $this->medicine->id, 'option_ids' => [$options[2]->id], 'quantity' => 2])->assertCreated();
+
+        $scheduled = $this->actingAsCustomer($customer)->postJson('/api/v1/scheduled-orders', [
+            'address_id' => $address->id,
+            'payment_method' => 'cash',
+            'scheduled_for' => now()->addHours(3)->toIso8601String(),
+        ])->assertCreated()->json('data');
+
+        // (20 + 35) × 2 — the line used to read 40.
+        $line = $scheduled['lines'][0];
+        $this->assertEquals(110, $line['line_total']);
+        $this->assertSame(['1000 مجم'], $line['options']);
+        $this->assertSame('التركيز', $line['option_details'][0]['group_name']);
+        $this->assertEquals(35, $line['option_details'][0]['price_delta']);
+
+        $place = $this->actingAsPlace($this->pharmacy)->getJson('/api/v1/restaurant/scheduled-orders')->assertOk()->json('data.0');
+        $this->assertEquals(110, $place['subtotal']);
+    }
+
     public function test_the_price_band_counts_a_dish_priced_by_its_sizes_at_its_smallest_size(): void
     {
         $this->medicine->delete();

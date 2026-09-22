@@ -51,7 +51,7 @@ class ScheduledOrderResource extends JsonResource
             // basket's — the number it will be paid on.
             'subtotal' => $restaurantId === null
                 ? (float) ($snapshot['subtotal'] ?? 0)
-                : round($lines->sum(fn (array $line) => (float) $line['unit_price'] * (int) $line['quantity']), 2),
+                : round($lines->sum(fn (array $line) => (float) ($line['line_total'] ?? (float) $line['unit_price'] * (int) $line['quantity'])), 2),
             'delivery_fee' => $this->when($restaurantId === null, fn () => (float) ($snapshot['delivery_fee'] ?? 0)),
             'total' => $this->when($restaurantId === null, fn () => (float) ($snapshot['total'] ?? 0)),
             'customer' => $this->when(

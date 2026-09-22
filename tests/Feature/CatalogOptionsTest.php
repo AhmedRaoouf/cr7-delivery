@@ -181,6 +181,23 @@ class CatalogOptionsTest extends TestCase
         $this->actingAsAdmin($viewer)->patchJson("/api/v1/admin/products/{$this->medicine->id}/option-groups/{$strength->id}", ['is_required' => false])->assertForbidden();
     }
 
+    public function test_the_admin_availability_switch_obeys_the_value_it_is_sent(): void
+    {
+        $admin = $this->cityAdmin($this->city);
+        $url = "/api/v1/admin/restaurants/{$this->pharmacy->id}/products/{$this->medicine->id}/availability";
+
+        $this->actingAsAdmin($admin)->postJson($url, ['is_available' => true])->assertOk();
+        $this->assertTrue($this->medicine->fresh()->is_available);
+
+        $this->actingAsAdmin($admin)->postJson($url, ['is_available' => false])->assertOk();
+        $this->actingAsAdmin($admin)->postJson($url, ['is_available' => false])->assertOk();
+        $this->assertFalse($this->medicine->fresh()->is_available);
+
+        // No body: the old toggle, for shipped clients.
+        $this->actingAsAdmin($admin)->postJson($url)->assertOk();
+        $this->assertTrue($this->medicine->fresh()->is_available);
+    }
+
     // ── the customer ────────────────────────────────────────────────────────────
 
     public function test_the_catalogue_says_what_a_configured_dish_costs_at_least(): void

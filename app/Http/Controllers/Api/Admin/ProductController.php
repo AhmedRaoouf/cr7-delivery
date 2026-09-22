@@ -74,7 +74,10 @@ class ProductController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $product->update(['is_available' => ! $product->is_available]);
+        // Doc 76 — an explicit `is_available` is obeyed, so a stale screen cannot flip
+        // the dish the wrong way; with no body it still toggles, for shipped clients.
+        $validated = $request->validate(['is_available' => ['sometimes', 'boolean']]);
+        $product->update(['is_available' => $validated['is_available'] ?? ! $product->is_available]);
 
         return ApiResponse::success($product, 'تم تحديث حالة توفر المنتج بنجاح');
     }

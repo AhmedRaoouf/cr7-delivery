@@ -21,8 +21,6 @@ use App\Http\Controllers\Api\Admin\HomePopupController as AdminHomePopupControll
 use App\Http\Controllers\Api\Admin\LookupController;
 use App\Http\Controllers\Api\Admin\MediaController;
 use App\Http\Controllers\Api\Admin\MediaTagController;
-use App\Http\Controllers\Api\Admin\PlaceGroupController;
-use App\Http\Controllers\Api\Restaurant\MediaPickerController as RestaurantMediaPickerController;
 use App\Http\Controllers\Api\Admin\MenuCategoryController;
 use App\Http\Controllers\Api\Admin\NotificationBroadcastController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
@@ -31,6 +29,7 @@ use App\Http\Controllers\Api\Admin\OtpController as AdminOtpController;
 use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
+use App\Http\Controllers\Api\Admin\PlaceGroupController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductGalleryController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
@@ -76,6 +75,7 @@ use App\Http\Controllers\Api\Driver\TripController as DriverTripController;
 use App\Http\Controllers\Api\Restaurant\CategoryController as RestaurantCategoryController;
 use App\Http\Controllers\Api\Restaurant\ComplaintController as RestaurantComplaintController;
 use App\Http\Controllers\Api\Restaurant\DirectOrderController as RestaurantDirectOrderController;
+use App\Http\Controllers\Api\Restaurant\MediaPickerController as RestaurantMediaPickerController;
 use App\Http\Controllers\Api\Restaurant\OrderController as RestaurantOrderController;
 use App\Http\Controllers\Api\Restaurant\ProductController as RestaurantProductController;
 use App\Http\Controllers\Api\Restaurant\ProductGalleryController as RestaurantProductGalleryController;
@@ -403,11 +403,14 @@ Route::prefix('v1')->group(function () {
         Route::delete('/products/{product}/gallery/{ref}', [RestaurantProductGalleryController::class, 'destroy']);
 
         Route::get('/products/{product}/option-groups', [RestaurantProductOptionGroupController::class, 'index']);
+        // doc 76 §2.4 — a PUT, so it never collides with `{optionGroup}`'s PATCH/DELETE.
+        Route::put('/products/{product}/option-groups/order', [RestaurantProductOptionGroupController::class, 'order']);
         Route::post('/products/{product}/option-groups', [RestaurantProductOptionGroupController::class, 'store']);
         Route::patch('/products/{product}/option-groups/{optionGroup}', [RestaurantProductOptionGroupController::class, 'update']);
         Route::delete('/products/{product}/option-groups/{optionGroup}', [RestaurantProductOptionGroupController::class, 'destroy']);
 
         Route::get('/option-groups/{optionGroup}/options', [RestaurantProductOptionController::class, 'index']);
+        Route::put('/option-groups/{optionGroup}/options/order', [RestaurantProductOptionController::class, 'order']);
         Route::post('/option-groups/{optionGroup}/options', [RestaurantProductOptionController::class, 'store']);
         Route::patch('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'update']);
         Route::delete('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'destroy']);
@@ -608,12 +611,20 @@ Route::prefix('v1')->group(function () {
             Route::delete('/restaurants/{restaurant}/products/{product}/gallery/{ref}', [ProductGalleryController::class, 'destroy']);
         });
 
-        Route::middleware('permission:products.update')->scopeBindings()->group(function () {
+        // doc 76 §2.8 — reading a product's options needs only `products.view`, so an
+        // admin who may look but not change still sees the whole dish.
+        Route::middleware('permission:products.view')->scopeBindings()->group(function () {
             Route::get('/products/{product}/option-groups', [ProductOptionGroupController::class, 'index']);
+            Route::get('/option-groups/{optionGroup}/options', [ProductOptionController::class, 'index']);
+        });
+
+        Route::middleware('permission:products.update')->scopeBindings()->group(function () {
+            Route::put('/products/{product}/option-groups/order', [ProductOptionGroupController::class, 'order']);
             Route::post('/products/{product}/option-groups', [ProductOptionGroupController::class, 'store']);
             Route::patch('/products/{product}/option-groups/{optionGroup}', [ProductOptionGroupController::class, 'update']);
             Route::delete('/products/{product}/option-groups/{optionGroup}', [ProductOptionGroupController::class, 'destroy']);
 
+            Route::put('/option-groups/{optionGroup}/options/order', [ProductOptionController::class, 'order']);
             Route::post('/option-groups/{optionGroup}/options', [ProductOptionController::class, 'store']);
             Route::patch('/option-groups/{optionGroup}/options/{option}', [ProductOptionController::class, 'update']);
             Route::delete('/option-groups/{optionGroup}/options/{option}', [ProductOptionController::class, 'destroy']);

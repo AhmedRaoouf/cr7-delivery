@@ -14,12 +14,21 @@ class ProductOptionGroup extends Model
         'is_required', 'min_select', 'max_select', 'sort_order',
     ];
 
+    /** D-164 — every staff payload says whether the customer can see the group yet. */
+    protected $appends = ['is_draft'];
+
     protected function casts(): array
     {
         return [
             'selection_type' => OptionSelectionType::class,
             'is_required' => 'boolean',
         ];
+    }
+
+    /** A group with no options is a draft: not shown to the customer, never enforced. */
+    public function getIsDraftAttribute(): bool
+    {
+        return $this->relationLoaded('options') ? $this->options->isEmpty() : ! $this->options()->exists();
     }
 
     public function product(): BelongsTo

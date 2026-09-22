@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\BasketLimit;
+use App\Support\Catalog\OptionSelection;
 use Illuminate\Support\Facades\DB;
 
 /** doc 08 §4 — POST /cart/items. */
@@ -49,7 +50,7 @@ class AddCartItemAction
                 }
             }
 
-            $optionIds = $data['option_ids'] ?? [];
+            $optionIds = collect($data['option_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
             $this->validateOptions($product, $optionIds);
 
             $quantity = max(1, (int) ($data['quantity'] ?? 1));
@@ -125,30 +126,9 @@ class AddCartItemAction
             });
     }
 
+    /** D-167 — through the one validator, so the add cannot disagree with checkout. */
     private function validateOptions(Product $product, array $optionIds): void
     {
-        $groups = $product->optionGroups()->with('options')->get();
-        $validOptionIds = $groups->flatMap(fn ($g) => $g->options->pluck('id'));
-
-        $invalid = array_diff($optionIds, $validOptionIds->all());
-        if ($invalid !== []) {
-            throw new ApiException('validation_failed', 'أحد الخيارات المختارة غير صالح لهذا المنتج', 422, ['option_ids' => array_values($invalid)]);
-        }
-
-        foreach ($groups as $group) {
-            $selectedInGroup = $group->options->pluck('id')->intersect($optionIds)->count();
-
-            if ($group->is_required && $selectedInGroup < max(1, $group->min_select)) {
-                throw new ApiException('validation_failed', "يجب اختيار {$group->name_ar}", 422, [
-                    'option_group_id' => [$group->id],
-                ]);
-            }
-
-            if ($selectedInGroup > $group->max_select) {
-                throw new ApiException('validation_failed', "الحد الأقصى للاختيار في {$group->name_ar} هو {$group->max_select}", 422, [
-                    'option_group_id' => [$group->id],
-                ]);
-            }
-        }
+        OptionSelection::assertValid($product, $optionIds);
     }
 }

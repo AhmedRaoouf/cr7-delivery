@@ -2,8 +2,8 @@
 
 namespace App\Actions\Customer;
 
-use App\Exceptions\ApiException;
 use App\Models\CartItem;
+use App\Support\Catalog\OptionSelection;
 use Illuminate\Support\Facades\DB;
 
 /** doc 08 §4 — PATCH /cart/items/{id}. */
@@ -22,13 +22,12 @@ class UpdateCartItemAction
 
             if (array_key_exists('option_ids', $data)) {
                 $product = $item->product()->with('optionGroups.options')->first();
-                $optionIds = $data['option_ids'] ?? [];
+                $optionIds = collect($data['option_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
 
-                $validOptionIds = $product->optionGroups->flatMap(fn ($g) => $g->options->pluck('id'));
-                $invalid = array_diff($optionIds, $validOptionIds->all());
-                if ($invalid !== []) {
-                    throw new ApiException('validation_failed', 'أحد الخيارات المختارة غير صالح لهذا المنتج', 422, ['option_ids' => array_values($invalid)]);
-                }
+                // D-167 — the edit is held to the same rules as the add. It used to
+                // check only that the ids belonged to the dish, so `option_ids: []`
+                // emptied a required size and a switched-off extra went straight in.
+                OptionSelection::assertValid($product, $optionIds);
 
                 $item->options()->delete();
                 foreach ($optionIds as $optionId) {

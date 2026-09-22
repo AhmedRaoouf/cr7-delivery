@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Restaurant;
 
+use App\Http\Requests\Concerns\ValidatesOptionGroups;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreProductOptionRequest extends FormRequest
 {
+    use ValidatesOptionGroups;
+
     public function authorize(): bool
     {
         return true;
@@ -13,15 +16,11 @@ class StoreProductOptionRequest extends FormRequest
 
     public function rules(): array
     {
-        $required = $this->isMethod('post') ? 'required' : 'sometimes';
+        return $this->optionRules($this->isMethod('post'));
+    }
 
-        return [
-            'name_ar' => [$required, 'string', 'max:255'],
-            'name_en' => [$required, 'string', 'max:255'],
-            'price_delta' => ['nullable', 'numeric'],
-            'is_available' => ['nullable', 'boolean'],
-            'is_default' => ['nullable', 'boolean'],
-            'sort_order' => ['nullable', 'integer'],
-        ];
+    public function messages(): array
+    {
+        return $this->optionMessages();
     }
 }

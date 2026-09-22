@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Cart;
 use App\Models\City;
 use App\Models\ServiceZone;
+use App\Support\Catalog\OptionSelection;
 use Illuminate\Http\Request;
 
 /** doc 08 §4 — GET /cart response shape: always grouped by restaurant, even for one restaurant. */
@@ -20,7 +21,7 @@ class CartFormatter
         // refused the third. A raw read with its own literal is a second source of truth.
         $maxRestaurants = BasketLimit::maxRestaurants();
 
-        $items = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get();
+        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant', 'options.productOption.group'])->get();
         $itemsByRestaurant = $items->groupBy('restaurant_id');
 
         $basketIssues = [];
@@ -42,17 +43,41 @@ class CartFormatter
                     $groupIssues[] = ['code' => 'product_unavailable', 'message' => 'بعض المنتجات لم تعد متاحة', 'product_id' => $product->id];
                 }
 
+                // D-167 — the menu may have moved since the line was added: an option
+                // switched off, a required size added. Said on the line, so the basket
+                // can reopen that dish's sheet instead of checkout refusing blind.
+                $optionIds = $item->options->pluck('product_option_id')->map(fn ($id) => (int) $id)->values()->all();
+                $optionsProblem = OptionSelection::problem($product, $optionIds);
+
+                if ($optionsProblem !== null) {
+                    $groupIssues[] = [
+                        'code' => 'options_invalid',
+                        'message' => $optionsProblem['message'],
+                        'product_id' => $product->id,
+                        'cart_item_id' => $item->id,
+                    ];
+                }
+
                 return [
                     'id' => $item->id,
                     'product_id' => $product->id,
                     'name' => $product->{"name_{$locale}"},
                     'image' => $product->image,
                     'unit_price' => $unitPrice,
+                    'option_ids' => $optionIds,
                     'options' => $item->options->map(fn ($o) => [
                         'id' => $o->productOption->id,
                         'name' => $o->productOption->{"name_{$locale}"},
                         'price_delta' => (float) $o->productOption->price_delta,
+                        'group_id' => $o->productOption->product_option_group_id,
+                        'group_name' => $o->productOption->group?->{"name_{$locale}"},
+                        'is_available' => (bool) $o->productOption->is_available,
                     ]),
+                    'options_valid' => $optionsProblem === null,
+                    'options_issue' => $optionsProblem === null ? null : [
+                        'code' => $optionsProblem['code'],
+                        'message' => $optionsProblem['message'],
+                    ],
                     'options_total' => $optionsTotal,
                     'quantity' => $item->quantity,
                     'line_total' => $lineTotal,

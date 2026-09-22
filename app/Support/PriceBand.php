@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Product;
 use App\Models\Restaurant;
+use App\Support\Catalog\OptionSelection;
 
 /**
  * D-60 — `restaurants.price_band` is derived from the menu, never declared by hand.
@@ -27,10 +28,14 @@ class PriceBand
             ->where('restaurant_id', $restaurant->id)
             ->where('is_available', true)
             ->whereNull('deleted_at')
+            ->with('optionGroups.options')
+            ->get()
             // The **base** price: a discount is a promotion, not the brand's level.
-            ->orderBy('price')
-            ->pluck('price')
-            ->map(fn ($price) => (float) $price)
+            // D-166 — plus the cheapest choice every required group forces, so a dish
+            // priced only through its sizes (base 0) counts at its smallest size rather
+            // than at zero.
+            ->map(fn (Product $product) => OptionSelection::fromPrice($product, base: true))
+            ->sort()
             ->values();
 
         if ($prices->isEmpty()) {

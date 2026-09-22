@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Support\Catalog\OptionSelection;
 use App\Support\Locale;
 use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
@@ -40,6 +41,11 @@ class ProductResource extends JsonResource
             // to answer one boolean is the wrong trade on a search that returns
             // dishes from every restaurant, so the boolean is what travels.
             'requires_configuration' => $this->requiresConfiguration(),
+            // D-166 — a quick add still posts a dish whose options are all optional;
+            // `from_price` is what the card prints («من …») when a required size moves
+            // the price, so a dish priced only through its sizes never lists at 0.
+            'has_options' => $this->hasOptions(),
+            'from_price' => OptionSelection::fromPrice($this->resource),
         ];
     }
 }

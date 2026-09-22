@@ -88,9 +88,25 @@ class Product extends Model
      */
     public function requiresConfiguration(): bool
     {
+        // D-164 — a group with no options is a draft: never shown, never enforced.
+        if ($this->relationLoaded('optionGroups')) {
+            return $this->optionGroups->contains(fn (ProductOptionGroup $group) => $group->is_required && $group->options->isNotEmpty());
+        }
+
         return $this->optionGroups()
             ->where('is_required', true)
+            ->whereHas('options')
             ->exists();
+    }
+
+    /** D-166 — at least one group the customer will see. */
+    public function hasOptions(): bool
+    {
+        if ($this->relationLoaded('optionGroups')) {
+            return $this->optionGroups->contains(fn (ProductOptionGroup $group) => $group->options->isNotEmpty());
+        }
+
+        return $this->optionGroups()->whereHas('options')->exists();
     }
 
     public function optionGroups(): HasMany

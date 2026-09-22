@@ -10,23 +10,28 @@ use App\Models\ProductOptionGroup;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Catalog\OptionGroupWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * The admin mirror of the place's option groups (doc 76 §2.8): the same writer, with
+ * the place checked against the admin's scope first.
+ */
 class ProductOptionGroupController extends Controller
 {
     public function index(Request $request, Product $product): JsonResponse
     {
         $this->ensureRestaurantInScope($request, $product->restaurant);
 
-        return ApiResponse::success($product->optionGroups()->with('options')->orderBy('sort_order')->get());
+        return ApiResponse::success($this->groups($product));
     }
 
     public function store(StoreProductOptionGroupRequest $request, Product $product): JsonResponse
     {
         $this->ensureRestaurantInScope($request, $product->restaurant);
 
-        $group = $product->optionGroups()->create($request->validated());
+        $group = OptionGroupWriter::create($product, $request->validated());
 
         return ApiResponse::success($group, 'تم إنشاء مجموعة الخيارات بنجاح', status: 201);
     }
@@ -35,9 +40,19 @@ class ProductOptionGroupController extends Controller
     {
         $this->ensureRestaurantInScope($request, $product->restaurant);
 
-        $optionGroup->update($request->validated());
+        $group = OptionGroupWriter::update($optionGroup, $request->validated());
 
-        return ApiResponse::success($optionGroup, 'تم تحديث مجموعة الخيارات بنجاح');
+        return ApiResponse::success($group, 'تم تحديث مجموعة الخيارات بنجاح');
+    }
+
+    public function order(Request $request, Product $product): JsonResponse
+    {
+        $this->ensureRestaurantInScope($request, $product->restaurant);
+        $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['integer']]);
+
+        OptionGroupWriter::reorder($product->optionGroups()->get(), $request->input('ids'));
+
+        return ApiResponse::success($this->groups($product), 'تم حفظ الترتيب');
     }
 
     public function destroy(Request $request, Product $product, ProductOptionGroup $optionGroup): JsonResponse
@@ -47,6 +62,15 @@ class ProductOptionGroupController extends Controller
         $optionGroup->delete();
 
         return ApiResponse::success(message: 'تم حذف مجموعة الخيارات بنجاح');
+    }
+
+    private function groups(Product $product)
+    {
+        return $product->optionGroups()
+            ->with(['options' => fn ($q) => $q->orderBy('sort_order')->orderBy('id')])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
     }
 
     /**

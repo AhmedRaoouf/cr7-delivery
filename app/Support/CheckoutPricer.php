@@ -10,6 +10,7 @@ use App\Models\PromoCode;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserAddress;
+use App\Support\Catalog\OptionSelection;
 use Illuminate\Support\Collection;
 
 /**
@@ -25,7 +26,7 @@ class CheckoutPricer
 {
     public function price(User $user, Cart $cart, UserAddress $address, ?string $promoCode, string $paymentMethod): array
     {
-        $items = $cart->items()->with(['product', 'restaurant.serviceZone'])->get();
+        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant.serviceZone', 'options.productOption'])->get();
         $byRestaurant = $items->groupBy('restaurant_id');
 
         $blockers = [];
@@ -158,6 +159,37 @@ class CheckoutPricer
 
         if ($restaurantCount === 0) {
             $blockers[] = ['code' => 'cart_empty', 'message' => 'السلة فارغة'];
+        }
+
+        // D-167 — the basket is re-read against today's menu. A dish switched off, an
+        // option switched off, or a required size added after the line went in used to
+        // reach the order unchallenged; each is refused by name and line, so the app can
+        // reopen that dish rather than guess.
+        foreach ($items as $item) {
+            if (! $item->product->is_available) {
+                $blockers[] = [
+                    'code' => 'product_unavailable',
+                    'message' => "لم يعد متاحًا: {$item->product->name_ar}",
+                    'product_id' => $item->product_id,
+                    'cart_item_id' => $item->id,
+                ];
+
+                continue;
+            }
+
+            $problem = OptionSelection::problem(
+                $item->product,
+                $item->options->pluck('product_option_id')->map(fn ($id) => (int) $id)->all(),
+            );
+
+            if ($problem !== null) {
+                $blockers[] = [
+                    'code' => 'options_invalid',
+                    'message' => "{$item->product->name_ar}: {$problem['message']}",
+                    'product_id' => $item->product_id,
+                    'cart_item_id' => $item->id,
+                ];
+            }
         }
 
         // D-114 — a basket filled before the operator lowered the limit is not trimmed

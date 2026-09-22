@@ -37,7 +37,7 @@ class ProductController extends Controller
         }
 
         $products = Product::query()
-            ->with('restaurant:id,name_ar,name_en')
+            ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
             ->whereIn('id', $ids)
             ->get();
 
@@ -67,7 +67,7 @@ class ProductController extends Controller
         $cityId = $request->integer('city_id') ?: null;
 
         $products = Product::query()
-            ->with('restaurant:id,name_ar,name_en')
+            ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
             ->where('is_available', true)
             ->whereHas('restaurant', fn ($q) => $q
                 ->where('is_active', true)

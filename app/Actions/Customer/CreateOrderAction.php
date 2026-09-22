@@ -14,8 +14,8 @@ use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use App\Support\OrderNumber;
 use App\Support\Otp;
-use App\Support\SettingsCatalog;
 use App\Support\ReviewAccess;
+use App\Support\SettingsCatalog;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -113,7 +113,7 @@ class CreateOrderAction
             $groupNumber = OrderNumber::forGroup($group->id);
             $group->update(['group_number' => $groupNumber]);
 
-            $cartItemsByRestaurant = $cart->items()->with(['product', 'restaurant', 'options.productOption'])->get()->groupBy('restaurant_id');
+            $cartItemsByRestaurant = $cart->items()->with(['product', 'restaurant', 'options.productOption.group'])->get()->groupBy('restaurant_id');
 
             foreach ($quote['groups'] as $sequence => $groupQuote) {
                 $restaurantId = $groupQuote['restaurant_id'];
@@ -206,6 +206,7 @@ class CreateOrderAction
                         $orderItem->options()->create([
                             'product_option_id' => $option->productOption->id,
                             'group_name_snapshot' => $option->productOption->group->name_ar,
+                            'group_name_en_snapshot' => $option->productOption->group->name_en,
                             'option_name_ar_snapshot' => $option->productOption->name_ar,
                             'option_name_en_snapshot' => $option->productOption->name_en,
                             'price_delta_snapshot' => $option->productOption->price_delta,

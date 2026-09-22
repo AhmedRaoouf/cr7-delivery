@@ -169,6 +169,7 @@ class RestaurantController extends Controller
         $search = $params->search();
 
         $products = $restaurant->products()
+            ->with('optionGroups.options')
             ->where('is_available', true)
             ->when($params->id('category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
             ->when($search !== '', fn ($q) => ArabicSearch::apply(
@@ -197,6 +198,7 @@ class RestaurantController extends Controller
     public function bestSellers(Restaurant $restaurant): JsonResponse
     {
         $products = $restaurant->products()
+            ->with('optionGroups.options')
             ->where('is_available', true)
             ->orderByDesc('sold_count')
             ->limit(5)

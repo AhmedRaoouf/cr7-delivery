@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\ValidatesOptionGroups;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateProductOptionRequest extends FormRequest
 {
+    use ValidatesOptionGroups;
+
     public function authorize(): bool
     {
         return $this->user()->can('products.update');
@@ -13,13 +16,11 @@ class UpdateProductOptionRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
-            'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
-            'name_en' => ['sometimes', 'required', 'string', 'max:255'],
-            'price_delta' => ['nullable', 'numeric'],
-            'is_available' => ['nullable', 'boolean'],
-            'is_default' => ['nullable', 'boolean'],
-            'sort_order' => ['nullable', 'integer'],
-        ];
+        return $this->optionRules(false);
+    }
+
+    public function messages(): array
+    {
+        return $this->optionMessages();
     }
 }

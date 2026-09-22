@@ -4,6 +4,7 @@ namespace App\Actions\Customer;
 
 use App\Exceptions\ApiException;
 use App\Models\Cart;
+use App\Models\ProductOption;
 use App\Models\ScheduledOrder;
 use App\Models\User;
 use App\Support\Notifications\NotificationDispatcher;
@@ -136,7 +137,12 @@ class ReleaseScheduledOrdersAction
                     'note' => $line['note'] ?? null,
                 ]);
 
-                foreach ($line['option_ids'] ?? [] as $optionId) {
+                // An option deleted since the basket was scheduled has no row to point
+                // at; it is left out here and checkout then refuses the line by name
+                // (`options_invalid`) if its group required it — D-167.
+                $optionIds = ProductOption::query()->whereIn('id', $line['option_ids'] ?? [])->pluck('id');
+
+                foreach ($optionIds as $optionId) {
                     $item->options()->create(['product_option_id' => $optionId]);
                 }
             }

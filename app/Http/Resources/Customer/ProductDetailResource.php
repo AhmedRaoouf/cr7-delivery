@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Support\Catalog\OptionSelection;
 use App\Support\Locale;
 use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
@@ -33,13 +34,19 @@ class ProductDetailResource extends JsonResource
             'rating_avg' => (float) $this->rating_avg,
             'rating_count' => $this->rating_count,
             'tags' => $this->tags,
-            'option_groups' => $this->whenLoaded('optionGroups', fn () => $this->optionGroups->map(fn ($group) => [
+            'requires_configuration' => $this->requiresConfiguration(),
+            'has_options' => $this->hasOptions(),
+            'from_price' => OptionSelection::fromPrice($this->resource),
+            // D-164 — a group with no options is a draft and is not the customer's to
+            // see; the rest arrive in the place's order, with the limits the basket
+            // will hold them to (a single group always takes exactly one at most).
+            'option_groups' => $this->whenLoaded('optionGroups', fn () => OptionSelection::liveGroups($this->resource)->map(fn ($group) => [
                 'id' => $group->id,
                 'name' => $group->{"name_{$locale}"},
                 'selection_type' => $group->selection_type,
                 'is_required' => $group->is_required,
-                'min_select' => $group->min_select,
-                'max_select' => $group->max_select,
+                'min_select' => OptionSelection::minimum($group),
+                'max_select' => OptionSelection::maximum($group),
                 'options' => $group->options->map(fn ($option) => [
                     'id' => $option->id,
                     'name' => $option->{"name_{$locale}"},

@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Observers\AuditableObserver;
 use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
+use App\Observers\ProductOptionObserver;
 use App\Observers\SettingObserver;
 use App\Services\Maps\ChainGeocoder;
 use App\Services\Maps\Geocoder;
@@ -220,6 +221,8 @@ class AppServiceProvider extends ServiceProvider
         // D-60 — restaurants.price_band is derived from the menu, so it is recomputed
         // whenever a row that feeds the median moves.
         Product::observe(ProductObserver::class);
+        ProductOptionGroup::observe(ProductOptionObserver::class);
+        ProductOption::observe(ProductOptionObserver::class);
 
         // Realtime. Every open board, map and tracking screen learns that an order
         // moved from here — see App\Observers\OrderObserver for why the model event

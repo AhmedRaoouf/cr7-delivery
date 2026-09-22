@@ -6,6 +6,7 @@ use App\Actions\Customer\CancelOrderGroupAction;
 use App\Actions\Customer\ConfirmOrderGroupAction;
 use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Customer\RateOrderGroupAction;
+use App\Actions\Customer\ReorderAction;
 use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\FiltersLists;
@@ -17,7 +18,6 @@ use App\Http\Resources\Customer\OrderGroupCreatedResource;
 use App\Http\Resources\Customer\OrderGroupDetailResource;
 use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
-use App\Models\Product;
 use App\Support\ApiResponse;
 use App\Support\DriverLiveness;
 use App\Support\LateCancellationFee;
@@ -180,7 +180,19 @@ class OrderController extends Controller
                 'restaurant_id' => $o->restaurant_id,
                 'restaurant_name' => $o->restaurant->{"name_{$locale}"},
                 'prep_minutes' => $o->prep_minutes,
-                'items' => $o->items->map(fn ($i) => ['name' => $locale === 'en' ? $i->product_name_en_snapshot : $i->product_name_ar_snapshot, 'quantity' => $i->quantity, 'line_total' => (float) $i->line_total]),
+                'items' => $o->items->map(fn ($i) => [
+                    'name' => $locale === 'en' ? $i->product_name_en_snapshot : $i->product_name_ar_snapshot,
+                    'quantity' => $i->quantity,
+                    'line_total' => (float) $i->line_total,
+                    // D-167 — the confirmation is the last look before paying; «كفتة ×1»
+                    // without «نص كيلو» is not what is being confirmed.
+                    'options' => $i->options->map(fn ($o) => [
+                        'option_id' => $o->product_option_id,
+                        'group_name' => $locale === 'en' ? ($o->group_name_en_snapshot ?? $o->group_name_snapshot) : $o->group_name_snapshot,
+                        'name' => $locale === 'en' ? $o->option_name_en_snapshot : $o->option_name_ar_snapshot,
+                        'price_delta' => (float) $o->price_delta_snapshot,
+                    ])->values(),
+                ]),
             ])->values(),
             'declined_restaurants' => $orders->where('status', OrderStatus::Cancelled)->map(fn ($o) => [
                 'restaurant_id' => $o->restaurant_id,
@@ -268,43 +280,13 @@ class OrderController extends Controller
         ], 'تم إلغاء الطلب');
     }
 
-    public function reorder(Request $request, OrderGroup $orderGroup): JsonResponse
+    public function reorder(Request $request, OrderGroup $orderGroup, ReorderAction $action): JsonResponse
     {
         $this->ensureOwned($request, $orderGroup);
 
-        $user = $request->user();
-        $cart = $user->cart()->firstOrCreate([]);
-        $added = [];
-        $skipped = [];
+        $result = $action->execute($request->user(), $orderGroup);
 
-        foreach ($orderGroup->orders()->with('items.options')->get() as $order) {
-            foreach ($order->items as $item) {
-                $product = Product::find($item->product_id);
-
-                if (! $product || ! $product->is_available) {
-                    $skipped[] = $item->product_name_ar_snapshot;
-
-                    continue;
-                }
-
-                $cartItem = $cart->items()->create([
-                    'restaurant_id' => $order->restaurant_id,
-                    'product_id' => $product->id,
-                    'quantity' => $item->quantity,
-                    'note' => $item->note,
-                ]);
-
-                foreach ($item->options as $option) {
-                    if ($option->product_option_id) {
-                        $cartItem->options()->create(['product_option_id' => $option->product_option_id]);
-                    }
-                }
-
-                $added[] = $product->id;
-            }
-        }
-
-        return ApiResponse::success(['added' => $added, 'skipped' => $skipped], 'تمت إضافة الطلب للسلة');
+        return ApiResponse::success($result, $result['added'] === [] ? 'لم يعد أي صنف من هذا الطلب متاحًا' : 'تمت إضافة الطلب للسلة');
     }
 
     public function ratings(RateOrderRequest $request, OrderGroup $orderGroup, RateOrderGroupAction $action): JsonResponse

@@ -114,6 +114,8 @@ class OrderGroupDetailResource extends JsonResource
                     'image' => $item->product_image_snapshot,
                     'unit_price' => (float) $item->unit_price_snapshot,
                     'options' => $item->options->map(fn ($o) => [
+                        'option_id' => $o->product_option_id,
+                        'group_name' => $locale === 'en' ? ($o->group_name_en_snapshot ?? $o->group_name_snapshot) : $o->group_name_snapshot,
                         'name' => $locale === 'en' ? $o->option_name_en_snapshot : $o->option_name_ar_snapshot,
                         'price_delta' => (float) $o->price_delta_snapshot,
                     ]),

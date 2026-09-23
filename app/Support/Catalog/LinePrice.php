@@ -6,6 +6,7 @@ use App\Enums\OptionPriceMode;
 use App\Models\Product;
 use App\Models\ProductOption;
 use App\Models\ProductOptionGroup;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 /**
@@ -111,5 +112,34 @@ class LinePrice
         return self::isFinal($group)
             ? round(self::finalPrice($option, $effective) - $effective, 2)
             : (float) $option->price_delta;
+    }
+
+    /**
+     * An app older than 1.0.17 knows nothing of `price_mode`: it adds every `price_delta`
+     * to `price` and prints each delta with a sign. Such an app is still in testers' hands
+     * (and a Play update is never instant), so the product sheet speaks its language —
+     * see {@see self::legacySheet()}.
+     */
+    public static function isLegacyClient(?Request $request): bool
+    {
+        // Only the phone app sends its version (every build since 1.0.0); a request without
+        // one — the dashboards, a test, a script — is never treated as an old app.
+        if ($request === null || $request->header('X-App') !== 'app' || ! $request->hasHeader('X-App-Version')) {
+            return false;
+        }
+
+        return version_compare((string) $request->header('X-App-Version'), '1.0.17', '<');
+    }
+
+    /**
+     * For an old app, a dish whose size is **required** and sets the price is sent as a
+     * dish priced 0 whose sizes each «add» their whole price: the app prints «نص كيلو
+     * +500 ج.م», and adds 0 + 500 — exactly what the basket will charge. (An optional
+     * size keeps the dish's price and a negative delta: the total is still right.)
+     */
+    public static function legacySheet(Product $product, Collection $liveGroups): bool
+    {
+        return $liveGroups->contains(fn (ProductOptionGroup $group) => self::isFinal($group)
+            && OptionSelection::minimum($group) > 0);
     }
 }

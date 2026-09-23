@@ -187,4 +187,32 @@ class OptionPriceModeTest extends TestCase
         $size['Third']->update(['price_delta' => 300]);
         $this->assertEquals(300, OptionSelection::fromPrice($this->kebab->fresh()->load('optionGroups.options')));
     }
+
+    public function test_an_app_before_1_0_17_is_sent_a_sheet_whose_sum_is_the_bill(): void
+    {
+        [, $size, $bread] = $this->sizesAndBread();
+        $customer = $this->makeCustomer();
+        $old = ['X-App' => 'app', 'X-App-Version' => '1.0.16'];
+
+        // 1.0.16 prices a sheet as `price + Σ price_delta` and prints each delta signed:
+        // a dish at 0 whose sizes carry their whole price reads «نص كيلو +500» and sums right.
+        $sheet = $this->actingAsCustomer($customer)->withHeaders($old)->getJson("/api/v1/products/{$this->kebab->id}")->assertOk()->json('data');
+        $this->assertEquals(0, $sheet['price']);
+        $this->assertNull($sheet['discount_price']);
+        $this->assertEquals([950, 500, 350], collect($sheet['option_groups'][0]['options'])->pluck('price_delta')->all());
+        $this->assertEquals(10, $sheet['option_groups'][1]['options'][0]['price_delta']);
+        $this->assertEquals(350, $sheet['from_price']);
+
+        // The basket agrees with that sum.
+        $this->actingAsCustomer($customer)->withHeaders($old)->postJson('/api/v1/cart/items', [
+            'product_id' => $this->kebab->id, 'option_ids' => [$size['Third']->id, $bread->id],
+        ])->assertCreated()->assertJsonPath('data.groups.0.items.0.line_total', 360);
+
+        // 1.0.17 and anything without the header get the real shape — never the cached old one.
+        foreach ([['X-App' => 'app', 'X-App-Version' => '1.0.17'], []] as $headers) {
+            $this->flushHeaders();
+            $this->actingAsCustomer($customer)->withHeaders($headers)->getJson("/api/v1/products/{$this->kebab->id}")
+                ->assertOk()->assertJsonPath('data.price', fn ($price) => (float) $price === 950.0);
+        }
+    }
 }

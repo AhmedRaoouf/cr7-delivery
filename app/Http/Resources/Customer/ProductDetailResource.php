@@ -15,6 +15,11 @@ class ProductDetailResource extends JsonResource
     public function toArray(Request $request): array
     {
         $locale = Locale::current($request);
+        $effective = LinePrice::effective($this->resource);
+        // doc 78 — an app before 1.0.17 prices a sheet as `price + Σ price_delta`.
+        $legacy = LinePrice::isLegacyClient($request)
+            && $this->relationLoaded('optionGroups')
+            && LinePrice::legacySheet($this->resource, OptionSelection::liveGroups($this->resource));
 
         return [
             'id' => $this->id,
@@ -23,8 +28,8 @@ class ProductDetailResource extends JsonResource
             'description' => $this->{"description_{$locale}"},
             'image' => MediaLibrary::orPlaceholder($this->image),
             'gallery' => $this->gallery,
-            'price' => (float) $this->price,
-            'discount_price' => $this->discount_price !== null ? (float) $this->discount_price : null,
+            'price' => $legacy ? 0.0 : (float) $this->price,
+            'discount_price' => $legacy || $this->discount_price === null ? null : (float) $this->discount_price,
             'is_available' => $this->is_available,
             'prep_minutes' => $this->prep_minutes,
             'calories' => $this->calories,
@@ -57,8 +62,10 @@ class ProductDetailResource extends JsonResource
                     // price in a `final` group, the extra in an `add` one. `price_delta` is
                     // what choosing it changes one unit by against the dish's price (negative
                     // for a size cheaper than the dish) — the sum a 1.0.16 app does.
-                    'price' => LinePrice::shownPrice($option, $group, LinePrice::effective($this->resource)),
-                    'price_delta' => LinePrice::sheetDelta($option, $group, LinePrice::effective($this->resource)),
+                    'price' => LinePrice::shownPrice($option, $group, $effective),
+                    'price_delta' => $legacy && LinePrice::isFinal($group)
+                        ? LinePrice::shownPrice($option, $group, $effective)
+                        : LinePrice::sheetDelta($option, $group, $effective),
                     'is_default' => $option->is_default,
                     'is_available' => $option->is_available,
                 ]),

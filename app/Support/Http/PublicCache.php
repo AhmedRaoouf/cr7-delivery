@@ -5,6 +5,7 @@ namespace App\Support\Http;
 use App\Console\Commands\PruneExpiredCacheCommand;
 use App\Models\ServiceZone;
 use App\Models\User;
+use App\Support\Catalog\LinePrice;
 use App\Support\FirstOrderPerk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -105,6 +106,9 @@ final class PublicCache
             $request->path(),
             app()->getLocale(),
             $viewer ?? '-',
+            // doc 78 — an app before 1.0.17 is sent another product sheet; the two must
+            // never be served from one entry.
+            LinePrice::isLegacyClient($request) ? 'legacy' : 'current',
             http_build_query($query),
         ]);
 

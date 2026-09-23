@@ -39,7 +39,9 @@ class CartFormatter
                 $unitPrice = (float) ($product->discount_price ?? $product->price);
                 $lineTotal = ($unitPrice + $optionsTotal) * $item->quantity;
 
-                if (! $product->is_available) {
+                $orderable = $product->isOrderable();
+
+                if (! $orderable) {
                     $groupIssues[] = ['code' => 'product_unavailable', 'message' => 'بعض المنتجات لم تعد متاحة', 'product_id' => $product->id];
                 }
 
@@ -82,7 +84,7 @@ class CartFormatter
                     'quantity' => $item->quantity,
                     'line_total' => $lineTotal,
                     'note' => $item->note,
-                    'is_available' => $product->is_available,
+                    'is_available' => $orderable,
                     'price_changed' => false,
                 ];
             });

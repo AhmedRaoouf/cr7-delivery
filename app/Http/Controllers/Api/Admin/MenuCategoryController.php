@@ -11,6 +11,7 @@ use App\Models\MenuCategory;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Catalog\MenuWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,7 +23,7 @@ class MenuCategoryController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $categories = $restaurant->menuCategories()->orderBy('sort_order')->get();
+        $categories = $restaurant->menuCategories()->withCount('products')->orderBy('sort_order')->orderBy('id')->get();
 
         return ApiResponse::success($categories);
     }
@@ -51,9 +52,27 @@ class MenuCategoryController extends Controller
     {
         $this->ensureRestaurantInScope($request, $restaurant);
 
-        $menuCategory->delete();
+        $result = MenuWriter::deleteCategory($restaurant, $menuCategory, $request);
 
-        return ApiResponse::success(message: 'تم حذف القسم بنجاح');
+        return ApiResponse::success($result, 'تم حذف القسم بنجاح');
+    }
+
+    /** Doc 77 — `PUT /admin/restaurants/{r}/categories/order` {ids}. */
+    public function order(Request $request, Restaurant $restaurant): JsonResponse
+    {
+        $this->ensureRestaurantInScope($request, $restaurant);
+        MenuWriter::orderCategories($restaurant, $request);
+
+        return ApiResponse::success($restaurant->menuCategories()->withCount('products')->orderBy('sort_order')->orderBy('id')->get(), 'تم حفظ الترتيب');
+    }
+
+    /** Doc 77 — `PUT /admin/restaurants/{r}/categories/{c}/products/order` {ids}. */
+    public function productsOrder(Request $request, Restaurant $restaurant, MenuCategory $menuCategory): JsonResponse
+    {
+        $this->ensureRestaurantInScope($request, $restaurant);
+        MenuWriter::orderProducts($menuCategory, $request);
+
+        return ApiResponse::success(message: 'تم حفظ الترتيب');
     }
 
     /**

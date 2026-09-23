@@ -39,6 +39,7 @@ class ProductController extends Controller
         $products = Product::query()
             ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
             ->whereIn('id', $ids)
+            ->onMenu()
             ->get();
 
         return ApiResponse::success(ProductResource::collection($products));
@@ -69,6 +70,7 @@ class ProductController extends Controller
         $products = Product::query()
             ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
             ->where('is_available', true)
+            ->onMenu()
             ->whereHas('restaurant', fn ($q) => $q
                 ->where('is_active', true)
                 ->when($cityId, fn ($rq, $id) => $rq->where('city_id', $id))
@@ -102,7 +104,7 @@ class ProductController extends Controller
 
     public function show(Product $product): JsonResponse
     {
-        abort_unless($product->is_available, 404);
+        abort_unless($product->isOrderable(), 404);
 
         return ApiResponse::success(new ProductDetailResource($product->load('optionGroups.options')));
     }

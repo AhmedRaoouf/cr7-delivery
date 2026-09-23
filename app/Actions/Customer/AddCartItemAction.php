@@ -21,7 +21,7 @@ class AddCartItemAction
 
             $product = Product::query()->with('restaurant.servedZones')->findOrFail($data['product_id']);
 
-            if (! $product->is_available || ! $product->restaurant->is_active) {
+            if (! $product->isOrderable() || ! $product->restaurant->is_active) {
                 throw new ApiException('product_unavailable', 'هذا المنتج لم يعد متاحًا', 422);
             }
 

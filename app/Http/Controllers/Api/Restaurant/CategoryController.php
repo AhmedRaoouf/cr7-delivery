@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreCategoryRequest;
 use App\Models\MenuCategory;
 use App\Support\ApiResponse;
+use App\Support\Catalog\MenuWriter;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,8 @@ class CategoryController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
         $params = $this->listParams($request);
 
-        $query = $restaurant->menuCategories()->getQuery();
+        // Doc 77 — the row says how many dishes it holds, so «حذف» can say what happens to them.
+        $query = $restaurant->menuCategories()->withCount('products')->getQuery();
 
         if (($active = $params->bool('is_active')) !== null) {
             $query->where('menu_categories.is_active', $active);
@@ -57,9 +59,27 @@ class CategoryController extends Controller
     public function destroy(Request $request, MenuCategory $category): JsonResponse
     {
         $this->ensureOwned($request, $category);
-        $category->delete();
+        $result = MenuWriter::deleteCategory($request->user()->restaurant, $category, $request);
 
-        return ApiResponse::success(message: 'تم حذف القسم بنجاح');
+        return ApiResponse::success($result, 'تم حذف القسم بنجاح');
+    }
+
+    /** Doc 77 — `PUT /restaurant/categories/order` {ids}: every category, in the new order. */
+    public function order(Request $request): JsonResponse
+    {
+        $restaurant = $request->user()->restaurant()->firstOrFail();
+        MenuWriter::orderCategories($restaurant, $request);
+
+        return ApiResponse::success($restaurant->menuCategories()->withCount('products')->orderBy('sort_order')->orderBy('id')->get(), 'تم حفظ الترتيب');
+    }
+
+    /** Doc 77 — `PUT /restaurant/categories/{category}/products/order` {ids}: the dishes inside one category. */
+    public function productsOrder(Request $request, MenuCategory $category): JsonResponse
+    {
+        $this->ensureOwned($request, $category);
+        MenuWriter::orderProducts($category, $request);
+
+        return ApiResponse::success(message: 'تم حفظ الترتيب');
     }
 
     private function ensureOwned(Request $request, MenuCategory $category): void

@@ -171,6 +171,7 @@ class RestaurantController extends Controller
         $products = $restaurant->products()
             ->with('optionGroups.options')
             ->where('is_available', true)
+            ->onMenu()
             ->when($params->id('category_id'), fn ($q, $categoryId) => $q->where('menu_category_id', $categoryId))
             ->when($search !== '', fn ($q) => ArabicSearch::apply(
                 $q,
@@ -200,6 +201,7 @@ class RestaurantController extends Controller
         $products = $restaurant->products()
             ->with('optionGroups.options')
             ->where('is_available', true)
+            ->onMenu()
             ->orderByDesc('sold_count')
             ->limit(5)
             ->get();

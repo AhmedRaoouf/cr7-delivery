@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Media\ProductGallery;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -70,6 +71,22 @@ class Product extends Model
     public function menuCategory(): BelongsTo
     {
         return $this->belongsTo(MenuCategory::class);
+    }
+
+    /**
+     * Doc 77 — a dish whose section was deleted is not on the menu. Before doc 77 a
+     * category delete left its dishes behind (soft delete, so the FK cascade never ran):
+     * gone from the tab strip, still listed and orderable under «كل الأصناف».
+     */
+    public function scopeOnMenu(Builder $query): Builder
+    {
+        return $query->whereHas('menuCategory');
+    }
+
+    /** What a customer may add or keep in a basket: switched on, and in a live section. */
+    public function isOrderable(): bool
+    {
+        return $this->is_available && $this->menuCategory()->exists();
     }
 
     /**

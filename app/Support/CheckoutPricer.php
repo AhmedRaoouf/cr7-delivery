@@ -166,7 +166,7 @@ class CheckoutPricer
         // reach the order unchallenged; each is refused by name and line, so the app can
         // reopen that dish rather than guess.
         foreach ($items as $item) {
-            if (! $item->product->is_available) {
+            if (! $item->product->isOrderable()) {
                 $blockers[] = [
                     'code' => 'product_unavailable',
                     'message' => "لم يعد متاحًا: {$item->product->name_ar}",

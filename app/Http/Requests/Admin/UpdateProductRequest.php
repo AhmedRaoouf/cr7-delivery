@@ -19,7 +19,7 @@ class UpdateProductRequest extends FormRequest
     {
         return [
             // Batch 67 — a category of the restaurant in the path, not of any restaurant.
-            'menu_category_id' => ['sometimes', 'required', Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->route('restaurant')?->getKey())],
+            'menu_category_id' => ['sometimes', 'required', Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->route('restaurant')?->getKey())->whereNull('deleted_at')],
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

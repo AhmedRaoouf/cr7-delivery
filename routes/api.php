@@ -384,6 +384,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders/{order}/pickup-otp', [RestaurantOrderController::class, 'pickupOtp']);
 
         Route::get('/categories', [RestaurantCategoryController::class, 'index']);
+        // Doc 77 — PUTs, so `order` never collides with `{category}`'s PATCH/DELETE.
+        Route::put('/categories/order', [RestaurantCategoryController::class, 'order']);
+        Route::put('/categories/{category}/products/order', [RestaurantCategoryController::class, 'productsOrder']);
         Route::post('/categories', [RestaurantCategoryController::class, 'store']);
         Route::patch('/categories/{category}', [RestaurantCategoryController::class, 'update']);
         Route::delete('/categories/{category}', [RestaurantCategoryController::class, 'destroy']);
@@ -395,6 +398,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/products/{product}', [RestaurantProductController::class, 'destroy']);
         Route::post('/products/{product}/availability', [RestaurantProductController::class, 'availability']);
         Route::post('/products/bulk-availability', [RestaurantProductController::class, 'bulkAvailability']);
+        Route::post('/products/bulk-delete', [RestaurantProductController::class, 'bulkDestroy']);
 
         // Batch 72 — one picture at a time. `gallery/order` is a PUT and `gallery/{ref}` a
         // DELETE, so neither shadows the other.
@@ -588,8 +592,13 @@ Route::prefix('v1')->group(function () {
         // the path, or it is a 404. Without it `PATCH /restaurants/1/products/999` edited
         // product 999 wherever it lived — the restaurant id in the URL was decoration,
         // and a scope check on it could be stepped around with any in-scope parent.
+        // Doc 77 — reading a place's sections needs only `products.view`: `ADM-13` builds
+        // its category column, filter and the product form's picker from it, and a
+        // look-only admin got an empty list and a form that could not be saved.
+        Route::get('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'index'])->middleware('permission:products.view')->scopeBindings();
+
         Route::middleware('permission:restaurants.manage_menu')->scopeBindings()->group(function () {
-            Route::get('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'index']);
+            Route::put('/restaurants/{restaurant}/categories/order', [MenuCategoryController::class, 'order']);
             Route::post('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'store']);
             Route::patch('/restaurants/{restaurant}/categories/{menuCategory}', [MenuCategoryController::class, 'update']);
             Route::delete('/restaurants/{restaurant}/categories/{menuCategory}', [MenuCategoryController::class, 'destroy']);
@@ -603,6 +612,10 @@ Route::prefix('v1')->group(function () {
         Route::patch('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'update'])->middleware('permission:products.update')->scopeBindings();
         Route::post('/restaurants/{restaurant}/products/{product}/availability', [ProductController::class, 'toggleAvailability'])->middleware('permission:products.toggle_availability')->scopeBindings();
         Route::delete('/restaurants/{restaurant}/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:products.delete')->scopeBindings();
+        // Doc 77 — many dishes at once, and the dishes inside one section in order.
+        Route::post('/restaurants/{restaurant}/products/bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:products.delete');
+        Route::post('/restaurants/{restaurant}/products/bulk-availability', [ProductController::class, 'bulkAvailability'])->middleware('permission:products.toggle_availability');
+        Route::put('/restaurants/{restaurant}/categories/{menuCategory}/products/order', [MenuCategoryController::class, 'productsOrder'])->middleware('permission:products.update')->scopeBindings();
 
         // Batch 72 — the per-picture gallery API, the admin mirror of the restaurant's.
         Route::middleware('permission:products.update')->scopeBindings()->group(function () {

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
 use App\Models\Product;
 use App\Support\ApiResponse;
+use App\Support\Catalog\MenuWriter;
 use App\Support\Http\PublicCache;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
@@ -90,17 +91,18 @@ class ProductController extends Controller
     public function bulkAvailability(Request $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
-        $validated = $request->validate([
-            'ids' => ['required', 'array'],
-            'ids.*' => ['integer'],
-            'is_available' => ['required', 'boolean'],
-        ]);
+        $count = MenuWriter::setAvailability($restaurant, $request);
 
-        $restaurant->products()->whereIn('id', $validated['ids'])->update(['is_available' => $validated['is_available']]);
-        // A bulk update fires no model event; the public menu must not wait out its TTL.
-        PublicCache::bump('catalog');
+        return ApiResponse::success(['updated' => $count], 'تم تحديث حالة التوفر للمنتجات المحددة');
+    }
 
-        return ApiResponse::success(message: 'تم تحديث حالة التوفر للمنتجات المحددة');
+    /** Doc 77 — `POST /restaurant/products/bulk-delete` {ids}. */
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $restaurant = $request->user()->restaurant()->firstOrFail();
+        $count = MenuWriter::deleteProducts($restaurant, $request);
+
+        return ApiResponse::success(['deleted' => $count], "تم حذف {$count} صنف");
     }
 
     private function ensureOwned(Request $request, Product $product): void

@@ -28,6 +28,7 @@ class PriceBand
             ->where('restaurant_id', $restaurant->id)
             ->where('is_available', true)
             ->whereNull('deleted_at')
+            ->onMenu()
             ->with('optionGroups.options')
             ->get()
             // The **base** price: a discount is a promotion, not the brand's level.

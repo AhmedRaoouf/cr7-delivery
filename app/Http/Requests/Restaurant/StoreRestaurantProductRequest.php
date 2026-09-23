@@ -22,7 +22,7 @@ class StoreRestaurantProductRequest extends FormRequest
         return [
             // Batch 67 — the category must be this place's own. `exists:menu_categories,id`
             // accepted any place's category, so a dish could be filed into a rival's menu.
-            'menu_category_id' => [$required, Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->user()?->restaurant?->id)],
+            'menu_category_id' => [$required, Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->user()?->restaurant?->id)->whereNull('deleted_at')],
             'name_ar' => [$required, 'string', 'max:255'],
             'name_en' => [$required, 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

@@ -60,6 +60,7 @@ class SearchController extends Controller
     {
         $query = Product::query()
             ->where('is_available', true)
+            ->onMenu()
             ->with(['restaurant:id,name_ar,name_en,is_active', 'optionGroups.options'])
             ->whereHas('restaurant', fn ($q) => $q->where('is_active', true));
 

@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
+use App\Support\Catalog\MenuWriter;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,6 +90,24 @@ class ProductController extends Controller
         $product->delete();
 
         return ApiResponse::success(message: 'تم حذف المنتج بنجاح');
+    }
+
+    /** Doc 77 — `POST /admin/restaurants/{r}/products/bulk-delete` {ids}. */
+    public function bulkDestroy(Request $request, Restaurant $restaurant): JsonResponse
+    {
+        $this->ensureRestaurantInScope($request, $restaurant);
+        $count = MenuWriter::deleteProducts($restaurant, $request);
+
+        return ApiResponse::success(['deleted' => $count], "تم حذف {$count} صنف");
+    }
+
+    /** Doc 77 — `POST /admin/restaurants/{r}/products/bulk-availability` {ids, is_available}. */
+    public function bulkAvailability(Request $request, Restaurant $restaurant): JsonResponse
+    {
+        $this->ensureRestaurantInScope($request, $restaurant);
+        $count = MenuWriter::setAvailability($restaurant, $request);
+
+        return ApiResponse::success(['updated' => $count], 'تم تحديث حالة التوفر للمنتجات المحددة');
     }
 
     /**

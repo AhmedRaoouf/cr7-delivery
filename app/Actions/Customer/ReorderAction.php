@@ -50,7 +50,7 @@ class ReorderAction
     {
         $product = Product::query()->with(['restaurant', 'optionGroups.options'])->find($item->product_id);
 
-        if ($product === null || ! $product->is_available || ! $product->restaurant?->is_active) {
+        if ($product === null || ! $product->isOrderable() || ! $product->restaurant?->is_active) {
             $this->skip($result, $item, 'product_unavailable');
 
             return;

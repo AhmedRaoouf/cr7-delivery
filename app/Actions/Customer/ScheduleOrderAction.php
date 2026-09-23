@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\ScheduledOrder;
 use App\Models\User;
 use App\Support\BusinessTime;
+use App\Support\Catalog\LinePrice;
 use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use App\Support\ReviewAccess;
@@ -110,30 +111,39 @@ class ScheduleOrderAction
                         'restaurant_id' => $group['restaurant_id'],
                         'subtotal' => $group['subtotal'],
                     ])->all(),
-                    'lines' => $lines->map(fn ($item) => [
-                        'restaurant_id' => $item->restaurant_id,
-                        'restaurant_name' => $item->restaurant?->name_ar,
-                        'product_id' => $item->product_id,
-                        'product_name' => $item->product?->name_ar,
-                        'quantity' => $item->quantity,
-                        'unit_price' => (float) ($item->product?->discount_price ?? $item->product?->price ?? 0),
-                        // Names only, for the apps that already read this line.
-                        'options' => $item->options->map(fn ($o) => $o->productOption?->name_ar)->filter()->values()->all(),
-                        // D-167 — what each choice added, and the line as it will be billed.
-                        // `unit_price × quantity` left the options out, so a scheduled
-                        // «كفتة نص كيلو» read as the price of the base dish.
-                        'option_details' => $item->options->filter(fn ($o) => $o->productOption !== null)->map(fn ($o) => [
-                            'option_id' => $o->productOption->id,
-                            'group_name' => $o->productOption->group?->name_ar,
-                            'group_name_en' => $o->productOption->group?->name_en,
-                            'name' => $o->productOption->name_ar,
-                            'name_en' => $o->productOption->name_en,
-                            'price_delta' => (float) $o->productOption->price_delta,
-                        ])->values()->all(),
-                        'options_total' => (float) $item->options->sum(fn ($o) => (float) ($o->productOption?->price_delta ?? 0)),
-                        'line_total' => round(((float) ($item->product?->discount_price ?? $item->product?->price ?? 0)
-                            + (float) $item->options->sum(fn ($o) => (float) ($o->productOption?->price_delta ?? 0))) * $item->quantity, 2),
-                    ])->all(),
+                    'lines' => $lines->map(function ($item) {
+                        // doc 78 — the same unit the order will be billed at.
+                        $price = $item->product
+                            ? LinePrice::ofCartOptions($item->product, $item->options)
+                            : ['unit' => 0.0, 'options_total' => 0.0];
+                        $effective = $item->product ? LinePrice::effective($item->product) : 0.0;
+
+                        return [
+                            'restaurant_id' => $item->restaurant_id,
+                            'restaurant_name' => $item->restaurant?->name_ar,
+                            'product_id' => $item->product_id,
+                            'product_name' => $item->product?->name_ar,
+                            'quantity' => $item->quantity,
+                            'unit_price' => $price['unit'],
+                            // Names only, for the apps that already read this line.
+                            'options' => $item->options->map(fn ($o) => $o->productOption?->name_ar)->filter()->values()->all(),
+                            // D-167 — what each choice added, and the line as it will be billed.
+                            // `unit_price × quantity` left the options out, so a scheduled
+                            // «كفتة نص كيلو» read as the price of the base dish.
+                            'option_details' => $item->options->filter(fn ($o) => $o->productOption !== null)->map(fn ($o) => [
+                                'option_id' => $o->productOption->id,
+                                'group_name' => $o->productOption->group?->name_ar,
+                                'group_name_en' => $o->productOption->group?->name_en,
+                                'name' => $o->productOption->name_ar,
+                                'name_en' => $o->productOption->name_en,
+                                'price_delta' => LinePrice::lineDelta($o->productOption),
+                                'price' => LinePrice::shownPrice($o->productOption, $o->productOption->group, $effective),
+                                'price_mode' => $o->productOption->group?->price_mode?->value ?? 'add',
+                            ])->values()->all(),
+                            'options_total' => $price['options_total'],
+                            'line_total' => round(($price['unit'] + $price['options_total']) * $item->quantity, 2),
+                        ];
+                    })->all(),
                     'subtotal' => $quote['subtotal'],
                     'delivery_fee' => $quote['delivery_fee'],
                     'discount_amount' => $quote['discount_amount'],

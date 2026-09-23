@@ -191,6 +191,9 @@ class OrderController extends Controller
                         'group_name' => $locale === 'en' ? ($o->group_name_en_snapshot ?? $o->group_name_snapshot) : $o->group_name_snapshot,
                         'name' => $locale === 'en' ? $o->option_name_en_snapshot : $o->option_name_ar_snapshot,
                         'price_delta' => (float) $o->price_delta_snapshot,
+                        // doc 78 — `final`: this choice *was* the unit price, `price`.
+                        'price_mode' => $o->price_mode_snapshot ?? 'add',
+                        'price' => (float) ($o->option_price_snapshot ?? $o->price_delta_snapshot),
                     ])->values(),
                 ]),
             ])->values(),

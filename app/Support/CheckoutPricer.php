@@ -10,6 +10,7 @@ use App\Models\PromoCode;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserAddress;
+use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\OptionSelection;
 use Illuminate\Support\Collection;
 
@@ -26,15 +27,15 @@ class CheckoutPricer
 {
     public function price(User $user, Cart $cart, UserAddress $address, ?string $promoCode, string $paymentMethod): array
     {
-        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant.serviceZone', 'options.productOption'])->get();
+        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant.serviceZone', 'options.productOption.group'])->get();
         $byRestaurant = $items->groupBy('restaurant_id');
 
         $blockers = [];
 
         $restaurantSubtotals = $byRestaurant->map(function (Collection $lines) {
             return $lines->sum(function ($item) {
-                $unitPrice = (float) ($item->product->discount_price ?? $item->product->price);
-                $optionsTotal = $item->options->sum(fn ($o) => (float) $o->productOption->price_delta);
+                // doc 78 — one pricing rule for the basket, the quote and the order.
+                ['unit' => $unitPrice, 'options_total' => $optionsTotal] = LinePrice::ofCartOptions($item->product, $item->options);
 
                 return ($unitPrice + $optionsTotal) * $item->quantity;
             });
@@ -318,8 +319,14 @@ class CheckoutPricer
     /** doc 08 §4 — POST /promo/validate: strict, throws on any invalidity. */
     public function validatePromo(User $user, Cart $cart, UserAddress $address, string $code): PromoCode
     {
-        $items = $cart->items()->with('product')->get();
-        $subtotal = round($items->sum(fn ($item) => (float) ($item->product->discount_price ?? $item->product->price) * $item->quantity), 2);
+        $items = $cart->items()->with(['product', 'options.productOption.group'])->get();
+        // doc 78 — the same subtotal the quote charges: options included. This read the
+        // bare dish, so a promo's minimum was judged on a smaller basket than the bill.
+        $subtotal = round($items->sum(function ($item) {
+            ['unit' => $unit, 'options_total' => $extras] = LinePrice::ofCartOptions($item->product, $item->options);
+
+            return ($unit + $extras) * $item->quantity;
+        }), 2);
         $restaurantIds = $items->pluck('restaurant_id')->unique()->values()->all();
 
         [$promo, $valid, $reason] = $this->resolvePromo($code, $user, $address, $subtotal, $restaurantIds);

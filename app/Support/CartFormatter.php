@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Cart;
 use App\Models\City;
 use App\Models\ServiceZone;
+use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\OptionSelection;
 use Illuminate\Http\Request;
 
@@ -35,8 +36,8 @@ class CartFormatter
 
             $lines = $restaurantItems->map(function ($item) use ($locale, &$groupIssues) {
                 $product = $item->product;
-                $optionsTotal = $item->options->sum(fn ($o) => (float) $o->productOption->price_delta);
-                $unitPrice = (float) ($product->discount_price ?? $product->price);
+                // doc 78 — a `final` choice is the unit price; the rest are extras on it.
+                ['unit' => $unitPrice, 'options_total' => $optionsTotal] = LinePrice::ofCartOptions($product, $item->options);
                 $lineTotal = ($unitPrice + $optionsTotal) * $item->quantity;
 
                 $orderable = $product->isOrderable();
@@ -70,7 +71,9 @@ class CartFormatter
                     'options' => $item->options->map(fn ($o) => [
                         'id' => $o->productOption->id,
                         'name' => $o->productOption->{"name_{$locale}"},
-                        'price_delta' => (float) $o->productOption->price_delta,
+                        'price_delta' => LinePrice::lineDelta($o->productOption),
+                        'price' => LinePrice::shownPrice($o->productOption, $o->productOption->group, LinePrice::effective($product)),
+                        'price_mode' => $o->productOption->group?->price_mode?->value ?? 'add',
                         'group_id' => $o->productOption->product_option_group_id,
                         'group_name' => $o->productOption->group?->{"name_{$locale}"},
                         'is_available' => (bool) $o->productOption->is_available,

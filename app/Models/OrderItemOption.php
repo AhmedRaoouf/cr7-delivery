@@ -10,11 +10,12 @@ class OrderItemOption extends Model
     protected $fillable = [
         'order_item_id', 'product_option_id', 'group_name_snapshot', 'group_name_en_snapshot',
         'option_name_ar_snapshot', 'option_name_en_snapshot', 'price_delta_snapshot',
+        'price_mode_snapshot', 'option_price_snapshot',
     ];
 
     protected function casts(): array
     {
-        return ['price_delta_snapshot' => 'decimal:2'];
+        return ['price_delta_snapshot' => 'decimal:2', 'option_price_snapshot' => 'decimal:2'];
     }
 
     public function orderItem(): BelongsTo

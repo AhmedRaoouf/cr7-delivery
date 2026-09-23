@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
 use App\Support\BusinessTime;
+use App\Support\Catalog\LinePrice;
 use App\Support\CheckoutAddress;
 use App\Support\CheckoutPricer;
 use App\Support\OrderNumber;
@@ -187,8 +188,9 @@ class CreateOrderAction
                 ]);
 
                 foreach ($lines as $item) {
-                    $unitPrice = (float) ($item->product->discount_price ?? $item->product->price);
-                    $optionsTotal = $item->options->sum(fn ($o) => (float) $o->productOption->price_delta);
+                    // doc 78 — a `final` choice is the unit; the snapshot keeps that, so
+                    // `unit_price + Σ price_delta` stays the line for every reader.
+                    ['unit' => $unitPrice, 'options_total' => $optionsTotal] = LinePrice::ofCartOptions($item->product, $item->options);
 
                     $orderItem = $subOrder->items()->create([
                         'product_id' => $item->product->id,
@@ -209,7 +211,9 @@ class CreateOrderAction
                             'group_name_en_snapshot' => $option->productOption->group->name_en,
                             'option_name_ar_snapshot' => $option->productOption->name_ar,
                             'option_name_en_snapshot' => $option->productOption->name_en,
-                            'price_delta_snapshot' => $option->productOption->price_delta,
+                            'price_delta_snapshot' => LinePrice::lineDelta($option->productOption),
+                            'price_mode_snapshot' => $option->productOption->group->price_mode->value,
+                            'option_price_snapshot' => LinePrice::shownPrice($option->productOption, $option->productOption->group, LinePrice::effective($item->product)),
                         ]);
                     }
                 }

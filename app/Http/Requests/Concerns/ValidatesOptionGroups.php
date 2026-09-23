@@ -21,6 +21,9 @@ trait ValidatesOptionGroups
             'name_ar' => [$required, 'string', 'max:255'],
             'name_en' => [$required, 'string', 'max:255'],
             'selection_type' => [$required, 'in:single,multiple'],
+            // doc 78 — `add`: each option is an extra on the dish; `final`: the chosen
+            // option's price *is* the dish's price («نص كيلو = 500»). Omitted → `add`.
+            'price_mode' => ['sometimes', 'nullable', 'in:add,final'],
             'is_required' => ['sometimes', 'nullable', 'boolean'],
             'min_select' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:50'],
             'max_select' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:50'],
@@ -41,7 +44,9 @@ trait ValidatesOptionGroups
         return [
             'name_ar' => [$required, 'string', 'max:255'],
             'name_en' => [$required, 'string', 'max:255'],
-            // What the option **adds** to the product's price — never negative (D-165).
+            // The option's price, never negative (D-165). In an `add` group it is added to
+            // the dish; in a `final` group it is the dish's price, and 0 means «the dish's
+            // own price» (doc 78).
             'price_delta' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000'],
             'is_available' => ['sometimes', 'nullable', 'boolean'],
             'is_default' => ['sometimes', 'nullable', 'boolean'],

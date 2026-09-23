@@ -2,6 +2,7 @@
 
 namespace App\Support\Catalog;
 
+use App\Enums\OptionPriceMode;
 use App\Enums\OptionSelectionType;
 use App\Exceptions\ApiException;
 use App\Models\Product;
@@ -31,6 +32,7 @@ class OptionGroupWriter
 
             $group = new ProductOptionGroup(['product_id' => $product->id]);
             $group->fill(self::normalise($data, null, count($options)));
+            self::assertOnePriceGroup($product->id, $group);
             $group->sort_order ??= (int) $product->optionGroups()->max('sort_order') + 1;
             $group->save();
 
@@ -50,6 +52,7 @@ class OptionGroupWriter
         return DB::transaction(function () use ($group, $data): ProductOptionGroup {
             unset($data['options']);
             $group->fill(self::normalise($data, $group, $group->options()->count()));
+            self::assertOnePriceGroup((int) $group->product_id, $group);
             $group->save();
 
             self::settleDefaults($group);
@@ -121,7 +124,22 @@ class OptionGroupWriter
      */
     private static function normalise(array $data, ?ProductOptionGroup $current, int $optionCount): array
     {
+        $mode = OptionPriceMode::from($data['price_mode'] ?? $current?->price_mode?->value ?? 'add');
         $type = OptionSelectionType::from($data['selection_type'] ?? $current?->selection_type?->value ?? 'single');
+
+        // doc 78 — a group that sets the price is one size, so it takes exactly one. A
+        // client that only switched the mode gets a single group; one that asked for
+        // both «multiple» and «final» in the same breath is told why not.
+        if ($mode === OptionPriceMode::Final && $type === OptionSelectionType::Multiple) {
+            if (($data['selection_type'] ?? null) === 'multiple') {
+                throw new ApiException('validation_failed', 'مجموعة تحدد السعر تسمح باختيار واحد فقط', 422, [
+                    'selection_type' => ['مجموعة تحدد السعر تسمح باختيار واحد فقط'],
+                ]);
+            }
+
+            $type = OptionSelectionType::Single;
+        }
+
         $required = (bool) (array_key_exists('is_required', $data) ? $data['is_required'] : ($current?->is_required ?? false));
 
         if ($type === OptionSelectionType::Single) {
@@ -145,10 +163,31 @@ class OptionGroupWriter
             'sort_order' => $data['sort_order'] ?? null,
         ], fn ($value) => $value !== null) + [
             'selection_type' => $type,
+            'price_mode' => $mode,
             'is_required' => $required,
             'min_select' => $min,
             'max_select' => $max,
         ];
+    }
+
+    /** doc 78 — one dish has one price: at most one group may set it. */
+    private static function assertOnePriceGroup(int $productId, ProductOptionGroup $group): void
+    {
+        if ($group->price_mode !== OptionPriceMode::Final) {
+            return;
+        }
+
+        $other = ProductOptionGroup::query()
+            ->where('product_id', $productId)
+            ->where('price_mode', OptionPriceMode::Final->value)
+            ->when($group->exists, fn ($q) => $q->whereKeyNot($group->id))
+            ->exists();
+
+        if ($other) {
+            throw new ApiException('validation_failed', 'لهذا الصنف مجموعة أخرى تحدد السعر — يمكن لمجموعة واحدة فقط أن تحدده', 422, [
+                'price_mode' => ['لهذا الصنف مجموعة أخرى تحدد السعر'],
+            ]);
+        }
     }
 
     /**

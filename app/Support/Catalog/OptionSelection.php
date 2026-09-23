@@ -117,27 +117,43 @@ class OptionSelection
     /**
      * D-166 — the least one unit can cost: the effective price plus the cheapest
      * available options every required group demands.
+     *
+     * doc 78 — a `final` group sets the starting price instead: its cheapest available
+     * choice when the group is required, else the cheaper of that and the dish itself.
      */
     public static function fromPrice(Product $product, bool $base = false): float
     {
-        $price = $base ? (float) $product->price : (float) ($product->discount_price ?? $product->price);
+        $own = $base ? (float) $product->price : (float) ($product->discount_price ?? $product->price);
+        $price = $own;
+        $extras = 0.0;
 
         foreach (self::liveGroups($product) as $group) {
+            $available = $group->options->filter(fn (ProductOption $option) => $option->is_available);
+
+            if (LinePrice::isFinal($group)) {
+                $cheapest = $available->map(fn (ProductOption $option) => LinePrice::finalPrice($option, $own))->min();
+
+                if ($cheapest !== null) {
+                    $price = self::minimum($group) > 0 ? (float) $cheapest : min($own, (float) $cheapest);
+                }
+
+                continue;
+            }
+
             $need = self::minimum($group);
 
             if ($need === 0) {
                 continue;
             }
 
-            $price += (float) $group->options
-                ->filter(fn (ProductOption $option) => $option->is_available)
+            $extras += (float) $available
                 ->map(fn (ProductOption $option) => (float) $option->price_delta)
                 ->sort()
                 ->take($need)
                 ->sum();
         }
 
-        return round($price, 2);
+        return round($price + $extras, 2);
     }
 
     /** @return array{code: string, message: string, errors: array<string, mixed>, meta: array<string, mixed>} */

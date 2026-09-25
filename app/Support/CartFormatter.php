@@ -22,7 +22,7 @@ class CartFormatter
         // refused the third. A raw read with its own literal is a second source of truth.
         $maxRestaurants = BasketLimit::maxRestaurants();
 
-        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant', 'options.productOption.group'])->get();
+        $items = $cart->items()->with(['product.optionGroups.options', 'restaurant.serviceZone', 'options.productOption.group'])->get();
         $itemsByRestaurant = $items->groupBy('restaurant_id');
 
         $basketIssues = [];
@@ -105,6 +105,9 @@ class CartFormatter
                     'name' => $restaurant->{"name_{$locale}"},
                     'logo' => $restaurant->logo,
                     'is_open_now' => $restaurant->isOpenNow(),
+                    // The basket's «التوصيل خلال …» — the same window the menu prints.
+                    'delivery_time_min' => $restaurant->etaWindow()[0],
+                    'delivery_time_max' => $restaurant->etaWindow()[1],
                 ],
                 'items' => $lines->values(),
                 'subtotal' => $subtotal,

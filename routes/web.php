@@ -217,7 +217,8 @@ Route::withoutMiddleware([
      * ⚠️ **This is only half of it.** The app must also carry
      * `com.apple.developer.associated-domains = applinks:cr7-delivery.com` in its release
      * entitlement, and that capability must exist on the App ID
-     * `com.cr7delivery.cr7Delivery` for team `XB8YVBDAM7` — otherwise every device release
+     * `com.cr7delivery.cr7Delivery` for team `RPQS94YAFH` (signing moved there from
+     * `XB8YVBDAM7` on 2026-09-24; the old id stays listed for builds already installed) — otherwise every device release
      * build fails to provision, which is exactly why `RunnerRelease.entitlements` does not
      * carry it yet. Until it does, an iPhone opens the shared link in Safari and lands on
      * the share page, whose «افتح في التطبيق» button uses the `cr7delivery://` scheme and
@@ -228,7 +229,10 @@ Route::withoutMiddleware([
         return response()->json([
             'applinks' => [
                 'details' => [[
-                    'appIDs' => ['XB8YVBDAM7.com.cr7delivery.cr7Delivery'],
+                    'appIDs' => [
+                        'RPQS94YAFH.com.cr7delivery.cr7Delivery',
+                        'XB8YVBDAM7.com.cr7delivery.cr7Delivery',
+                    ],
                     'components' => [
                         ['/' => '/r/*', 'comment' => 'a shop'],
                         ['/' => '/p/*', 'comment' => 'a dish'],

@@ -138,8 +138,11 @@ class CheckoutPricer
                 'delivery_fee_share' => round($deliveryFee * $share, 2),
                 'platform_fee_share' => round($platformFee * $share, 2),
                 'meets_min_order' => $lineSubtotal >= (float) $restaurant->min_order_value,
-                'eta_minutes_min' => $restaurant->serviceZone ? max(5, $restaurant->serviceZone->avg_delivery_minutes - 10) : null,
-                'eta_minutes_max' => $restaurant->serviceZone ? $restaurant->serviceZone->avg_delivery_minutes + 10 : null,
+                // The place's own window first, its zone's average after — the
+                // same numbers the menu and the basket print. Zone-only left a
+                // place with no zone promising «خلال 0–0 دقيقة» at checkout.
+                'eta_minutes_min' => $restaurant->etaWindow()[0],
+                'eta_minutes_max' => $restaurant->etaWindow()[1],
                 'is_open_now' => $restaurant->isOpenNow(),
             ];
         })->values();

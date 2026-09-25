@@ -114,6 +114,26 @@ class CatalogOptionsTest extends TestCase
         $this->actingAsCustomer($customer)->postJson('/api/v1/cart/items', ['product_id' => $this->medicine->id])->assertCreated();
     }
 
+    public function test_the_basket_says_how_long_its_kitchen_takes(): void
+    {
+        $this->pharmacy->forceFill(['eta_min_minutes' => 25, 'eta_max_minutes' => 40])->save();
+        $customer = $this->makeCustomer();
+        $this->actingAsCustomer($customer)->postJson('/api/v1/cart/items', ['product_id' => $this->medicine->id])->assertCreated();
+
+        // Without it the basket's footer promised «خلال 0–0 دقيقة».
+        $this->actingAsCustomer($customer)->getJson('/api/v1/cart')
+            ->assertOk()
+            ->assertJsonPath('data.groups.0.restaurant.delivery_time_min', 25)
+            ->assertJsonPath('data.groups.0.restaurant.delivery_time_max', 40);
+
+        // Checkout promised the zone's average only — never the place's own window.
+        $quote = $this->actingAsCustomer($customer)->postJson('/api/v1/checkout/quote', [
+            'address_id' => $this->makeAddress($customer)->id, 'payment_method' => 'cash',
+        ])->assertOk()->json('data');
+        $this->assertSame(25, $quote['eta_minutes_min']);
+        $this->assertSame(40, $quote['eta_minutes_max']);
+    }
+
     public function test_groups_and_options_are_reordered_by_sending_every_id(): void
     {
         [$strength, $options] = $this->strengthGroup();

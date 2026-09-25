@@ -20,6 +20,10 @@ class UpdateProductRequest extends FormRequest
         return [
             // Batch 67 — a category of the restaurant in the path, not of any restaurant.
             'menu_category_id' => ['sometimes', 'required', Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->route('restaurant')?->getKey())->whereNull('deleted_at')],
+            // Doc 82 — the dish's cuisine (the customer's «برجر / بيتزا» filter). Optional
+            // on the wire so an older client still saves; the model files a dish that
+            // names none by its name, or under «أخرى».
+            'cuisine_id' => ['sometimes', 'nullable', 'integer', Rule::exists('cuisines', 'id')->where('is_active', true)],
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'name_en' => ['sometimes', 'required', 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

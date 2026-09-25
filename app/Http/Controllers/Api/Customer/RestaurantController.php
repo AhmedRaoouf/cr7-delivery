@@ -64,10 +64,12 @@ class RestaurantController extends Controller
                         }
                     }));
             })
-            ->when($filter['cuisine_id'] ?? null, fn ($q, $cuisineId) => $q->whereHas(
-                'cuisines',
-                fn ($cq) => $cq->where('cuisines.id', $cuisineId),
-            ))
+            // Doc 82 — a place answers a cuisine when it serves a dish of it, or when it
+            // is tagged with it (the tag is how a place with no menu yet still shows).
+            ->when($filter['cuisine_id'] ?? null, fn ($q, $cuisineId) => $q->where(fn ($inner) => $inner
+                ->whereHas('products', fn ($pq) => $pq->where('products.cuisine_id', $cuisineId)
+                    ->where('products.is_available', true)->onMenu())
+                ->orWhereHas('cuisines', fn ($cq) => $cq->where('cuisines.id', $cuisineId))))
             ->when(($filter['min_rating'] ?? null) !== null, fn ($q) => $q->where('rating_avg', '>=', (float) $filter['min_rating']))
             ->when($filter['free_delivery'] ?? null, fn ($q) => $q->whereHas(
                 'serviceZone',

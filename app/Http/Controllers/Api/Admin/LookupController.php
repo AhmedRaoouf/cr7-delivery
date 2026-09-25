@@ -96,10 +96,11 @@ class LookupController extends Controller
             ],
             'cuisines' => [
                 Cuisine::query()
-                    ->select(['id', 'name_ar', 'name_en', 'is_active'])
+                    ->select(['id', 'name_ar', 'name_en', 'image', 'is_active', 'is_fallback'])
                     ->tap(fn ($q) => ListSearch::apply($q, $params->search(), ['names' => ['name_ar', 'name_en']]))
-                    ->orderBy('sort_order')->orderBy('name_ar'),
-                fn (Cuisine $c) => ['id' => $c->id, 'name' => $c->name_ar, 'name_en' => $c->name_en],
+                    // Doc 82 — «أخرى» last, so a product form's list reads the real ones first.
+                    ->orderBy('is_fallback')->orderBy('sort_order')->orderBy('name_ar'),
+                fn (Cuisine $c) => ['id' => $c->id, 'name' => $c->name_ar, 'name_en' => $c->name_en, 'image' => $c->image, 'is_fallback' => (bool) $c->is_fallback],
             ],
             'admins' => [
                 $this->assignees($admin)

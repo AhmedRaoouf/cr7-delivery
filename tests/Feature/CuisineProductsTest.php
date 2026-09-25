@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Cuisine;
 use App\Models\Product;
-use App\Models\Restaurant;
 use Database\Seeders\CatalogSeeder;
 use Database\Seeders\ContentSeeder;
 use Database\Seeders\LocationSeeder;
@@ -93,16 +92,12 @@ class CuisineProductsTest extends TestCase
         $this->assertSame(5, $response->json('meta.per_page'));
         $this->assertGreaterThan(5, $response->json('meta.total'));
 
-        $expected = Restaurant::query()
-            ->whereHas('cuisines', fn ($q) => $q->where('cuisines.id', $cuisine->id))
-            ->pluck('id')
-            ->all();
-
         foreach ($rows as $row) {
             // A dish, not a shop: a restaurant row has `rating_count` and no price.
             $this->assertArrayHasKey('price', $row);
             $this->assertArrayHasKey('menu_category_id', $row);
-            $this->assertContains($row['restaurant_id'], $expected);
+            // Doc 82 — the dish's own cuisine, not its kitchen's tag.
+            $this->assertSame($cuisine->id, $row['cuisine_id']);
             // Out of its own menu a dish is unopenable and unaddable without this.
             $this->assertNotNull($row['restaurant_name']);
             $this->assertTrue($row['is_available']);
@@ -161,15 +156,17 @@ class CuisineProductsTest extends TestCase
         );
     }
 
-    /** A cuisine doc 17 actually tagged a kitchen with, so the assertions have rows. */
+    /** The seeded cuisine holding the most orderable dishes, so the assertions have rows. */
     private function cuisineWithProducts(): Cuisine
     {
         $cuisine = Cuisine::query()
-            ->whereHas('restaurants', fn ($q) => $q->where('is_active', true)->whereHas('products'))
-            ->orderBy('sort_order')
+            ->offered()
+            ->withCount(['products' => fn ($q) => $q->orderableHere()])
+            ->orderByDesc('products_count')
             ->first();
 
-        $this->assertNotNull($cuisine, 'the seeded catalogue tags no kitchen with a cuisine');
+        $this->assertNotNull($cuisine, 'the seeded catalogue files no dish under a cuisine');
+        $this->assertGreaterThan(20, $cuisine->products_count);
 
         return $cuisine;
     }

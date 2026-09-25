@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Catalog\CuisineClassifier;
 use App\Support\Media\ProductGallery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +18,7 @@ class Product extends Model
     public const GALLERY_MAX = 12;
 
     protected $fillable = [
-        'restaurant_id', 'menu_category_id', 'name_ar', 'name_en',
+        'restaurant_id', 'menu_category_id', 'cuisine_id', 'name_ar', 'name_en',
         'description_ar', 'description_en', 'image', 'gallery', 'price',
         'discount_price', 'prep_minutes', 'calories', 'ingredients_ar',
         'ingredients_en', 'allergens', 'spice_level', 'serving_size_ar',
@@ -63,9 +64,32 @@ class Product extends Model
         return $this->append(['gallery_items', 'gallery_version']);
     }
 
+    /**
+     * Doc 82 — every dish has a cuisine. A write that names none (an older app, a
+     * script, a seeder) is filed by its name, and «أخرى» when no rule fits.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Product $product): void {
+            $product->cuisine_id ??= CuisineClassifier::idFor($product);
+        });
+
+        // Clearing the cuisine on an edit files the dish under «أخرى», never under nothing.
+        static::updating(function (Product $product): void {
+            if ($product->isDirty('cuisine_id') && $product->cuisine_id === null) {
+                $product->cuisine_id = CuisineClassifier::fallbackId();
+            }
+        });
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function cuisine(): BelongsTo
+    {
+        return $this->belongsTo(Cuisine::class);
     }
 
     public function menuCategory(): BelongsTo
@@ -81,6 +105,18 @@ class Product extends Model
     public function scopeOnMenu(Builder $query): Builder
     {
         return $query->whereHas('menuCategory');
+    }
+
+    /**
+     * Doc 82 — a dish a customer can find through a filter: switched on, in a live
+     * section, at a place that is switched on.
+     */
+    public function scopeOrderableHere(Builder $query): Builder
+    {
+        return $query
+            ->where('products.is_available', true)
+            ->onMenu()
+            ->whereHas('restaurant', fn (Builder $q) => $q->where('is_active', true));
     }
 
     /** What a customer may add or keep in a basket: switched on, and in a live section. */

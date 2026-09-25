@@ -23,6 +23,10 @@ class StoreRestaurantProductRequest extends FormRequest
             // Batch 67 — the category must be this place's own. `exists:menu_categories,id`
             // accepted any place's category, so a dish could be filed into a rival's menu.
             'menu_category_id' => [$required, Rule::exists('menu_categories', 'id')->where('restaurant_id', (int) $this->user()?->restaurant?->id)->whereNull('deleted_at')],
+            // Doc 82 — the dish's cuisine (the customer's «برجر / بيتزا» filter). Optional
+            // on the wire so an older client still saves; the model files a dish that
+            // names none by its name, or under «أخرى».
+            'cuisine_id' => ['sometimes', 'nullable', 'integer', Rule::exists('cuisines', 'id')->where('is_active', true)],
             'name_ar' => [$required, 'string', 'max:255'],
             'name_en' => [$required, 'string', 'max:255'],
             'description_ar' => ['nullable', 'string'],

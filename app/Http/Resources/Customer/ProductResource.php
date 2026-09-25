@@ -32,6 +32,10 @@ class ProductResource extends JsonResource
             // the restaurant it belongs to or it cannot be opened or added.
             'restaurant_id' => $this->restaurant_id,
             'restaurant_name' => $this->whenLoaded('restaurant', fn () => $this->restaurant->{"name_{$locale}"}),
+            // Doc 82 — a cuisine's list is dishes from every place, so the row carries
+            // the place's mark beside its name.
+            'restaurant_logo' => $this->whenLoaded('restaurant', fn () => $this->restaurant->logo),
+            'cuisine_id' => $this->cuisine_id,
             // FR-MENU-08 — «+» on a list row may not add a dish that still has a
             // choice to make; it has to open `CUS-15` instead. The app decided
             // that by looking at `option_groups`, which **only the detail

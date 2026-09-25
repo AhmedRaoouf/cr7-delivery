@@ -63,18 +63,18 @@ class ProductController extends Controller
      */
     public function byCuisine(Request $request, Cuisine $cuisine): JsonResponse
     {
-        abort_unless($cuisine->is_active, 404);
+        // «أخرى» is where dishes no filter fits are kept; it is not a filter.
+        abort_unless($cuisine->is_active && ! $cuisine->is_fallback, 404);
 
         $cityId = $request->integer('city_id') ?: null;
 
+        // Doc 82 — the dish's own cuisine, not its place's tags: «برجر» lists burgers,
+        // not the drinks of a burger place, and finds a burger at a grill house too.
         $products = Product::query()
-            ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
-            ->where('is_available', true)
-            ->onMenu()
-            ->whereHas('restaurant', fn ($q) => $q
-                ->where('is_active', true)
-                ->when($cityId, fn ($rq, $id) => $rq->where('city_id', $id))
-                ->whereHas('cuisines', fn ($cq) => $cq->where('cuisines.id', $cuisine->id)))
+            ->with(['restaurant:id,name_ar,name_en,logo', 'optionGroups.options'])
+            ->where('products.cuisine_id', $cuisine->id)
+            ->orderableHere()
+            ->when($cityId, fn ($q, $id) => $q->whereHas('restaurant', fn ($rq) => $rq->where('city_id', $id)))
             ->when(($search = ListParams::of($request)->search()) !== '', fn ($q) => ArabicSearch::apply(
                 $q,
                 ['name_ar', 'name_en', 'description_ar', 'description_en'],

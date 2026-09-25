@@ -130,7 +130,10 @@ class CatalogHttpCacheTest extends TestCase
         $this->assertCount(0, $this->getJson('/api/v1/cuisines')->assertOk()->json('data'));
         $this->assertSame('HIT', $this->getJson('/api/v1/cuisines')->headers->get('X-Cache'));
 
-        Cuisine::query()->create(['name_ar' => 'مشويات', 'name_en' => 'Grill', 'is_active' => true]);
+        // Doc 82 — a cuisine is offered once it holds a dish; filing one is the write.
+        $grill = Cuisine::query()->create(['name_ar' => 'مشويات', 'name_en' => 'Grill', 'is_active' => true]);
+        $this->assertCount(0, $this->getJson('/api/v1/cuisines')->json('data'), 'an empty cuisine is not offered');
+        $this->makeProduct($this->place, 'كفتة', 90)->update(['cuisine_id' => $grill->id]);
 
         $after = $this->getJson('/api/v1/cuisines')->assertOk();
         $this->assertSame('MISS', $after->headers->get('X-Cache'));

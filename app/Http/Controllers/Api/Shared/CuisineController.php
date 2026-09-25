@@ -13,8 +13,9 @@ class CuisineController extends Controller
 {
     public function index(): JsonResponse
     {
+        // Doc 82 — only what a tap can fill: «أخرى» and an empty cuisine are not offered.
         $cuisines = Cuisine::query()
-            ->where('is_active', true)
+            ->offered()
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();

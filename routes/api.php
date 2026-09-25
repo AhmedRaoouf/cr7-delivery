@@ -91,6 +91,7 @@ use App\Http\Controllers\Api\Shared\CaptainApplicationController;
 use App\Http\Controllers\Api\Shared\CityController as SharedCityController;
 use App\Http\Controllers\Api\Shared\ConfigController;
 use App\Http\Controllers\Api\Shared\CuisineController as SharedCuisineController;
+use App\Http\Controllers\Api\Restaurant\CuisineController as RestaurantCuisineController;
 use App\Http\Controllers\Api\Shared\DeviceController;
 use App\Http\Controllers\Api\Shared\FaqController;
 use App\Http\Controllers\Api\Shared\GeoController;
@@ -390,6 +391,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/categories', [RestaurantCategoryController::class, 'store']);
         Route::patch('/categories/{category}', [RestaurantCategoryController::class, 'update']);
         Route::delete('/categories/{category}', [RestaurantCategoryController::class, 'destroy']);
+
+        // Doc 82 — the cuisines a dish is filed under, and «تصنيف جديد» from the form.
+        Route::get('/cuisines', [RestaurantCuisineController::class, 'index']);
+        Route::post('/cuisines', [RestaurantCuisineController::class, 'store']);
 
         Route::get('/products', [RestaurantProductController::class, 'index']);
         Route::post('/products', [RestaurantProductController::class, 'store']);

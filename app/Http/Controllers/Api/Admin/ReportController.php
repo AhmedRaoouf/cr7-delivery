@@ -154,7 +154,7 @@ class ReportController extends Controller
         return ApiResponse::success([
             'total_amount' => (float) $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->sum('amount'),
             'count' => $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->count(),
-            'by_reason' => $refunds()->whereBetween('created_at', [$from, $to])->selectRaw('reason_code, COUNT(*) as count')->groupBy('reason_code')->pluck('count', 'reason_code'),
+            'by_reason' => (object) $refunds()->whereBetween('created_at', [$from, $to])->selectRaw('reason_code, COUNT(*) as count')->groupBy('reason_code')->pluck('count', 'reason_code')->all(),
         ]);
     }
 
@@ -166,7 +166,7 @@ class ReportController extends Controller
         return ApiResponse::success([
             'total' => (clone $complaints)->count(),
             'resolved' => (clone $complaints)->where('status', 'resolved')->count(),
-            'by_category' => (clone $complaints)->selectRaw('category, COUNT(*) as count')->groupBy('category')->pluck('count', 'category'),
+            'by_category' => (object) (clone $complaints)->selectRaw('category, COUNT(*) as count')->groupBy('category')->pluck('count', 'category')->all(),
             'avg_resolution_hours' => (clone $complaints)->whereNotNull('resolved_at')->selectRaw('AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) as avg_hours')->value('avg_hours'),
         ]);
     }

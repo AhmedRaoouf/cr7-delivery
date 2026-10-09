@@ -90,10 +90,11 @@ class DashboardController extends Controller
 
         return ApiResponse::success([
             'sales' => $sales,
-            'statuses' => $statuses,
-            'payment_methods' => $paymentMethods,
-            // Always an object keyed by hour: a run of hours from 0 (or none at all)
-            // would otherwise serialise as a JSON list and fail the dashboards' schema.
+            // All three are maps and always JSON objects: an empty collection (a week with
+            // no orders) serialises as `[]`, and the admin home refused the whole page on
+            // it — «تعذر تحميل هذه الشاشة» (2026-10-10). A run of hours from 0 is a list too.
+            'statuses' => (object) $statuses->all(),
+            'payment_methods' => (object) $paymentMethods->all(),
             'peak_hours' => (object) $peakHours->all(),
         ]);
     }

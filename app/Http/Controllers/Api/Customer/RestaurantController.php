@@ -10,6 +10,7 @@ use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
+use App\Support\Catalog\PlaceOrder;
 use App\Support\Lists\ListParams;
 use App\Support\Locale;
 use App\Support\MenuCategoryIcon;
@@ -94,8 +95,10 @@ class RestaurantController extends Controller
             // places. It used to drop the closed ones from each page after the fact: a page
             // of twenty came back with six and a total that still counted all forty.
             ->when($filter['open_now'] ?? null, fn ($q) => $q->openNow())
-            ->when($request->string('sort')->value(), function ($q, $sort) use ($lat, $lng) {
-                match ($sort) {
+            // Doc 87 — no sort chosen: the operator's order (pinned places, then the
+            // preset on the admin panel). A sort the customer picked is theirs, whole.
+            ->when(PlaceOrder::isRequested($request), fn ($q) => PlaceOrder::apply($q), function ($q) use ($request, $lat, $lng) {
+                match ($request->string('sort')->value()) {
                     '-rating_avg' => $q->orderByDesc('rating_avg'),
                     'rating_avg' => $q->orderBy('rating_avg'),
                     // «الأكثر طلبًا»
@@ -109,17 +112,20 @@ class RestaurantController extends Controller
                             ->whereColumn('service_zones.id', 'restaurants.service_zone_id'),
                     ),
                     // «الأقرب» — needs a point to be near. Without one it is not a
-                    // sort at all, so it falls through to the default rather than
-                    // silently ordering by something else.
+                    // sort at all, so it falls through to the operator's order rather
+                    // than silently ordering by something else.
                     'nearest' => ($lat !== null && $lng !== null)
                         ? $q->orderByRaw(
                             '(6371 * acos(least(1, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))',
                             [$lat, $lng, $lat],
                         )
-                        : $q->orderByDesc('is_featured')->orderBy('sort_order'),
-                    default => $q->orderByDesc('is_featured')->orderBy('sort_order'),
+                        : PlaceOrder::apply($q),
+                    default => PlaceOrder::apply($q),
                 };
-            }, fn ($q) => $q->orderByDesc('is_featured')->orderBy('sort_order'))
+                // Equal distances or ratings fall back to a stable order, so a page
+                // boundary never repeats or skips a place.
+                $q->orderBy('restaurants.id');
+            })
             ->paginate($request->integer('per_page', 20));
 
         $items = $restaurants->getCollection();

@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\PlaceGroupController;
+use App\Http\Controllers\Api\Admin\PlaceOrderController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductGalleryController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
@@ -580,6 +581,11 @@ Route::prefix('v1')->group(function () {
         });
 
         // Restaurants / catalog
+        // Doc 87 — «ترتيب الأماكن». One list for the platform, so global operators only.
+        Route::get('/places/order', [PlaceOrderController::class, 'show'])
+            ->middleware(['permission:restaurants.view', 'admin.global']);
+        Route::put('/places/order', [PlaceOrderController::class, 'update'])
+            ->middleware(['permission:restaurants.update', 'admin.global']);
         Route::middleware('permission:restaurants.view')->group(function () {
             Route::get('/restaurants', [RestaurantController::class, 'index']);
             Route::get('/restaurants/{restaurant}', [RestaurantController::class, 'show']);

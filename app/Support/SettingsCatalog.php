@@ -399,6 +399,21 @@ final class SettingsCatalog
                 ],
             ],
             [
+                // Doc 87 — also edited, with the pinned places, on «ترتيب الأماكن».
+                'key' => 'catalog',
+                'title_ar' => 'ترتيب الأماكن',
+                'title_en' => 'Place order',
+                'fields' => [
+                    [
+                        'key' => 'catalog.places_order', 'type' => 'enum', 'default' => 'featured',
+                        'label_ar' => 'ترتيب الأماكن في التطبيق', 'label_en' => 'Order of places in the app',
+                        'helper_ar' => 'يسري حين لا يختار العميل ترتيبًا بنفسه. الأماكن المثبّتة تظهر قبلها دائمًا.',
+                        'helper_en' => 'Applies when the customer has not chosen a sort. Pinned places always come first.',
+                        'options' => \App\Support\Catalog\PlaceOrder::modes(),
+                    ],
+                ],
+            ],
+            [
                 'key' => 'support',
                 'title_ar' => 'الدعم والتطبيق',
                 'title_en' => 'Support and app',

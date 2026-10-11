@@ -6,6 +6,7 @@ use App\Console\Commands\PruneExpiredCacheCommand;
 use App\Models\ServiceZone;
 use App\Models\User;
 use App\Support\Catalog\LinePrice;
+use App\Support\Catalog\PlaceOrder;
 use App\Support\FirstOrderPerk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -109,6 +110,9 @@ final class PublicCache
             // doc 78 — an app before 1.0.17 is sent another product sheet; the two must
             // never be served from one entry.
             LinePrice::isLegacyClient($request) ? 'legacy' : 'current',
+            // doc 87 — an app before 1.0.22 reads its untouched `sort=nearest` as the
+            // operator's order; a newer one asking for «الأقرب» means it.
+            PlaceOrder::isLegacyClient($request) ? 'nearest-default' : 'nearest-chosen',
             http_build_query($query),
         ]);
 

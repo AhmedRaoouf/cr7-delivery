@@ -117,7 +117,7 @@ class SettingsPanelTest extends TestCase
         $groups = collect($response->json('data'))->keyBy('key');
 
         $this->assertSame(
-            ['delivery', 'cart', 'payment', 'ring', 'timeouts', 'dispatch', 'kitchen', 'errands', 'codes', 'otp', 'session', 'addresses', 'direct', 'support'],
+            ['delivery', 'cart', 'payment', 'ring', 'timeouts', 'dispatch', 'kitchen', 'errands', 'codes', 'otp', 'session', 'addresses', 'direct', 'catalog', 'support'],
             $groups->keys()->all(),
         );
 

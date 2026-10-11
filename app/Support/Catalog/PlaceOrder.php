@@ -112,7 +112,8 @@ final class PlaceOrder
 
         $filter = $request->array('filter');
 
-        foreach (['min_rating', 'free_delivery', 'open_now', 'price_band', 'max_delivery_fee'] as $key) {
+        // `open_now` is not one: that app sends it on by default.
+        foreach (['min_rating', 'free_delivery', 'price_band', 'max_delivery_fee'] as $key) {
             if (($filter[$key] ?? null) !== null && ($filter[$key] ?? '') !== '') {
                 return false;
             }

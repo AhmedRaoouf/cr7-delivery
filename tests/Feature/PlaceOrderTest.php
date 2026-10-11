@@ -111,11 +111,12 @@ class PlaceOrderTest extends TestCase
     public function test_an_old_app_reads_its_untouched_nearest_as_the_operators_order(): void
     {
         $this->c->forceFill(['pin_position' => 1])->save();
-        $point = ['sort' => 'nearest', 'lat' => 31.3840, 'lng' => 31.4840];
+        // What 1.0.21 sends untouched: «الأقرب» and «مفتوح الآن», both its defaults.
+        $point = ['sort' => 'nearest', 'lat' => 31.3840, 'lng' => 31.4840, 'filter' => ['open_now' => 1]];
 
         $this->assertSame($this->c->id, $this->customerOrder($point, ['X-App-Version' => '1.0.21'])[0]);
         // …but not once the customer used the filter sheet.
-        $filtered = $this->customerOrder($point + ['filter' => ['min_rating' => 1]], ['X-App-Version' => '1.0.21']);
+        $filtered = $this->customerOrder(['filter' => ['open_now' => 1, 'min_rating' => 1]] + $point, ['X-App-Version' => '1.0.21']);
         $this->assertSame([$this->a->id, $this->b->id, $this->c->id], $filtered);
         // A current app asking for «الأقرب» means it.
         $this->assertSame([$this->a->id, $this->b->id, $this->c->id], $this->customerOrder($point, ['X-App-Version' => '1.0.22']));

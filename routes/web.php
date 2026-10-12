@@ -194,6 +194,9 @@ Route::withoutMiddleware([
         ]);
     })->whereNumber('product')->name('share.product');
 
+    // CR Delivery Landing Page
+    Route::get('/cr-delivery', fn () => view('cr-delivery-landing'))->name('cr-delivery.landing');
+
     /**
      * Batch 72 — the public legal pages the Google Play and App Store listings link to.
      *

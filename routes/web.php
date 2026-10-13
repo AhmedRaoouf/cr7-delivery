@@ -34,10 +34,17 @@ Route::withoutMiddleware([
 ])->group(function () {
 
     /*
-     * The root says what this host is and nothing about what it runs on. `/up` is the health
-     * check; this is only what a person who types the bare domain sees.
+     * The root is the public CR Delivery page: what the app is, and the two store links.
+     * `/up` is the health check.
+     *
+     * 2026-10-13 — this page first went live by replacing this whole file on the server with
+     * `Route::view('/', 'landing')`. That deleted every other route below: each uploaded
+     * picture (dish photos, logos, covers, category art) answered 404 in the app and both
+     * dashboards, and so did `/privacy`, `/terms`, `/delete-account` and `/support`, which
+     * both store listings link to. **Add a route here; never replace this file.**
+     * `PublicRoutesTest` fails if any of them goes missing.
      */
-    Route::get('/', fn () => response()->json(['name' => 'CR7 Delivery API', 'status' => 'ok']));
+    Route::view('/', 'landing')->name('landing');
 
     /**
      * Serve the public upload disk directly.

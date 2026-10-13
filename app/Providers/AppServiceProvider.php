@@ -454,9 +454,11 @@ class AppServiceProvider extends ServiceProvider
 
         // What cannot work at all with the log as the channel, whatever the panel says:
         // an admin's reset code and every password-change code are real SMS by rule
-        // (D-107). Config only — no database at boot.
-        if ($this->app->environment('production') && config('services.otp_channel') !== 'sms_misr') {
-            Log::warning('[OTP] OTP_CHANNEL is the log in production — no SMS leaves this server, and an admin cannot change a password by SMS. Use `php artisan cr7:reset-password` until SMS Misr is bound.');
+        // (D-107). Config only — no database at boot. «The log» is whatever the binding
+        // above falls through to: until 2026-10-13 this said `!== 'sms_misr'`, so with
+        // ZADX live it logged a false alarm on every request, ~13 000 a day.
+        if ($this->app->environment('production') && ! in_array(config('services.otp_channel'), ['zadx', 'sms_misr'], true)) {
+            Log::warning('[OTP] OTP_CHANNEL is the log in production — no SMS leaves this server, and an admin cannot change a password by SMS. Use `php artisan cr7:reset-password` until a gateway (OTP_CHANNEL=zadx) is bound.');
         }
     }
 

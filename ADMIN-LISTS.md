@@ -406,9 +406,12 @@ Light rows for dropdowns and typeaheads, scoped like the list they feed.
 | `store_categories` | `{id, name, name_en, slug}` | global |
 | `cuisines` | `{id, name, name_en}` | global |
 | `admins` | `{id, name}` — active admin accounts, for `assigned_to` | caller must be global, or hold `complaints.view` or `users.view` (else 404) |
+| `places` | `{id, name, name_en, logo, logo_thumb, cover_thumb, category, city, zone, rating_avg, rating_count, products_count, is_active, is_open}` — a banner / popup destination picker (2026-10-14) | `applyToRestaurants` |
+| `products` | `{id, name, name_en, image, image_thumb, price, discount_price, category, is_available, restaurant: {id, name, logo_thumb, is_active}}`; search matches the dish **or its place's** name; `filter[restaurant_id]`; `filter[is_active]` reads `is_available` | dishes of `applyToRestaurants` places |
+| `promo_codes` | `{id, code, name, type, value, max_discount, min_order_value, ends_at, is_active}`; search matches title or code | global |
 
-`filter[search]` (names, phone for drivers), `filter[city_id]` (restaurants, drivers,
-zones), `filter[is_active]`, `limit` 1…200 (default 50). Sorted by name. **No paging, no
+`filter[search]` (names, phone for drivers), `filter[id]` (places, products — resolve a stored
+value), `filter[city_id]` (restaurants, drivers, zones, places), `filter[store_category_id]` (places), `filter[is_active]`, `limit` 1…200 (default 50). Sorted by name. **No paging, no
 `meta.total`** — `meta.count` and `meta.truncated` (true when `limit` cut the list).
 
 ### 1.27b `GET /admin/media` and `GET /admin/media/available` (doc 71)

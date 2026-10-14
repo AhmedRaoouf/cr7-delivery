@@ -132,6 +132,21 @@ class BannerDestinationTest extends TestCase
             ->assertOk();
     }
 
+    public function test_the_admin_list_names_where_each_slide_lands(): void
+    {
+        Banner::query()->create(['title_ar' => 'منتج', 'image_ar' => 'https://example.test/a.png', 'link_type' => 'product', 'link_value' => (string) $this->smash->id, 'sort_order' => 1]);
+        Banner::query()->create(['title_ar' => 'مكان', 'image_ar' => 'https://example.test/b.png', 'link_type' => 'restaurant', 'link_value' => (string) $this->ramla->id, 'sort_order' => 2]);
+        Banner::query()->create(['title_ar' => 'محذوف', 'image_ar' => 'https://example.test/c.png', 'link_type' => 'restaurant', 'link_value' => '999999', 'sort_order' => 3]);
+        Banner::query()->create(['title_ar' => 'بلا', 'image_ar' => 'https://example.test/d.png', 'link_type' => 'none', 'sort_order' => 4]);
+
+        $this->getJson('/api/v1/admin/banners')->assertOk()
+            ->assertJsonPath('data.0.destination.label', 'ساندوتش سموكي سماش دبل')
+            ->assertJsonPath('data.0.destination.sub', 'رمله')
+            ->assertJsonPath('data.1.destination.label', 'رمله')
+            ->assertJsonPath('data.2.destination.missing', true)
+            ->assertJsonPath('data.3.destination', null);
+    }
+
     private function dish(Restaurant $restaurant, string $name, float $price, ?float $discount = null): Product
     {
         $category = MenuCategory::query()->create(['restaurant_id' => $restaurant->id, 'name_ar' => 'الأطباق', 'name_en' => 'Plates']);

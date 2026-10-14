@@ -8,6 +8,7 @@ use App\Support\AdminScope;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -81,6 +82,35 @@ class AdminScopeCreationTest extends TestCase
         $user = $this->create(['type' => 'city', 'city_ids' => [$this->city->id]], '01000000077', 'super_admin');
 
         $this->assertTrue(AdminScope::isGlobal($user));
+    }
+
+    /**
+     * 2026-10-14 — the web `ADM-49` sent only name / email / phone here and every create
+     * answered «حقل role مطلوب». This is the body it sends now, byte for byte.
+     */
+    public function test_the_dashboard_create_body_is_accepted_over_http(): void
+    {
+        $actor = User::query()->create(['name' => 'Admin', 'phone' => '01000000099', 'type' => 'admin', 'is_active' => true]);
+        $actor->assignRole('super_admin');
+        $actor->adminScopes()->create(['scope_type' => 'global']);
+        Sanctum::actingAs($actor);
+
+        $response = $this->withHeader('X-App', 'admin')->postJson('/api/v1/admin/users', [
+            'name' => 'مسؤول التشغيل',
+            'email' => null,
+            'phone' => '01012345678',
+            'job_title' => null,
+            'role' => 'support',
+            'grants' => [],
+            'scope' => ['scope_type' => 'city', 'city_ids' => [$this->city->id], 'zone_ids' => []],
+        ]);
+
+        $response->assertCreated()->assertJsonPath('data.user.phone', '01012345678');
+        $this->assertNotEmpty($response->json('data.temp_password'));
+
+        $user = User::query()->where('phone', '01012345678')->firstOrFail();
+        $this->assertTrue($user->hasRole('support'));
+        $this->assertSame([$this->city->id], AdminScope::scopedCityIds($user));
     }
 
     /** @param  array<string, mixed>  $scope */

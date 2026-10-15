@@ -122,7 +122,11 @@ class Product extends Model
     /** What a customer may add or keep in a basket: switched on, and in a live section. */
     public function isOrderable(): bool
     {
-        return $this->is_available && $this->menuCategory()->exists();
+        // Doc 91 — and still on the app: not deleted, at a place that is not deleted.
+        return ! $this->trashed()
+            && $this->is_available
+            && $this->menuCategory()->exists()
+            && $this->restaurant()->exists();
     }
 
     /**

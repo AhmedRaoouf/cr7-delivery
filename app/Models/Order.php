@@ -236,9 +236,14 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Doc 91 — a deleted place is still the place an old order came from. Without
+     * `withTrashed()` the relation read null and «طلباتي» answered 500 for anyone who
+     * had ever ordered there.
+     */
     public function restaurant(): BelongsTo
     {
-        return $this->belongsTo(Restaurant::class);
+        return $this->belongsTo(Restaurant::class)->withTrashed();
     }
 
     public function driver(): BelongsTo

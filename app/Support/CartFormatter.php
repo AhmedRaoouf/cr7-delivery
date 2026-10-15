@@ -30,7 +30,7 @@ class CartFormatter
             $restaurant = $restaurantItems->first()->restaurant;
             $groupIssues = [];
 
-            if (! $restaurant->is_active || ! $restaurant->isOpenNow()) {
+            if ($restaurant->trashed() || ! $restaurant->is_active || ! $restaurant->isOpenNow()) {
                 $groupIssues[] = ['code' => 'restaurant_closed', 'message' => 'المطعم مغلق حاليًا'];
             }
 

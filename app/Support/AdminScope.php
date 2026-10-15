@@ -259,7 +259,8 @@ class AdminScope
             return $query;
         }
 
-        $restaurants = self::applyToRestaurants(Restaurant::query(), $admin)->select('restaurants.id');
+        // Doc 91 — withTrashed: a deleted place's statements stay visible to its scope.
+        $restaurants = self::applyToRestaurants(Restaurant::withTrashed(), $admin)->select('restaurants.id');
         $drivers = self::applyToDrivers(Driver::query(), $admin)->select('drivers.id');
 
         return $query->where(function (Builder $q) use ($restaurants, $drivers) {

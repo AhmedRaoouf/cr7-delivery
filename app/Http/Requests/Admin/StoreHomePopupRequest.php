@@ -36,8 +36,8 @@ class StoreHomePopupRequest extends FormRequest
 
             'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
             'audience' => ['nullable', 'in:all,first_order,returning'],
-            'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
-            'product_id' => ['nullable', 'integer', 'exists:products,id'],
+            'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id,deleted_at,NULL'],
+            'product_id' => ['nullable', 'integer', 'exists:products,id,deleted_at,NULL'],
             'store_category_id' => ['nullable', 'integer', 'exists:store_categories,id'],
             'code' => ['nullable', 'string', 'max:60'],
             // Validated as a URL here, not only required: a card that opens `htp://…`

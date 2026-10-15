@@ -54,9 +54,10 @@ class Complaint extends Model
         return $this->belongsTo(OrderGroup::class);
     }
 
+    /** Doc 91 — a complaint outlives the place it is about. */
     public function restaurant(): BelongsTo
     {
-        return $this->belongsTo(Restaurant::class);
+        return $this->belongsTo(Restaurant::class)->withTrashed();
     }
 
     public function assignedTo(): BelongsTo

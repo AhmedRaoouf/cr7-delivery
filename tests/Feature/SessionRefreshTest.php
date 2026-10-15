@@ -747,8 +747,8 @@ class SessionRefreshTest extends TestCase
     }
 
     /**
-     * Deleting a captain or a place ends the owner's sign-ins and does nothing else to
-     * the account: the row is there and active afterwards, exactly as before.
+     * Deleting a captain or a place ends the owner's sign-ins. The account row stays; a
+     * captain's stays active, a place owner's is switched off with the place (doc 91).
      */
     public function test_deleting_a_captain_or_a_place_ends_the_owners_sessions_and_nothing_else(): void
     {
@@ -766,14 +766,20 @@ class SessionRefreshTest extends TestCase
 
         foreach ([[$placeSession, 'restaurant'], [$captainSession, 'app']] as [$session, $app]) {
             $this->me($session['token'], $app)->assertStatus(401);
-            $this->assertExpired($this->refresh($session['refresh_token'], $app));
         }
 
+        $this->assertExpired($this->refresh($captainSession['refresh_token'], 'app'));
+        // Doc 91 — the place owner's account is switched off, so a renewal is refused as a
+        // suspended account rather than an expired session.
+        $this->refresh($placeSession['refresh_token'], 'restaurant')->assertStatus(423);
+
         foreach ([$place->owner, $captain->user] as $account) {
-            $account = User::query()->find($account->id);
-            $this->assertNotNull($account, 'the account row is not deleted');
-            $this->assertTrue($account->is_active, 'the account is not blocked');
+            $this->assertNotNull(User::query()->find($account->id), 'the account row is not deleted');
         }
+
+        $this->assertTrue($captain->user->fresh()->is_active, 'the captain is not blocked');
+        // Doc 91 — a place's owner with no other place is switched off with it.
+        $this->assertFalse($place->owner->fresh()->is_active);
 
         $this->me($bystander['token'])->assertOk();
         $this->me($operator['token'], 'admin')->assertOk();

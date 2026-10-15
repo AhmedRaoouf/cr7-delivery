@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Actions\Admin\CreateRestaurantAction;
+use App\Actions\Admin\DeletePlaceAction;
 use App\Actions\Admin\ResetUserPasswordAction;
+use App\Enums\MediaField;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\FiltersLists;
-use App\Enums\MediaField;
 use App\Http\Controllers\Concerns\HandlesUploads;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRestaurantRequest;
@@ -15,7 +16,6 @@ use App\Models\Restaurant;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
-use App\Support\Auth\Sessions;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -204,18 +204,14 @@ class RestaurantController extends Controller
         return ApiResponse::success(['temp_password' => $tempPassword], 'تم إعادة تعيين كلمة المرور بنجاح');
     }
 
-    public function destroy(Request $request, Restaurant $restaurant): JsonResponse
+    public function destroy(Request $request, Restaurant $restaurant, DeletePlaceAction $action): JsonResponse
     {
         $this->ensureInScope($request, $restaurant);
 
-        // D-120 — the place is gone, so the sessions its owner signed in with go with it:
-        // the board, the tablet, the phone. Only the sign-ins end; the owner's account row
-        // is left exactly as it was.
-        if ($restaurant->owner !== null) {
-            Sessions::revokeAll($restaurant->owner);
-        }
-
-        $restaurant->delete();
+        // Doc 91 — refused while an order is open; otherwise the baskets, favourites,
+        // banners and dishes that point at the place go with it, and so does its owner's
+        // sign-in (D-120).
+        $action->execute($restaurant);
 
         return ApiResponse::success(message: 'تم حذف المطعم بنجاح');
     }

@@ -15,14 +15,18 @@ class CartItem extends Model
         return $this->belongsTo(Cart::class);
     }
 
+    /**
+     * Doc 91 — a line whose place or dish went away is read and flagged unavailable,
+     * never dereferenced as null: that was a 500 on every cart call.
+     */
     public function restaurant(): BelongsTo
     {
-        return $this->belongsTo(Restaurant::class);
+        return $this->belongsTo(Restaurant::class)->withTrashed();
     }
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     public function options(): HasMany

@@ -69,7 +69,8 @@ class Settlement extends Model
     public function party(): BelongsTo
     {
         return $this->party_type === SettlementPartyType::Restaurant
-            ? $this->belongsTo(Restaurant::class, 'party_id')
+            // Doc 91 — a statement outlives the place it settles.
+            ? $this->belongsTo(Restaurant::class, 'party_id')->withTrashed()
             : $this->belongsTo(Driver::class, 'party_id');
     }
 }

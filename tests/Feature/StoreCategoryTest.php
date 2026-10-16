@@ -169,4 +169,30 @@ class StoreCategoryTest extends TestCase
         $this->assertSame(1, $restaurant->openingHours()->count());
         $this->assertSame('10:00:00', $restaurant->openingHours()->first()->opens_at);
     }
+
+    public function test_the_week_the_api_handed_out_can_be_sent_back_with_its_seconds(): void
+    {
+        $restaurant = $this->makeRestaurant('لا ڤي');
+
+        Sanctum::actingAs($restaurant->owner);
+        $this->withHeader('X-App', 'restaurant');
+
+        $week = fn (bool $closed) => array_map(fn (int $d) => [
+            'weekday' => $d, 'opens_at' => '08:00:00', 'closes_at' => '04:00:00',
+            'is_closed' => $closed, 'is_24h' => false,
+        ], range(0, 6));
+
+        // «08:00:00» is what GET answers; a form that echoes it must not be refused.
+        $this->putJson('/api/v1/restaurant/opening-hours', ['is_24_7' => false, 'hours' => $week(true)])
+            ->assertOk();
+        $this->putJson('/api/v1/restaurant/opening-hours', ['is_24_7' => false, 'hours' => $week(false)])
+            ->assertOk();
+
+        $this->assertSame('08:00:00', $restaurant->openingHours()->where('weekday', 3)->first()->opens_at);
+        $this->assertFalse((bool) $restaurant->openingHours()->where('weekday', 3)->first()->is_closed);
+
+        $this->putJson('/api/v1/restaurant/opening-hours', ['is_24_7' => false, 'hours' => array_map(
+            fn ($r) => ['opens_at' => '25:00'] + $r, $week(false),
+        )])->assertStatus(422);
+    }
 }

@@ -94,8 +94,10 @@ class RestaurantMeController extends Controller
             'is_24_7' => ['nullable', 'boolean'],
             'hours' => ['exclude_if:is_24_7,true', 'required', 'array', 'size:7'],
             'hours.*.weekday' => ['required', 'integer', 'between:0,6'],
-            'hours.*.opens_at' => ['nullable', 'date_format:H:i'],
-            'hours.*.closes_at' => ['nullable', 'date_format:H:i'],
+            // The API itself answers «08:00:00»; a client that sends a stored row back
+            // unchanged must not be refused for the seconds it was handed.
+            'hours.*.opens_at' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
+            'hours.*.closes_at' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
             'hours.*.is_closed' => ['nullable', 'boolean'],
             'hours.*.is_24h' => ['nullable', 'boolean'],
         ]);
@@ -109,8 +111,8 @@ class RestaurantMeController extends Controller
             $restaurant->openingHours()->updateOrCreate(
                 ['weekday' => $entry['weekday']],
                 [
-                    'opens_at' => $entry['opens_at'] ?? null,
-                    'closes_at' => $entry['closes_at'] ?? null,
+                    'opens_at' => isset($entry['opens_at']) ? substr($entry['opens_at'], 0, 5) : null,
+                    'closes_at' => isset($entry['closes_at']) ? substr($entry['closes_at'], 0, 5) : null,
                     'is_closed' => $entry['is_closed'] ?? false,
                     // A day that is open round the clock, and a day that is a
                     // holiday, are the two answers the week could not give.

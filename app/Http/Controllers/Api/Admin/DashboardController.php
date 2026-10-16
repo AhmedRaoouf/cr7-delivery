@@ -19,6 +19,7 @@ use App\Support\Lists\ListParams;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 /** doc 08 §7 — dashboard & alerts. */
@@ -141,6 +142,7 @@ class DashboardController extends Controller
 
         $payments = AdminScope::applyToPayments(Payment::query(), $request->user())
             ->where('status', 'under_review')
+            ->whereKeyNot($this->dismissedIds($request, 'payment_review'))
             ->with(['proofs' => fn ($q) => $q->latest(), 'orderGroup:id,group_number,user_id'])
             ->latest()
             ->limit(self::ALERT_LIMIT)
@@ -162,6 +164,7 @@ class DashboardController extends Controller
             ]);
 
         $stranded = self::strandedQuery(clone $orders)
+            ->whereKeyNot($this->dismissedIds($request, 'no_driver'))
             ->with('restaurant:id,name_ar')
             ->oldest('dispatch_started_at')
             ->limit(self::ALERT_LIMIT)
@@ -170,6 +173,7 @@ class DashboardController extends Controller
 
         $timedOut = (clone $orders)
             ->where('status', 'restaurant_timeout')
+            ->whereKeyNot($this->dismissedIds($request, 'restaurant_timeout'))
             ->with('restaurant:id,name_ar')
             ->latest('updated_at')
             ->limit(self::ALERT_LIMIT)
@@ -178,6 +182,7 @@ class DashboardController extends Controller
 
         $issues = (clone $orders)
             ->where('status', 'delivery_issue')
+            ->whereKeyNot($this->dismissedIds($request, 'delivery_issue'))
             ->with('restaurant:id,name_ar')
             ->latest('updated_at')
             ->limit(self::ALERT_LIMIT)
@@ -191,6 +196,7 @@ class DashboardController extends Controller
         $errands = AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
             ->where('status', ErrandStatus::Open->value)
             ->whereNull('driver_id')
+            ->whereKeyNot($this->dismissedIds($request, 'errand_unclaimed'))
             ->oldest()
             ->limit(self::ALERT_LIMIT)
             ->get()
@@ -211,7 +217,8 @@ class DashboardController extends Controller
         // it up», which is exactly what this dock is for. It was the one open queue that
         // had no way of reaching an operator who was not already on `ADM-41`.
         $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())
-            ->whereIn('status', ['open', 'in_progress'])
+            ->awaitingReply()
+            ->whereKeyNot($this->dismissedIds($request, 'complaint_open'))
             ->with('user:id,name')
             ->oldest()
             ->limit(self::ALERT_LIMIT)
@@ -255,6 +262,34 @@ class DashboardController extends Controller
         ]);
     }
 
+    /** The alert ids this operator has hidden from their own dock, per kind. */
+    private function dismissedIds(Request $request, string $kind): array
+    {
+        return DB::table('alert_dismissals')
+            ->where('user_id', $request->user()->id)
+            ->where('kind', $kind)
+            ->pluck('subject_id')
+            ->all();
+    }
+
+    /** `POST /admin/dashboard/open-alerts/dismiss` — hide one alert from the caller's dock; the order or complaint is untouched. */
+    public function dismissAlert(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'kind' => ['required', 'in:payment_review,no_driver,restaurant_timeout,delivery_issue,errand_unclaimed,complaint_open'],
+            'id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        DB::table('alert_dismissals')->insertOrIgnore([
+            'user_id' => $request->user()->id,
+            'kind' => $data['kind'],
+            'subject_id' => $data['id'],
+            'created_at' => now(),
+        ]);
+
+        return ApiResponse::success(null, 'تم إخفاء التنبيه');
+    }
+
     /**
      * The four open-alert counts, scoped to the operator (D-50).
      *
@@ -265,17 +300,18 @@ class DashboardController extends Controller
         $orders = AdminScope::applyToOrders(Order::query(), $request->user());
 
         return [
-            'payment_review' => AdminScope::applyToPayments(Payment::query(), $request->user())->where('status', 'under_review')->count(),
-            'no_driver' => self::strandedQuery(clone $orders)->count(),
-            'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->count(),
-            'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->count(),
+            'payment_review' => AdminScope::applyToPayments(Payment::query(), $request->user())->where('status', 'under_review')->whereKeyNot($this->dismissedIds($request, 'payment_review'))->count(),
+            'no_driver' => self::strandedQuery(clone $orders)->whereKeyNot($this->dismissedIds($request, 'no_driver'))->count(),
+            'restaurant_timeout' => (clone $orders)->where('status', 'restaurant_timeout')->whereKeyNot($this->dismissedIds($request, 'restaurant_timeout'))->count(),
+            'delivery_issue' => (clone $orders)->where('status', 'delivery_issue')->whereKeyNot($this->dismissedIds($request, 'delivery_issue'))->count(),
             'errand_unclaimed' => AdminScope::applyToOrders(ErrandRequest::query(), $request->user())
                 ->where('status', ErrandStatus::Open->value)
                 ->whereNull('driver_id')
+                ->whereKeyNot($this->dismissedIds($request, 'errand_unclaimed'))
                 ->count(),
             // Batch 67 — scoped through the linked order, else the reporter
             // (`AdminScope::applyToComplaints`); a global operator still sees them all.
-            'complaint_open' => AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereIn('status', ['open', 'in_progress'])->count(),
+            'complaint_open' => AdminScope::applyToComplaints(Complaint::query(), $request->user())->awaitingReply()->whereKeyNot($this->dismissedIds($request, 'complaint_open'))->count(),
         ];
     }
 

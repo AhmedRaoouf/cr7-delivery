@@ -74,4 +74,17 @@ class Complaint extends Model
     {
         return $this->hasMany(ComplaintMessage::class);
     }
+
+    /**
+     * Open and waiting on staff: the last visible message is the complainant's. A reply
+     * from the office or the place takes it off the alert dock; the customer writing
+     * again puts it back. Status is untouched — closing is a separate decision.
+     */
+    public function scopeAwaitingReply($query)
+    {
+        return $query->whereIn('complaints.status', ['open', 'in_progress'])
+            ->whereRaw(
+                "coalesce((select m.sender_role from complaint_messages m where m.complaint_id = complaints.id and m.visibility = 'all' order by m.id desc limit 1), 'customer') in ('customer', 'driver')"
+            );
+    }
 }

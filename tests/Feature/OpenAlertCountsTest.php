@@ -109,6 +109,57 @@ class OpenAlertCountsTest extends TestCase
         $this->assertSame(4, $open['total']);
     }
 
+    public function test_a_reply_takes_the_complaint_off_the_dock_and_the_customer_writing_again_puts_it_back(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->makeCustomer();
+        $complaint = \App\Models\Complaint::query()->create([
+            'ticket_number' => 'T-REPLY', 'user_id' => $customer->id, 'user_role' => 'customer',
+            'category' => 'other', 'description' => 'x', 'status' => 'open', 'priority' => 'normal',
+        ]);
+        $complaint->messages()->create(['sender_id' => $customer->id, 'sender_role' => 'customer', 'visibility' => 'all', 'message' => 'x']);
+
+        $count = fn () => $this->withHeader('X-App', 'admin')->getJson('/api/v1/admin/dashboard/open-alerts')->json('data.counts.complaint_open');
+
+        $this->assertSame(1, $count());
+
+        $this->withHeader('X-App', 'admin')->postJson("/api/v1/admin/complaints/{$complaint->id}/messages", ['message' => 'داخلي', 'visibility' => 'internal'])->assertCreated();
+        $this->assertSame(1, $count(), 'an internal note answers nobody');
+
+        $this->withHeader('X-App', 'admin')->postJson("/api/v1/admin/complaints/{$complaint->id}/messages", ['message' => 'تم'])->assertCreated();
+        $this->assertSame(0, $count());
+
+        $complaint->messages()->create(['sender_id' => $customer->id, 'sender_role' => 'customer', 'visibility' => 'all', 'message' => 'لسه']);
+        $this->assertSame(1, $count());
+    }
+
+    public function test_an_operator_can_dismiss_any_alert_for_themselves_only(): void
+    {
+        $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $order = $this->makeOrder($restaurant, 'restaurant_timeout');
+        $this->makeOrder($restaurant, 'restaurant_timeout');
+        $admin = $this->admin();
+
+        $get = fn () => $this->withHeader('X-App', 'admin')->getJson('/api/v1/admin/dashboard/open-alerts')->json('data');
+
+        $this->assertSame(2, $get()['counts']['restaurant_timeout']);
+
+        $this->withHeader('X-App', 'admin')
+            ->postJson('/api/v1/admin/dashboard/open-alerts/dismiss', ['kind' => 'restaurant_timeout', 'id' => $order->id])
+            ->assertOk();
+
+        $after = $get();
+        $this->assertSame(1, $after['counts']['restaurant_timeout']);
+        $this->assertNotContains($order->id, array_column($after['items'], 'id'));
+        $this->assertSame('restaurant_timeout', $order->fresh()->status->value ?? $order->fresh()->status);
+
+        $other = User::factory()->create(['type' => 'admin']);
+        $other->assignRole('super_admin');
+        $other->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
+        Sanctum::actingAs($other);
+        $this->assertSame(2, $get()['counts']['restaurant_timeout']);
+    }
+
     private function makeOrder(Restaurant $restaurant, string $status): Order
     {
         $customer = $this->makeCustomer();

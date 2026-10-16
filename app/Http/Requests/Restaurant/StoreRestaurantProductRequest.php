@@ -2,17 +2,23 @@
 
 namespace App\Http\Requests\Restaurant;
 
+use App\Http\Requests\Concerns\FallsBackToArabic;
 use App\Http\Requests\Concerns\ValidatesProductGallery;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreRestaurantProductRequest extends FormRequest
 {
-    use ValidatesProductGallery;
+    use FallsBackToArabic, ValidatesProductGallery;
 
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->fillEnglishFromArabic($this, ['name_en' => 'name_ar'], $this->isMethod('post'));
     }
 
     public function rules(): array

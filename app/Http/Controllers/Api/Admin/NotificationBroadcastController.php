@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\UserType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Concerns\FallsBackToArabic;
 use App\Models\DeviceToken;
 use App\Models\Notification;
 use App\Models\User;
@@ -33,11 +34,16 @@ use Illuminate\Support\Facades\Log;
  */
 class NotificationBroadcastController extends Controller
 {
+    use FallsBackToArabic;
+
     /** One FCM pool per chunk. Large enough to be few round trips, small enough not to hold the request. */
     private const PUSH_CHUNK = 250;
 
     public function store(Request $request, FcmClient $fcm): JsonResponse
     {
+        // The dashboard has one title and one body input; English falls back to the Arabic.
+        $this->fillEnglishFromArabic($request, ['title_en' => 'title_ar', 'body_en' => 'body_ar'], true);
+
         $validated = $request->validate([
             'audience' => ['required', 'in:all,customers,drivers,restaurants'],
             'title_ar' => ['required', 'string', 'max:255'],

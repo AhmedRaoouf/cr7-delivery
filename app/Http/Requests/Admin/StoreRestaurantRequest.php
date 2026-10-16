@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\FallsBackToArabic;
 use App\Http\Requests\Concerns\NormalisesPhone;
 use App\Support\PdfPages;
 use Illuminate\Foundation\Http\FormRequest;
@@ -9,7 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
 /** FR-REST-01 — Admin creates a restaurant; the linked owner login is provisioned server-side. */
 class StoreRestaurantRequest extends FormRequest
 {
-    use NormalisesPhone;
+    use FallsBackToArabic, NormalisesPhone;
 
     public function authorize(): bool
     {
@@ -24,7 +25,14 @@ class StoreRestaurantRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        $this->fillEnglishFromArabic($this, ['name_en' => 'name_ar'], $this->isMethod('post'));
         $this->normalisePhoneFields(['owner_phone']);
+
+        // The dashboard form has one phone input, the owner's. The column is NOT NULL, so a
+        // branch phone left empty falls back to it rather than refusing the whole place.
+        if (! $this->filled('phone') && $this->filled('owner_phone')) {
+            $this->merge(['phone' => $this->input('owner_phone')]);
+        }
     }
 
     public function rules(): array

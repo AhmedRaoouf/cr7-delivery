@@ -28,7 +28,11 @@ class StoreBannerRequest extends FormRequest
             // them required forced a designer to produce two of everything, and the
             // dashboard could not create a banner at all.
             'title_en' => ['nullable', 'string', 'max:255'],
-            'image_ar' => [$required, 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            // A new banner needs its picture from somewhere: an upload or a library pick
+            // (`image_ar_media`, resolved by the controller). An update keeps what is stored.
+            'image_ar' => $this->isMethod('post')
+                ? ['required_without:image_ar_media', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120']
+                : ['sometimes', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'image_en' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             'link_type' => ['nullable', 'in:restaurant,product,category,promo,url,none'],
             'link_value' => ['nullable', 'string'],

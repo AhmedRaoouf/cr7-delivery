@@ -2,13 +2,21 @@
 
 namespace App\Http\Requests\Restaurant;
 
+use App\Http\Requests\Concerns\FallsBackToArabic;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCategoryRequest extends FormRequest
 {
+    use FallsBackToArabic;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->fillEnglishFromArabic($this, ['name_en' => 'name_ar'], $this->isMethod('post'));
     }
 
     public function rules(): array

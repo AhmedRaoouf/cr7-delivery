@@ -2,13 +2,21 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\FallsBackToArabic;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateServiceZoneRequest extends FormRequest
 {
+    use FallsBackToArabic;
+
     public function authorize(): bool
     {
         return $this->user()->can('locations.manage_zones');
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->fillEnglishFromArabic($this, ['name_en' => 'name_ar'], $this->isMethod('post'));
     }
 
     public function rules(): array

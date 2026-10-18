@@ -21,12 +21,16 @@ class Settings
      */
     public static function get(string $key, mixed $default = null): mixed
     {
-        $value = Cache::rememberForever(
-            "setting:{$key}",
-            static fn () => Setting::query()->where('key', $key)->value('value'),
+        // Wrapped in an array: `rememberForever` treats a stored `null` as a miss, so an
+        // unwritten key (most of them) went to the database — a read of `cache`, a read of
+        // `settings` and an upsert into `cache` — on every call, several times per poll.
+        // The wrapper makes "nothing stored" a value that can be remembered.
+        $hit = Cache::rememberForever(
+            self::cacheKey($key),
+            static fn () => ['value' => Setting::query()->where('key', $key)->value('value')],
         );
 
-        return $value ?? $default;
+        return $hit['value'] ?? $default;
     }
 
     public static function set(string $key, mixed $value, ?string $group = null, bool $isPublic = false): void
@@ -36,11 +40,17 @@ class Settings
             ['value' => $value, 'group' => $group, 'is_public' => $isPublic],
         );
 
-        Cache::forget("setting:{$key}");
+        self::forget($key);
     }
 
     public static function forget(string $key): void
     {
-        Cache::forget("setting:{$key}");
+        Cache::forget(self::cacheKey($key));
+        Cache::forget("setting:{$key}"); // the pre-wrapper entry, until it has expired everywhere
+    }
+
+    private static function cacheKey(string $key): string
+    {
+        return "setting:v2:{$key}";
     }
 }

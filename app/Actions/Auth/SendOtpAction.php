@@ -119,7 +119,7 @@ class SendOtpAction
 
         // One number at a time, so two requests racing each other cannot both slip under a
         // count that has room for one.
-        $lock = Cache::lock('otp-send-lock:'.$phone, 10);
+        $lock = Cache::store('database')->lock('otp-send-lock:'.$phone, 10);
 
         try {
             $code = $lock->block(5, function () use ($phone, $purpose, $account, $requester, $owner, $breaker, $kind, $testCode, $reviewCode): string {

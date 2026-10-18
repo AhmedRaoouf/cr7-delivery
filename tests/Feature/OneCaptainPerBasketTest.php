@@ -168,7 +168,7 @@ class OneCaptainPerBasketTest extends TestCase
         $this->ready($b);
 
         // Another accept on the *other* sibling holds the lock this very second.
-        $lock = Cache::lock("order_group:{$a->order_group_id}:assign", 5);
+        $lock = Cache::store('database')->lock("order_group:{$a->order_group_id}:assign", 5);
         $this->assertTrue($lock->get());
 
         try {

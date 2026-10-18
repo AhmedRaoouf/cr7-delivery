@@ -33,7 +33,7 @@ class AcceptOfferAction
     {
         $groupId = Order::query()->findOrFail($orderId)->order_group_id;
 
-        $lock = Cache::lock($groupId !== null ? "order_group:{$groupId}:assign" : "order:{$orderId}:assign", 5);
+        $lock = Cache::store('database')->lock($groupId !== null ? "order_group:{$groupId}:assign" : "order:{$orderId}:assign", 5);
 
         if (! $lock->get()) {
             throw new ApiException('already_assigned', 'تم قبول الطلب بواسطة كابتن آخر', 409);

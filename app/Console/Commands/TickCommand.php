@@ -75,7 +75,7 @@ class TickCommand extends Command
         ErrandDispatcher $errands,
         ReleaseScheduledOrdersAction $scheduled,
     ): int {
-        $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
+        $lock = Cache::store('database')->lock(self::LOCK_KEY, self::LOCK_SECONDS);
 
         if (! $lock->get()) {
             $this->comment('another tick is still running — skipping');

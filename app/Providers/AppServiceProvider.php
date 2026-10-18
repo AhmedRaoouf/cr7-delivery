@@ -103,6 +103,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // A busy shared host refuses a MySQL connection now and then; ask again before failing.
+        $this->app->bind('db.connector.mysql', \App\Support\Database\RetryingMySqlConnector::class);
+
         // Telescope is registered by hand rather than by package discovery
         // (`dont-discover` in composer.json), so the decision is one readable
         // `if` rather than a side effect of which packages happen to be

@@ -86,17 +86,11 @@ trait ValidatesAddressZone
             return;
         }
 
-        if ($zone->city_id !== $city->id) {
-            // Worded without the word «مدينة» on purpose: the customer no longer
-            // chooses one and should not be told to fix something they cannot see.
-            $validator->errors()->add(
-                'zone_id',
-                'المنطقة المختارة بعيدة عن الموقع المحدد على الخريطة — اختر المنطقة الصحيحة.',
-            );
-
-            return;
-        }
-
+        // 2026-10-19 — the city equality that stood here is gone. The area list is flat
+        // (operator ruling 2026-09-12) and an installed app offers one city's slice of it,
+        // so a pin in New Mansoura could only ever be filed under an area the server then
+        // refused as «بعيدة عن الموقع». Whether the pick is believable is the distance
+        // check below, which does not care which row of `cities` the area hangs off.
         if (! ZoneLocator::isPlausiblePick($zone, $lat, $lng)) {
             $validator->errors()->add(
                 'zone_id',

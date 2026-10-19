@@ -37,6 +37,15 @@ class ZoneLocator
     public const PICK_TOLERANCE_KM = 12.0;
 
     /**
+     * How far past its own edge a pin may sit and still claim an area that has a radius.
+     *
+     * The 12 km above is for the flyer areas that carry no shape. An area with a real
+     * radius is a place, and a pin 8 km from «داخلي جمصة» (1.6 km) is not in it — which
+     * is the whole of what the city-equality check used to catch, now that the list is flat.
+     */
+    public const PICK_REACH_PAST_EDGE_KM = 4.0;
+
+    /**
      * How far past every area's edge a pin may still be *offered* one.
      *
      * Much tighter than {@see self::PICK_TOLERANCE_KM}, because the two answer
@@ -108,8 +117,11 @@ class ZoneLocator
             return true;
         }
 
-        return Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng)
-            <= self::PICK_TOLERANCE_KM;
+        $reach = $zone->radius_km !== null
+            ? min(self::PICK_TOLERANCE_KM, (float) $zone->radius_km + self::PICK_REACH_PAST_EDGE_KM)
+            : self::PICK_TOLERANCE_KM;
+
+        return Geo::haversineKm((float) $zone->center_lat, (float) $zone->center_lng, $lat, $lng) <= $reach;
     }
 
     /**

@@ -606,6 +606,7 @@ Route::prefix('v1')->group(function () {
         // Doc 77 — reading a place's sections needs only `products.view`: `ADM-13` builds
         // its category column, filter and the product form's picker from it, and a
         // look-only admin got an empty list and a form that could not be saved.
+        Route::get('/restaurants/{restaurant}/menu/export', \App\Http\Controllers\Api\Admin\MenuExportController::class)->middleware('permission:products.view');
         Route::get('/restaurants/{restaurant}/categories', [MenuCategoryController::class, 'index'])->middleware('permission:products.view')->scopeBindings();
 
         Route::middleware('permission:restaurants.manage_menu')->scopeBindings()->group(function () {

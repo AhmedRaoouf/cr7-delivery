@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
  */
 final class PromoCodeNamer
 {
-    private const MAX_STEM = 10;
+    private const MAX_STEM = 12;
 
     /**
      * @param  list<int>  $restaurantIds

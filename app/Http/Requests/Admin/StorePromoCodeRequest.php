@@ -19,6 +19,14 @@ class StorePromoCodeRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        // These columns are NOT NULL with a default. The web form sends `null` for «no
+        // minimum», which was a 500 on every code created from the web (doc 96).
+        foreach (['min_order_value' => 0, 'first_order_only' => false, 'cost_bearer' => 'platform', 'is_active' => true] as $key => $default) {
+            if ($this->has($key) && $this->input($key) === null) {
+                $this->merge([$key => $default]);
+            }
+        }
+
         if (is_string($this->input('code'))) {
             $this->merge(['code' => strtoupper(trim($this->input('code'))) ?: null]);
         }

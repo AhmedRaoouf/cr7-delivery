@@ -185,6 +185,22 @@ class PromoCodePlacesTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_a_code_from_the_web_with_no_minimum_is_saved(): void
+    {
+        // The web form sends `null` for an empty minimum; the column is NOT NULL.
+        $this->actingAsAdmin($this->globalAdmin())
+            ->postJson('/api/v1/admin/promo-codes', [
+                'type' => 'percent', 'value' => 10, 'max_discount' => null, 'min_order_value' => null,
+                'usage_limit_total' => null, 'usage_limit_per_user' => 1, 'cost_bearer' => 'platform',
+                'first_order_only' => false, 'is_active' => true, 'restrict_restaurant_ids' => [],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.code', 'CR10')
+            ->assertJsonPath('data.title_ar', 'خصم 10% على كل الأماكن');
+
+        $this->assertSame('0.00', PromoCode::query()->where('code', 'CR10')->value('min_order_value'));
+    }
+
     public function test_clearing_the_places_makes_the_code_cover_every_place(): void
     {
         $takka = $this->place('تكة', 'Takka');

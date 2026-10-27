@@ -141,6 +141,22 @@ class MenuControlTest extends TestCase
             ->assertJsonPath('error', 'product_unavailable');
     }
 
+    public function test_a_switched_off_section_hides_its_dishes_everywhere_a_customer_looks(): void
+    {
+        // Doc 97: a hidden section left the tab strip and its dishes stayed under «كل الأصناف».
+        $this->mains->update(['is_active' => false]);
+        $customer = $this->makeCustomer();
+        $dish = $this->dishes[0];
+
+        $this->actingAsCustomer($customer)->getJson("/api/v1/restaurants/{$this->grill->id}/products")->assertOk()->assertJsonCount(0, 'data');
+        $this->actingAsCustomer($customer)->getJson("/api/v1/restaurants/{$this->grill->id}/products?search=كفتة")->assertOk()->assertJsonCount(0, 'data');
+        $this->actingAsCustomer($customer)->getJson("/api/v1/restaurants/{$this->grill->id}/best-sellers")->assertOk()->assertJsonCount(0, 'data');
+        $this->actingAsCustomer($customer)->getJson("/api/v1/products/{$dish->id}")->assertNotFound();
+
+        $this->mains->update(['is_active' => true]);
+        $this->actingAsCustomer($customer)->getJson("/api/v1/restaurants/{$this->grill->id}/products")->assertOk()->assertJsonCount(3, 'data');
+    }
+
     public function test_a_place_deletes_many_dishes_at_once_and_only_its_own(): void
     {
         $other = $this->makeRestaurant('مكان آخر');

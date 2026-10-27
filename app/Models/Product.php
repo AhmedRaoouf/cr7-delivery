@@ -101,10 +101,13 @@ class Product extends Model
      * Doc 77 — a dish whose section was deleted is not on the menu. Before doc 77 a
      * category delete left its dishes behind (soft delete, so the FK cascade never ran):
      * gone from the tab strip, still listed and orderable under «كل الأصناف».
+     *
+     * Doc 97 — a section that is switched off hides its dishes too. It already left the
+     * tab strip, and its dishes still came back under «كل الأصناف» and in search.
      */
     public function scopeOnMenu(Builder $query): Builder
     {
-        return $query->whereHas('menuCategory');
+        return $query->whereHas('menuCategory', fn (Builder $q) => $q->where('menu_categories.is_active', true));
     }
 
     /**
@@ -125,7 +128,7 @@ class Product extends Model
         // Doc 91 — and still on the app: not deleted, at a place that is not deleted.
         return ! $this->trashed()
             && $this->is_available
-            && $this->menuCategory()->exists()
+            && $this->menuCategory()->where('is_active', true)->exists()
             && $this->restaurant()->exists();
     }
 

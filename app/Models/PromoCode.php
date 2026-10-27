@@ -37,6 +37,28 @@ class PromoCode extends Model
         ];
     }
 
+    /**
+     * doc 96 — the places this code is limited to, as ints; empty means every place.
+     * The column is JSON written by more than one client, so a `"5"` and a `5` are the
+     * same place here.
+     *
+     * @return list<int>
+     */
+    public function restaurantIds(): array
+    {
+        return array_values(array_unique(array_map(
+            'intval',
+            array_filter((array) ($this->restrict_restaurant_ids ?? []), 'is_numeric'),
+        )));
+    }
+
+    public function appliesToRestaurant(int $restaurantId): bool
+    {
+        $ids = $this->restaurantIds();
+
+        return $ids === [] || in_array($restaurantId, $ids, true);
+    }
+
     public function usages(): HasMany
     {
         return $this->hasMany(PromoCodeUsage::class);

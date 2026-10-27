@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Models\Cart;
 use App\Models\DeliveryPricingRule;
 use App\Models\PromoCode;
+use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserAddress;
@@ -99,42 +100,51 @@ class CheckoutPricer
         $discountAmount = 0.0;
         $promoModel = null;
         $promoFreeDelivery = false;
+        // doc 96 — the places the discount is taken from. Every place in the basket
+        // unless the code names its own; a code for تكة in a basket with معروف takes its
+        // percentage from تكة's dishes and only تكة's share carries it.
+        $discountedIds = $restaurantSubtotals->keys()->map(fn ($id) => (int) $id)->all();
 
         if ($promoCode) {
-            [$promoModel, $promoValid, $promoReason] = $this->resolvePromo($promoCode, $user, $address, $subtotal, $byRestaurant->keys()->all());
+            [$promoModel, $promoValid, $promoReason] = $this->resolvePromo($promoCode, $user, $address, $restaurantSubtotals);
 
             if ($promoModel && $promoValid) {
+                $discountedIds = self::discountedIds($promoModel, $restaurantSubtotals);
+
                 if ($promoModel->type->value === 'free_delivery') {
                     $deliveryFee = 0.0;
                     $promoFreeDelivery = true;
                 } else {
-                    $discountAmount = $promoModel->type->value === 'percent'
-                        ? round($subtotal * ((float) $promoModel->value / 100), 2)
-                        : round((float) $promoModel->value, 2);
-
-                    if ($promoModel->max_discount !== null) {
-                        $discountAmount = min($discountAmount, (float) $promoModel->max_discount);
-                    }
-                    $discountAmount = min($discountAmount, $subtotal);
+                    $discountAmount = self::discountOn($promoModel, $restaurantSubtotals);
                 }
 
-                $promo = ['code' => $promoModel->code, 'title' => $promoModel->title_ar, 'valid' => true];
+                $promo = [
+                    'code' => $promoModel->code,
+                    'title' => $promoModel->title_ar,
+                    'valid' => true,
+                    'restaurant_ids' => $promoModel->restaurantIds(),
+                ];
             } else {
                 $promo = ['code' => $promoCode, 'title' => null, 'valid' => false, 'reason' => $promoReason];
             }
         }
 
-        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $deliveryFee, $platformFee, $distances) {
+        $discountBase = round($restaurantSubtotals->only($discountedIds)->sum(), 2);
+
+        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $discountedIds, $discountBase, $deliveryFee, $platformFee, $distances) {
             $restaurant = $lines->first()->restaurant;
             $lineSubtotal = round($restaurantSubtotals[$restaurantId], 2);
             $share = $subtotal > 0 ? $lineSubtotal / $subtotal : 0;
+            $discountShare = $discountBase > 0 && in_array((int) $restaurantId, $discountedIds, true)
+                ? $lineSubtotal / $discountBase
+                : 0;
 
             return [
                 'restaurant_id' => $restaurant->id,
                 'restaurant_name' => $restaurant->name_ar,
                 'distance_km' => round($distances[$restaurantId], 2),
                 'subtotal' => $lineSubtotal,
-                'discount_share' => round($discountAmount * $share, 2),
+                'discount_share' => round($discountAmount * $discountShare, 2),
                 'delivery_fee_share' => round($deliveryFee * $share, 2),
                 'platform_fee_share' => round($platformFee * $share, 2),
                 'meets_min_order' => $lineSubtotal >= (float) $restaurant->min_order_value,
@@ -148,7 +158,7 @@ class CheckoutPricer
         })->values();
 
         // Rounding remainder goes to the largest subtotal (doc 08 §4).
-        $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount);
+        $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount, $discountedIds);
         $groups = $this->assignRoundingRemainder($groups, 'delivery_fee_share', $deliveryFee);
         $groups = $this->assignRoundingRemainder($groups, 'platform_fee_share', $platformFee);
 
@@ -322,41 +332,34 @@ class CheckoutPricer
     /** doc 08 §4 — POST /promo/validate: strict, throws on any invalidity. */
     public function validatePromo(User $user, Cart $cart, UserAddress $address, string $code): PromoCode
     {
-        $items = $cart->items()->with(['product', 'options.productOption.group'])->get();
-        // doc 78 — the same subtotal the quote charges: options included. This read the
-        // bare dish, so a promo's minimum was judged on a smaller basket than the bill.
-        $subtotal = round($items->sum(function ($item) {
-            ['unit' => $unit, 'options_total' => $extras] = LinePrice::ofCartOptions($item->product, $item->options);
+        $restaurantSubtotals = $this->restaurantSubtotals($cart);
 
-            return ($unit + $extras) * $item->quantity;
-        }), 2);
-        $restaurantIds = $items->pluck('restaurant_id')->unique()->values()->all();
-
-        [$promo, $valid, $reason] = $this->resolvePromo($code, $user, $address, $subtotal, $restaurantIds);
+        [$promo, $valid, $reason] = $this->resolvePromo($code, $user, $address, $restaurantSubtotals);
 
         if (! $promo) {
             throw new ApiException('promo_invalid', 'كود الخصم غير صحيح', 422);
         }
 
         if (! $valid) {
-            $messages = [
+            $message = match ($reason) {
                 'promo_expired' => 'انتهت صلاحية كود الخصم',
                 'promo_usage_exceeded' => 'تم استخدام كود الخصم للحد الأقصى المسموح',
-                'promo_no_longer_applicable' => 'كود الخصم لا ينطبق على مطاعم السلة الحالية',
+                'promo_no_longer_applicable' => self::placesSentence($promo),
                 'below_min_order' => 'السلة لم تصل بعد للحد الأدنى لاستخدام الكود',
                 'promo_invalid' => 'كود الخصم غير صالح لهذا الطلب',
-            ];
+                default => 'كود الخصم غير صالح',
+            };
 
-            throw new ApiException($reason, $messages[$reason] ?? 'كود الخصم غير صالح', 422);
+            throw new ApiException($reason, $message, 422);
         }
 
         return $promo;
     }
 
     /** @return array{0: ?PromoCode, 1: bool, 2: ?string} */
-    private function resolvePromo(string $code, User $user, UserAddress $address, float $subtotal, array $restaurantIds): array
+    private function resolvePromo(string $code, User $user, UserAddress $address, Collection $restaurantSubtotals): array
     {
-        $promo = PromoCode::query()->where('code', $code)->where('is_active', true)->first();
+        $promo = PromoCode::query()->where('code', trim($code))->where('is_active', true)->first();
 
         if (! $promo) {
             return [null, false, 'promo_invalid'];
@@ -366,7 +369,16 @@ class CheckoutPricer
             return [$promo, false, 'promo_expired'];
         }
 
-        if ($subtotal < (float) $promo->min_order_value) {
+        $discountedIds = self::discountedIds($promo, $restaurantSubtotals);
+
+        // doc 96 — checked before the minimum, so a code for another place says whose
+        // it is rather than «لم تصل للحد الأدنى».
+        if ($discountedIds === []) {
+            return [$promo, false, 'promo_no_longer_applicable'];
+        }
+
+        // …and the minimum is judged on the dishes the code discounts.
+        if (round($restaurantSubtotals->only($discountedIds)->sum(), 2) < (float) $promo->min_order_value) {
             return [$promo, false, 'below_min_order'];
         }
 
@@ -393,17 +405,90 @@ class CheckoutPricer
             return [$promo, false, 'promo_invalid'];
         }
 
-        if ($promo->restrict_restaurant_ids && array_diff($restaurantIds, $promo->restrict_restaurant_ids) === $restaurantIds) {
-            // none of the basket restaurants are in the allow-list
-            return [$promo, false, 'promo_no_longer_applicable'];
-        }
-
         return [$promo, true, null];
     }
 
-    private function assignRoundingRemainder(Collection $groups, string $field, float $total): Collection
+    /**
+     * Each place's share of the basket, options included (doc 78) — the same numbers
+     * `price()` charges, keyed by restaurant id.
+     *
+     * @return Collection<int, float>
+     */
+    public function restaurantSubtotals(Cart $cart): Collection
     {
-        if ($groups->isEmpty()) {
+        return $cart->items()->with(['product', 'options.productOption.group'])->get()
+            ->groupBy('restaurant_id')
+            ->map(fn (Collection $lines) => $lines->sum(function ($item) {
+                ['unit' => $unit, 'options_total' => $extras] = LinePrice::ofCartOptions($item->product, $item->options);
+
+                return ($unit + $extras) * $item->quantity;
+            }));
+    }
+
+    /**
+     * doc 96 — the basket's places the code discounts.
+     *
+     * @param  Collection<int, float>  $restaurantSubtotals
+     * @return list<int>
+     */
+    public static function discountedIds(PromoCode $promo, Collection $restaurantSubtotals): array
+    {
+        return $restaurantSubtotals->keys()
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $promo->appliesToRestaurant($id))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The amount a percent or fixed code takes off, from the dishes of the places it
+     * covers only. Zero for free delivery — that code waives the fee instead.
+     *
+     * @param  Collection<int, float>  $restaurantSubtotals
+     */
+    public static function discountOn(PromoCode $promo, Collection $restaurantSubtotals): float
+    {
+        if ($promo->type->value === 'free_delivery') {
+            return 0.0;
+        }
+
+        $base = round($restaurantSubtotals->only(self::discountedIds($promo, $restaurantSubtotals))->sum(), 2);
+
+        $amount = $promo->type->value === 'percent'
+            ? round($base * ((float) $promo->value / 100), 2)
+            : round((float) $promo->value, 2);
+
+        if ($promo->max_discount !== null) {
+            $amount = min($amount, (float) $promo->max_discount);
+        }
+
+        return min($amount, $base);
+    }
+
+    /** «هذا الكود خاص بـ تكة ومعروف» — the customer is told where the code works. */
+    private static function placesSentence(PromoCode $promo): string
+    {
+        $names = Restaurant::query()->whereIn('id', $promo->restaurantIds())->orderBy('name_ar')->pluck('name_ar');
+
+        if ($names->isEmpty()) {
+            return 'كود الخصم لا ينطبق على مطاعم السلة الحالية';
+        }
+
+        $list = $names->count() > 3
+            ? $names->take(3)->implode('، ').' وأماكن أخرى'
+            : $names->join('، ', ' و');
+
+        return 'هذا الكود خاص بـ '.$list.' فقط';
+    }
+
+    /** @param  list<int>|null  $onlyIds  the groups allowed to carry it — doc 96, a code's own places */
+    private function assignRoundingRemainder(Collection $groups, string $field, float $total, ?array $onlyIds = null): Collection
+    {
+        $candidates = $onlyIds === null
+            ? $groups
+            : $groups->filter(fn ($group) => in_array((int) $group['restaurant_id'], $onlyIds, true));
+
+        if ($candidates->isEmpty()) {
             return $groups;
         }
 
@@ -414,7 +499,7 @@ class CheckoutPricer
             return $groups;
         }
 
-        $largestId = $groups->sortByDesc('subtotal')->first()['restaurant_id'];
+        $largestId = $candidates->sortByDesc('subtotal')->first()['restaurant_id'];
 
         return $groups->map(function ($group) use ($largestId, $field, $remainder) {
             if ($group['restaurant_id'] === $largestId) {

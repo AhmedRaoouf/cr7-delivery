@@ -802,6 +802,7 @@ Route::prefix('v1')->group(function () {
 
         // Marketing — promo codes, banners, pages, faqs
         Route::get('/promo-codes', [PromoCodeController::class, 'index'])->middleware('permission:promos.view');
+        Route::get('/promo-codes/suggest', [PromoCodeController::class, 'suggest'])->middleware('permission:promos.view');
         Route::get('/promo-codes/{promoCode}', [PromoCodeController::class, 'show'])->middleware('permission:promos.view');
         Route::get('/promo-codes/{promoCode}/usages', [PromoCodeController::class, 'usages'])->middleware('permission:promos.view');
         Route::post('/promo-codes', [PromoCodeController::class, 'store']);

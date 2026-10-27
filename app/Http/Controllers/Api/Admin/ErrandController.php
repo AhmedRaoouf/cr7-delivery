@@ -134,10 +134,13 @@ class ErrandController extends Controller
         ]);
 
         $driver = Driver::query()->findOrFail($validated['driver_id']);
+        $result = $action->assign($request->user(), $errand, $driver, $validated['note'] ?? null);
 
         return ApiResponse::success(
-            new ErrandRequestResource($action->assign($request->user(), $errand, $driver, $validated['note'] ?? null)),
-            'تم إرسال المشوار إلى الكابتن — بانتظار قبوله',
+            new ErrandRequestResource($result),
+            $result->driver_id === $driver->id
+                ? 'المشوار مع هذا الكابتن بالفعل'
+                : 'تم إرسال المشوار إلى الكابتن — بانتظار قبوله',
         );
     }
 

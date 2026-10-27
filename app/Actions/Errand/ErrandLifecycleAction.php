@@ -48,6 +48,18 @@ class ErrandLifecycleAction
             throw new ApiException('driver_busy', 'لا يمكنك قبول مشوار وأنت على طلب آخر', 422);
         }
 
+        // A second press on «اقبل» — a slow network, a double tap — is the same answer,
+        // not a race this captain lost to themselves.
+        if (self::alreadyCarriedBy($errand->fresh() ?? $errand, $driver)) {
+            return $errand->fresh(['driver.user']);
+        }
+
+        // One errand at a time: the broadcast no longer tells a captain mid-errand, and
+        // this is the same rule for one who opened the board anyway (doc 95).
+        if (DriverTrip::onErrand($driver)) {
+            throw new ApiException('driver_on_an_errand', 'لا يمكنك قبول مشوار وأنت في مشوار آخر', 422);
+        }
+
         $fresh = DB::transaction(function () use ($driver, $errand): ErrandRequest {
             $locked = ErrandRequest::query()->lockForUpdate()->find($errand->id);
 
@@ -109,8 +121,20 @@ class ErrandLifecycleAction
      */
     public function assign(User $admin, ErrandRequest $errand, Driver $driver, ?string $note = null): ErrandRequest
     {
+        // 🔴 doc 95 — assigning the captain who already carries it. This used to clear
+        // `driver_id` and send a fresh offer, so the captain had to accept again; ERR-1028
+        // went `offered → assigned` four times in a minute while an operator pressed
+        // «إسناد» and the captain kept answering. It is theirs already: nothing changes.
+        if (self::alreadyCarriedBy($errand->fresh() ?? $errand, $driver)) {
+            return $errand->fresh(['driver.user']);
+        }
+
         if (DriverTrip::count($driver) > 0) {
             throw new ApiException('driver_busy', 'هذا الكابتن على طلب آخر', 422);
+        }
+
+        if (DriverTrip::onErrand($driver)) {
+            throw new ApiException('driver_on_an_errand', 'هذا الكابتن في مشوار آخر', 422);
         }
 
         $fresh = DB::transaction(function () use ($admin, $errand, $driver, $note): ErrandRequest {
@@ -342,6 +366,12 @@ class ErrandLifecycleAction
     private function assertOwnedBy(Driver $driver, ErrandRequest $errand): void
     {
         abort_unless($errand->driver_id === $driver->id, 404);
+    }
+
+    private static function alreadyCarriedBy(ErrandRequest $errand, Driver $driver): bool
+    {
+        return $errand->driver_id === $driver->id
+            && in_array($errand->status, [ErrandStatus::Assigned, ErrandStatus::PickedUp], true);
     }
 
     private function announceAssignment(ErrandRequest $errand, Driver $driver): void

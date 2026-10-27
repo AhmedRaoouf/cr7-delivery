@@ -151,6 +151,10 @@ class OrderController extends Controller
             'mode' => ['nullable', 'in:offer,force'],
         ]);
 
+        if ((int) $order->driver_id === (int) $validated['driver_id']) {
+            return ApiResponse::success($order->fresh(), 'الطلب مع هذا الكابتن بالفعل');
+        }
+
         if (($validated['mode'] ?? 'offer') === 'force') {
             $order = $action->execute($request->user(), $order, $validated['driver_id'], $validated['reason_code'], $validated['note'] ?? null);
 

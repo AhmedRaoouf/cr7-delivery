@@ -6,6 +6,7 @@ use App\Actions\Admin\ModerateAccountAction;
 use App\Actions\Admin\OfferOrderToDriverAction;
 use App\Actions\Customer\CreateComplaintAction;
 use App\Actions\Customer\CreateOrderAction;
+use App\Actions\Driver\AcceptOfferAction;
 use App\Actions\Driver\RejectOfferAction;
 use App\Enums\AdminScopeType;
 use App\Enums\OrderStatus;
@@ -142,6 +143,48 @@ class AssignmentAndModerationTest extends TestCase
             ->assertOk();
 
         $this->assertSame($driver->id, $order->fresh()->driver_id);
+    }
+
+    /**
+     * doc 95 — a second «إسناد» to the captain who already accepted. The offer path used
+     * to clear `driver_id` and put the order back to `searching_driver`; the force path
+     * marked their own acceptance `reassigned_by_admin` and changed the pickup code.
+     */
+    public function test_assigning_the_captain_who_already_carries_it_changes_nothing(): void
+    {
+        [$order, $driver, $admin] = $this->scenario();
+
+        app(OfferOrderToDriverAction::class)->execute($admin, $order, $driver->id, 'nearest', null);
+        app(AcceptOfferAction::class)->execute($driver->fresh(), $order->id);
+
+        $before = $order->fresh();
+        $this->assertSame($driver->id, $before->driver_id);
+
+        foreach (['offer', 'force'] as $mode) {
+            $this->actingAs($admin)
+                ->withHeaders(['X-App' => 'admin'])
+                ->postJson("/api/v1/admin/orders/{$order->id}/reassign-driver", [
+                    'driver_id' => $driver->id,
+                    'reason_code' => 'nearest',
+                    'mode' => $mode,
+                ])
+                ->assertOk();
+
+            $after = $order->fresh();
+            $this->assertSame($driver->id, $after->driver_id, $mode);
+            $this->assertSame($before->status, $after->status, $mode);
+            $this->assertSame($before->pickup_otp, $after->pickup_otp, $mode);
+        }
+
+        $this->assertDatabaseHas('order_driver_attempts', [
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'result' => 'accepted',
+        ]);
+        $this->assertDatabaseMissing('order_driver_attempts', [
+            'order_id' => $order->id,
+            'result' => 'reassigned_by_admin',
+        ]);
     }
 
     // ------------------------------------------------------------ moderation

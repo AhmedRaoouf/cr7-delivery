@@ -31,6 +31,13 @@ class ReassignDriverAction
 
     public function execute(User $admin, Order $order, int $driverId, string $reasonCode, ?string $note): Order
     {
+        // doc 95 — the captain who already carries it. Reassigning them to themselves
+        // marked their own acceptance `reassigned_by_admin` (so the basket rule would
+        // never hand them a sibling again) and changed the pickup code under them.
+        if ((int) $order->driver_id === $driverId) {
+            return $order->fresh();
+        }
+
         if (in_array($order->status->value, self::BLOCKED_FROM, true)) {
             throw new ApiException('invalid_transition', 'لا يمكن تغيير الكابتن بعد استلام الطلب', 422);
         }

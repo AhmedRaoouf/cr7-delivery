@@ -351,6 +351,92 @@ class ErrandRequestTest extends TestCase
             ->assertJsonPath('error', 'errand_offered_elsewhere');
     }
 
+    /**
+     * doc 95 — «في المشاوير مش بييجي للدلفيري إنه في طلب». A captain on shift whose phone
+     * put the app to sleep stops pinging; the push is what wakes that phone, so a stale
+     * fix must not keep them off the broadcast.
+     */
+    public function test_a_captain_on_shift_with_a_stale_fix_is_still_told(): void
+    {
+        $asleep = $this->makeDriver();
+        $asleep->forceFill(['location_updated_at' => now()->subHours(10)])->save();
+        $neverPinged = $this->makeDriver();
+        $neverPinged->forceFill(['location_updated_at' => null, 'current_lat' => null, 'current_lng' => null])->save();
+        $offShift = $this->makeDriver();
+        $offShift->forceFill(['is_online' => false])->save();
+
+        $errand = $this->publish();
+
+        $told = $errand->fresh()->notified_driver_ids;
+        $this->assertContains($asleep->id, $told);
+        $this->assertContains($neverPinged->id, $told);
+        $this->assertNotContains($offShift->id, $told);
+        $this->assertDatabaseHas('notifications', ['user_id' => $asleep->user_id, 'type' => 'errand.new']);
+    }
+
+    /** One errand at a time: a captain riding one is not told about the next, and cannot take it. */
+    public function test_a_captain_on_an_errand_is_not_told_and_cannot_take_a_second(): void
+    {
+        $busy = $this->makeDriver();
+        $first = $this->publish();
+        $this->actingAsDriver($busy);
+        $this->postJson("/api/v1/driver/errands/{$first->id}/accept")->assertOk();
+
+        $this->customer = $this->makeCustomer();
+        $second = $this->publish();
+
+        $this->assertNotContains($busy->id, $second->fresh()->notified_driver_ids ?? []);
+
+        $this->actingAsDriver($busy);
+        $this->postJson("/api/v1/driver/errands/{$second->id}/accept")
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'driver_on_an_errand');
+        $this->assertNull($second->fresh()->driver_id);
+    }
+
+    /** A double tap on «اقبل» is the same answer, not «سبقك كابتن آخر». */
+    public function test_accepting_twice_keeps_the_errand(): void
+    {
+        $driver = $this->makeDriver();
+        $errand = $this->publish();
+
+        $this->actingAsDriver($driver);
+        $this->postJson("/api/v1/driver/errands/{$errand->id}/accept")->assertOk();
+        $this->postJson("/api/v1/driver/errands/{$errand->id}/accept")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'assigned');
+
+        $this->assertSame($driver->id, $errand->fresh()->driver_id);
+    }
+
+    /**
+     * ERR-1028, production 2026-10-25: an operator pressed «إسناد» again after the captain
+     * accepted, the errand went back to `offered`, and the captain had to accept four times.
+     */
+    public function test_assigning_the_captain_who_already_carries_it_changes_nothing(): void
+    {
+        $driver = $this->makeDriver();
+        $errand = $this->publish();
+
+        $this->actingAsAdmin();
+        $this->postJson("/api/v1/admin/errands/{$errand->id}/assign", ['driver_id' => $driver->id])->assertOk();
+        $this->actingAsDriver($driver);
+        $this->postJson("/api/v1/driver/errands/{$errand->id}/accept")->assertOk();
+
+        $events = $errand->events()->count();
+
+        $this->actingAsAdmin();
+        $this->postJson("/api/v1/admin/errands/{$errand->id}/assign", ['driver_id' => $driver->id])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'assigned');
+
+        $fresh = $errand->fresh();
+        $this->assertSame(ErrandStatus::Assigned, $fresh->status);
+        $this->assertSame($driver->id, $fresh->driver_id);
+        $this->assertNull($fresh->offered_driver_id);
+        $this->assertSame($events, $errand->events()->count());
+    }
+
     /** @param array<string, mixed> $overrides */
     private function payload(array $overrides = []): array
     {

@@ -47,6 +47,13 @@ class OfferOrderToDriverAction
 
     public function execute(User $admin, Order $order, int $driverId, string $reasonCode, ?string $note): Order
     {
+        // doc 95 — offering it to the captain who already accepted it. This used to clear
+        // `driver_id` and put the order back to `searching_driver`, so a second press on
+        // «إسناد» took the order off the captain riding to it. It is theirs: nothing changes.
+        if ((int) $order->driver_id === $driverId) {
+            return $order->fresh();
+        }
+
         if (in_array($order->status->value, self::BLOCKED_FROM, true)) {
             throw new ApiException('invalid_transition', 'لا يمكن تغيير الكابتن بعد استلام الطلب', 422);
         }

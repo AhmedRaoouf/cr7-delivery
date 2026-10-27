@@ -166,14 +166,20 @@ class ErrandDispatcher
     }
 
     /**
-     * Online, carrying no orders, and seen recently enough to be somewhere real.
+     * On shift and free: no orders in hand and no other errand.
+     *
+     * 🔴 doc 95 — this used to add «seen within `dispatch.location_stale_seconds`» (‪90‬ s).
+     * A phone that put the app to sleep stops pinging while the captain stays on shift,
+     * and the push this sends wakes exactly that phone — so the freshness gate removed the
+     * captains the broadcast exists for. Production, 2026-10-25: four captains on shift,
+     * two of them told, and errands reached a captain only through an operator's
+     * assignment. Food dispatch dropped the same gate long ago
+     * (`dispatch.offer_to_all_online`).
      *
      * @return Collection<int, Driver>
      */
     private function availableDrivers()
     {
-        $staleSeconds = DriverLiveness::staleSeconds();
-
         return Driver::query()
             ->with('user')
             ->where('is_active', true)
@@ -183,8 +189,12 @@ class ErrandDispatcher
             // no errands. Read from the trip itself rather than from `is_available`, which
             // is only a copy of it.
             ->whereDoesntHave('orders', fn ($q) => $q->whereIn('status', DriverTrip::STATES))
-            ->where(fn ($q) => $q->whereNull('location_updated_at')
-                ->orWhere('location_updated_at', '>=', now()->subSeconds($staleSeconds)))
+            // …nor one already riding another errand. The every-minute re-publish tells
+            // them the moment it is delivered.
+            ->whereNotIn('id', ErrandRequest::query()
+                ->whereNotNull('driver_id')
+                ->whereIn('status', [ErrandStatus::Assigned->value, ErrandStatus::PickedUp->value])
+                ->select('driver_id'))
             ->get();
     }
 

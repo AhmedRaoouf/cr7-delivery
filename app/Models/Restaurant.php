@@ -20,7 +20,7 @@ class Restaurant extends Model
         'user_id', 'city_id', 'service_zone_id', 'name_ar', 'name_en',
         'description_ar', 'description_en', 'slug', 'logo', 'cover', 'phone',
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
-        'min_order_value', 'avg_prep_minutes', 'eta_min_minutes', 'eta_max_minutes',
+        'min_order_value', 'delivery_surcharge', 'avg_prep_minutes', 'eta_min_minutes', 'eta_max_minutes',
         'is_open_manual', 'is_active',
         'is_verified', 'is_featured', 'direct_orders_enabled', 'menu_layout',
         'store_category_id', 'is_24_7',
@@ -36,6 +36,7 @@ class Restaurant extends Model
             'longitude' => 'decimal:7',
             'commission_rate' => 'decimal:2',
             'min_order_value' => 'decimal:2',
+            'delivery_surcharge' => 'decimal:2',
             'rating_avg' => 'decimal:2',
             'is_open_manual' => 'boolean',
             'is_active' => 'boolean',
@@ -44,6 +45,28 @@ class Restaurant extends Model
             'direct_orders_enabled' => 'boolean',
             'is_24_7' => 'boolean',
         ];
+    }
+
+    /** A cleared field on the form means «no surcharge», and the column is NOT NULL. */
+    public function setDeliverySurchargeAttribute(mixed $value): void
+    {
+        $this->attributes['delivery_surcharge'] = $value === null || $value === '' ? 0 : $value;
+    }
+
+    /**
+     * doc 97 — what the places in one basket add to the area fee. The largest, not
+     * the sum: one captain makes one trip out to the far town whatever is collected there.
+     *
+     * @param  iterable<Restaurant|null>  $restaurants
+     */
+    public static function surchargeOf(iterable $restaurants): float
+    {
+        $max = 0.0;
+        foreach ($restaurants as $restaurant) {
+            $max = max($max, (float) ($restaurant?->delivery_surcharge ?? 0));
+        }
+
+        return round($max, 2);
     }
 
     public function owner(): BelongsTo

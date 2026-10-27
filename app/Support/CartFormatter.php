@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Cart;
 use App\Models\City;
+use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\OptionSelection;
@@ -145,7 +146,7 @@ class CartFormatter
             // until the last screen of checkout. The quote is still what bills;
             // this is the same arithmetic from the same source, published early
             // enough that the basket cannot disagree with it.
-            ...self::deliveryEstimate($cart),
+            ...self::deliveryEstimate($cart, Restaurant::surchargeOf($itemsByRestaurant->map(fn ($lines) => $lines->first()->restaurant))),
             'issues' => $basketIssues,
         ];
     }
@@ -160,7 +161,7 @@ class CartFormatter
      *
      * @return array<string, mixed>
      */
-    private static function deliveryEstimate(Cart $cart): array
+    private static function deliveryEstimate(Cart $cart, float $surcharge): array
     {
         // Through the catalogue, so a stored `0` reads as zero rather than as «unset», and
         // the fallback is the declared default rather than a second copy of it here.
@@ -172,7 +173,9 @@ class CartFormatter
         if ($address?->serviceZone !== null) {
             return [
                 'delivery_address_id' => $address->id,
-                'delivery_base_fee' => (float) $address->serviceZone->delivery_fee,
+                // doc 97 — a far place's surcharge rides on the base, as the quote's does.
+                'delivery_base_fee' => round((float) $address->serviceZone->delivery_fee + $surcharge, 2),
+                'delivery_surcharge' => $surcharge,
                 'extra_stop_fee' => $extraStopFee,
             ];
         }
@@ -184,7 +187,8 @@ class CartFormatter
 
         return [
             'delivery_address_id' => null,
-            'delivery_base_fee' => (float) ($cheapest?->delivery_fee ?? 0),
+            'delivery_base_fee' => round((float) ($cheapest?->delivery_fee ?? 0) + $surcharge, 2),
+            'delivery_surcharge' => $surcharge,
             'extra_stop_fee' => $extraStopFee,
         ];
     }

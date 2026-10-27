@@ -41,7 +41,8 @@ class QuoteDirectOrderAction
         $distanceKm = Geo::haversineKm((float) $restaurant->latitude, (float) $restaurant->longitude, $lat, $lng);
 
         // The area's price, and nothing else — no distance band, no place location.
-        $fee = round((float) ($zone->delivery_fee ?? 0), 2);
+        // doc 97 — a place in another town adds its surcharge to the customer's area fee.
+        $fee = round((float) ($zone->delivery_fee ?? 0) + (float) $restaurant->delivery_surcharge, 2);
 
         // D-64 — a direct order is a delivery the platform sold, so it carries the
         // service fee too. `platform.order_fee_applies_to_direct` exempts phone orders

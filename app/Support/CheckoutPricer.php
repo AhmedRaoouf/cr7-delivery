@@ -70,6 +70,12 @@ class CheckoutPricer
             $deliveryBaseFee = (float) ($address->serviceZone->delivery_fee ?? 0);
         }
 
+        // doc 97 — a place in another town (New Damietta, ordered from Gamasa) adds its
+        // surcharge on top of the area fee. It is the captain's trip out there, so no
+        // free-delivery offer waives it: those waive the area fee and the extra stops.
+        $surcharge = Restaurant::surchargeOf($byRestaurant->map(fn (Collection $lines) => $lines->first()->restaurant));
+        $deliveryBaseFee = round($deliveryBaseFee + $surcharge, 2);
+
         $extraStopFee = (float) (Setting::query()->where('key', 'delivery.extra_stop_fee')->value('value') ?? 10);
         $extraStopFeeTotal = round($extraStopFee * max(0, $restaurantCount - 1), 2);
 
@@ -85,7 +91,7 @@ class CheckoutPricer
         $firstOrderFree = FirstOrderPerk::appliesTo($user);
 
         $deliveryFee = $freeDeliveryApplied || $firstOrderFree
-            ? 0.0
+            ? $surcharge
             : round($deliveryBaseFee + $extraStopFeeTotal, 2);
 
         // D-63 — the platform service fee. Charged **once per order group**, whatever
@@ -112,7 +118,7 @@ class CheckoutPricer
                 $discountedIds = self::discountedIds($promoModel, $restaurantSubtotals);
 
                 if ($promoModel->type->value === 'free_delivery') {
-                    $deliveryFee = 0.0;
+                    $deliveryFee = $surcharge;
                     $promoFreeDelivery = true;
                 } else {
                     $discountAmount = self::discountOn($promoModel, $restaurantSubtotals);
@@ -272,6 +278,7 @@ class CheckoutPricer
             'groups' => $groups,
             'max_distance_km' => round($maxDistanceKm, 3),
             'delivery_base_fee' => round($deliveryBaseFee, 2),
+            'delivery_surcharge' => $surcharge,
             'extra_stop_fee' => $extraStopFee,
             'extra_stop_fee_total' => $extraStopFeeTotal,
             'delivery_fee' => $deliveryFee,

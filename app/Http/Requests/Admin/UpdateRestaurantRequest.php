@@ -29,6 +29,8 @@ class UpdateRestaurantRequest extends FormRequest
             'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
             'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
+            // doc 97 — added to every area's fee when this place is in the basket.
+            'delivery_surcharge' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'avg_prep_minutes' => ['nullable', 'integer', 'min:1', 'max:240'],
             // Accepted here, but not authorised here: `restaurants.set_commission`
             // is its own grant, and the controller refuses a value that would

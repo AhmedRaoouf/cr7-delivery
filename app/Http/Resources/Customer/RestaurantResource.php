@@ -35,6 +35,8 @@ class RestaurantResource extends JsonResource
             'rating_avg' => (float) $this->rating_avg,
             'rating_count' => $this->rating_count,
             'delivery_fee' => $zone?->delivery_fee !== null ? (float) $zone->delivery_fee : null,
+            // doc 97 — added to the customer's area fee when this place is in the basket.
+            'delivery_surcharge' => (float) $this->delivery_surcharge,
             'free_delivery_over' => $zone?->free_delivery_over !== null ? (float) $zone->free_delivery_over : null,
             // The shop's own window when it publishes one, the zone's estimate
             // otherwise — see `Restaurant::etaWindow()`.

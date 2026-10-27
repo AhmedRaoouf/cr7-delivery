@@ -59,6 +59,8 @@ class StoreRestaurantRequest extends FormRequest
             // dashboard build does not 422, and defaults to 0 when it is not sent.
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
+            // doc 97 — added to every area's fee when this place is in the basket.
+            'delivery_surcharge' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'avg_prep_minutes' => ['nullable', 'integer', 'min:1'],
             // The window the customer is shown. Both nullable: a shop that sets
             // neither keeps its zone's estimate, and one that sets them equal

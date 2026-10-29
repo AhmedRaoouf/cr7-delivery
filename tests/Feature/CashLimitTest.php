@@ -320,6 +320,97 @@ class CashLimitTest extends TestCase
             ->assertJsonPath('message', 'Cash is available for orders under 1,250.50 EGP — choose Vodafone Cash');
     }
 
+    // ------------------------------------------- cash already under way (doc 98)
+
+    private const AR_REFUSAL_WITH_OPEN = "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,000\u{202C} ج.م مجتمعة، ولديك طلبات نقدية جارية بقيمة \u{202A}800\u{202C} ج.م — اختر فودافون كاش أو إنستا باي";
+
+    public function test_cash_already_under_way_counts_toward_the_limit(): void
+    {
+        // Production, 2026-10-29: ‪800‬ then ‪430‬ in cash a minute apart, each under the limit.
+        $this->basketOf(775);
+        $this->place('cash', 'first-800')->assertCreated();
+
+        $this->basketOf(405);
+        $quote = $this->quote('cash')->assertOk();
+        $this->assertEquals(430, $quote->json('data.total'));
+        $this->assertSame('cash_not_allowed', $quote->json('data.blockers.0.code'));
+        $this->assertSame(self::AR_REFUSAL_WITH_OPEN, $quote->json('data.blockers.0.message'));
+        $this->assertEquals(430, $quote->json('data.blockers.0.total'));
+        $this->assertEquals(800, $quote->json('data.blockers.0.open_cash_total'));
+        $cash = collect($quote->json('data.payment_methods'))->firstWhere('value', 'cash');
+        $this->assertFalse($cash['available']);
+        $this->assertSame(CashLimit::REASON, $cash['reason']);
+
+        $this->place('cash', 'second-430')
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'cash_not_allowed')
+            ->assertJsonPath('message', self::AR_REFUSAL_WITH_OPEN)
+            ->assertJsonPath('meta.total', 430)
+            ->assertJsonPath('meta.open_cash_total', 800);
+
+        $this->place('vodafone_cash', 'second-430-transfer')->assertCreated();
+        $this->assertSame(2, OrderGroup::query()->count());
+    }
+
+    public function test_cash_under_way_that_leaves_room_lets_a_small_basket_through(): void
+    {
+        $this->basketOf(775);
+        $this->place('cash', 'first-800')->assertCreated();
+
+        $this->basketOf(150); // 175 + 800 = 975
+        $this->quote('cash')->assertOk()->assertJsonPath('data.blockers', []);
+        $this->place('cash', 'second-175')->assertCreated();
+    }
+
+    public function test_delivered_cancelled_transfer_and_stale_orders_do_not_count(): void
+    {
+        foreach (['delivered', 'cancelled'] as $status) {
+            $this->basketOf(775);
+            $this->place('cash', "done-{$status}")->assertCreated();
+            OrderGroup::query()->latest('id')->firstOrFail()->orders()->update(['status' => $status]);
+        }
+
+        $this->basketOf(775);
+        $this->place('instapay', 'transfer-800')->assertCreated();
+
+        // Stuck for more than a day — not money the customer still owes on the way.
+        $this->basketOf(775);
+        $this->place('cash', 'stuck-800')->assertCreated();
+        OrderGroup::query()->latest('id')->firstOrFail()->orders()
+            ->update(['status' => 'delivery_issue', 'created_at' => now()->subHours(CashLimit::OPEN_WINDOW_HOURS + 1)]);
+
+        $this->assertEquals(0, CashLimit::openCashTotal($this->customer));
+        $this->basketOf(405);
+        $this->quote('cash')->assertOk()->assertJsonPath('data.blockers', []);
+    }
+
+    public function test_another_customers_cash_does_not_count(): void
+    {
+        $this->basketOf(775);
+        $this->place('cash', 'mine-800')->assertCreated();
+
+        $this->assertEquals(0, CashLimit::openCashTotal($this->makeCustomer()));
+    }
+
+    public function test_switching_to_cash_counts_the_cash_already_under_way(): void
+    {
+        $this->basketOf(775);
+        $this->place('cash', 'first-800')->assertCreated();
+
+        $this->basketOf(275); // 300 + 800 = 1100
+        $group = $this->placeWithOpenGate('vodafone_cash', 'switch-with-open');
+
+        $this->getJson("/api/v1/orders/{$group->id}/payment")->assertOk()->assertJsonPath('data.can_switch_to_cash', false);
+
+        $this->postJson("/api/v1/orders/{$group->id}/payment/method")
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'cash_not_allowed')
+            ->assertJsonPath('message', "الدفع نقدًا متاح للطلبات أقل من \u{202A}1,000\u{202C} ج.م مجتمعة، ولديك طلبات نقدية جارية بقيمة \u{202A}800\u{202C} ج.م — أكمل التحويل لإتمام طلبك")
+            ->assertJsonPath('meta.open_cash_total', 800);
+
+        $this->assertSame('vodafone_cash', $group->fresh()->payment_method->value);
+    }
+
     // ------------------------------------------ «ادفع نقدًا بدلًا من ذلك»
 
     public function test_switching_a_transfer_to_cash_is_refused_above_the_limit(): void

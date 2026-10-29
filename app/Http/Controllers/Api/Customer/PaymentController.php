@@ -50,7 +50,8 @@ class PaymentController extends Controller
             'instapay_handle' => SettingsCatalog::get('payment.instapay_handle'),
             // Whether «ادفع نقدًا بدلًا من ذلك» would be taken for this basket: cash is
             // switched on and the total is within `payment.cash_max_total` (0 = no limit).
-            'can_switch_to_cash' => PaymentMethods::isEnabled(PaymentMethod::Cash) && CashLimit::allows((float) $orderGroup->total),
+            'can_switch_to_cash' => PaymentMethods::isEnabled(PaymentMethod::Cash)
+                && CashLimit::allows((float) $orderGroup->total, CashLimit::openCashTotal($orderGroup->user, $orderGroup->id)),
             'cash_max_total' => CashLimit::max(),
             'amount' => $payment->amount !== null ? (float) $payment->amount : null,
             'opened_at' => $payment->gate_opened_at,
@@ -138,8 +139,11 @@ class PaymentController extends Controller
 
         // …and only for a basket cash may pay. Without this the limit would be one tap
         // deep: order by transfer, then switch to cash on the payment screen.
-        if (! CashLimit::allows((float) $orderGroup->total)) {
-            throw CashLimit::refusalOfSwitch((float) $orderGroup->total);
+        // The cash already under way on other orders counts too (doc 98).
+        $openCash = CashLimit::openCashTotal($orderGroup->user, $orderGroup->id);
+
+        if (! CashLimit::allows((float) $orderGroup->total, $openCash)) {
+            throw CashLimit::refusalOfSwitch((float) $orderGroup->total, $openCash);
         }
 
         DB::transaction(function () use ($orderGroup, $payment) {

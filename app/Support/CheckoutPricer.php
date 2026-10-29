@@ -269,8 +269,12 @@ class CheckoutPricer
         // delivery and service fees, a carried fee, less the discount. Only for a cash
         // basket the operator still takes cash for — a switched-off cash is already
         // `payment_method_disabled` above, and one refusal is enough.
-        if ($paymentMethod === PaymentMethod::Cash->value && PaymentMethods::isEnabled(PaymentMethod::Cash) && ! CashLimit::allows($total)) {
-            $blockers[] = CashLimit::blocker($total, $user);
+        // Operator, 2026-10-29 — and with the cash this customer still owes on orders under
+        // way, or two baskets a minute apart pay ‪1,230‬ in cash (doc 98).
+        $openCash = CashLimit::openCashTotal($user);
+
+        if ($paymentMethod === PaymentMethod::Cash->value && PaymentMethods::isEnabled(PaymentMethod::Cash) && ! CashLimit::allows($total, $openCash)) {
+            $blockers[] = CashLimit::blocker($total, $user, $openCash);
         }
 
         return [
@@ -310,7 +314,7 @@ class CheckoutPricer
             // `enabled` stays on every row for the clients that filtered on it;
             // `available` and `reason` say whether *this* basket may use it
             // (`above_cash_limit`, `cash_only_restricted`), so no client re-prices.
-            'payment_methods' => PaymentMethods::offeredFor($total, $user),
+            'payment_methods' => PaymentMethods::offeredFor($total, $user, $openCash),
             // `payment.cash_max_total` — cash pays a basket up to this, 0 = no limit.
             'cash_max_total' => CashLimit::max(),
             'blockers' => $blockers,
@@ -330,7 +334,7 @@ class CheckoutPricer
         $meta = ['blockers' => $blockers];
 
         if ($first['code'] === CashLimit::CODE) {
-            $meta += ['cash_max_total' => $first['cash_max_total'], 'total' => $first['total']];
+            $meta += ['cash_max_total' => $first['cash_max_total'], 'total' => $first['total'], 'open_cash_total' => $first['open_cash_total'] ?? 0.0];
         }
 
         return new ApiException($first['code'], $first['message'], 422, meta: $meta);

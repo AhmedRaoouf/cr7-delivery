@@ -60,18 +60,19 @@ final class PaymentMethods
      * `enabled` keeps its D-109 meaning (switched on at `ADM-46`, so `true` on every row
      * listed) because an installed app filters the picker on it. `available` is the new
      * answer for this basket and this account, and `reason` says why not:
-     * `above_cash_limit` (the basket is over `payment.cash_max_total`) or
+     * `above_cash_limit` (the basket, with [openCash] already under way, is over
+     * `payment.cash_max_total`) or
      * `cash_only_restricted` (the account is held to cash, `users.cash_only_until`).
      *
      * @return list<array<string, mixed>>
      */
-    public static function offeredFor(float $total, ?User $user = null): array
+    public static function offeredFor(float $total, ?User $user = null, float $openCash = 0.0): array
     {
         $cashOnly = $user?->cash_only_until !== null && $user->cash_only_until->isFuture();
 
-        return array_map(static function (array $method) use ($total, $cashOnly) {
+        return array_map(static function (array $method) use ($total, $cashOnly, $openCash) {
             $reason = match (true) {
-                $method['value'] === PaymentMethod::Cash->value && ! CashLimit::allows($total) => CashLimit::REASON,
+                $method['value'] === PaymentMethod::Cash->value && ! CashLimit::allows($total, $openCash) => CashLimit::REASON,
                 $method['value'] !== PaymentMethod::Cash->value && $cashOnly => 'cash_only_restricted',
                 default => null,
             };

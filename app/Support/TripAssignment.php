@@ -110,7 +110,10 @@ final class TripAssignment
                 'actor_id' => $actorId,
                 'reason_code' => $history['reason_code'] ?? null,
                 'note' => $history['note'] ?? null,
-                'meta' => $history['meta'] ?? null,
+                // doc 100 — the captain this row handed the order to. A captain's own
+                // «قبول» names him as the actor; the basket, auto-assign and the office
+                // did not, so an earlier captain on the order's stage times had no name.
+                'meta' => [...($history['meta'] ?? []), 'driver_id' => $driver->id],
             ]);
 
             $group = $order->orderGroup;

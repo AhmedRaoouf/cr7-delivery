@@ -6,6 +6,7 @@ use App\Http\Resources\Shared\PaymentProofResource;
 use App\Support\AutoAssign;
 use App\Support\Amendments\AmendmentPayload;
 use App\Support\OrderParties;
+use App\Support\OrderStages;
 use App\Support\RefundPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -22,6 +23,10 @@ class OrderResource extends JsonResource
             'user' => $this->whenLoaded('user'),
             'items' => $this->whenLoaded('items'),
             'timeline' => $this->whenLoaded('statusHistory'),
+            // doc 100 — the time of every stage, worked out once here so the web and the
+            // app show the same seconds: `stages` in the order they happened, the captains
+            // taken off it before the current one, and the durations between stages.
+            ...($this->resource->relationLoaded('statusHistory') ? self::stageBlocks($this->resource) : []),
             'attempts' => $this->whenLoaded('driverAttempts'),
             'refunds' => $this->whenLoaded('refunds'),
             // doc 99 D-172 — every change proposed to this order, newest first.
@@ -56,6 +61,19 @@ class OrderResource extends JsonResource
                 // its sub-orders — which is right: there was one transfer.
                 'receipts' => PaymentProofResource::forAdmin($this->orderGroup->payment?->proofs ?? []),
             ]),
+        ];
+    }
+
+    /** @return array{stages: list<array<string, mixed>>, earlier_captains: list<array<string, mixed>>, durations: array<string, int|null>, stages_timezone: string} */
+    private static function stageBlocks(\App\Models\Order $order): array
+    {
+        $blocks = OrderStages::for($order);
+
+        return [
+            'stages' => $blocks['stages'],
+            'earlier_captains' => $blocks['earlier_captains'],
+            'durations' => $blocks['durations'],
+            'stages_timezone' => $blocks['timezone'],
         ];
     }
 }

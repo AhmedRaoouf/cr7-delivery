@@ -301,10 +301,12 @@ class ProductGalleryTest extends TestCase
         $a = $this->stored();
         $product = $this->productWith($place, [$a]);
 
-        $this->patchProduct($place, $product, ['price' => 77])->assertOk();
+        $this->patchProduct($place, $product, ['price' => 77, 'name_ar' => 'اسم جديد'])->assertOk();
 
         $this->assertSame([$a], $this->gallery($product));
-        $this->assertSame('77.00', $product->fresh()->price);
+        // doc 99 §1 — the name saved; the price waits for the office.
+        $this->assertSame('اسم جديد', $product->fresh()->name_ar);
+        $this->assertSame('50.00', $product->fresh()->price);
     }
 
     public function test_a_stale_expected_version_on_the_replace_path_is_refused_and_no_file_is_left_behind(): void

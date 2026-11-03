@@ -82,6 +82,11 @@ return Application::configure(basePath: dirname(__DIR__))
             SetLocaleFromHeader::class,
         ]);
 
+        // Force update — 426 for a phone app below the platform minimum (class docblock).
+        $middleware->api(append: [
+            \App\Http\Middleware\EnforceMinimumAppVersion::class,
+        ]);
+
         // Batch 67 — every response from this origin, including the ones no route
         // produced (404, 405) and the exception pages. See the class.
         $middleware->append(SecurityHeaders::class);

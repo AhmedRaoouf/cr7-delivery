@@ -401,9 +401,13 @@ class SettingsPanelCoverageTest extends TestCase
      */
     public function test_a_setting_nothing_enforces_says_so_and_only_while_that_is_true(): void
     {
-        $enforced = $this->sourceMentions(["'maintenance'", "'force_update'"], ['app/Http/Middleware', 'bootstrap']);
+        $enforcedKeys = [
+            'app.maintenance_mode' => $this->sourceMentions(["'maintenance'"], ['app/Http/Middleware', 'bootstrap']),
+            'app.force_update.android_min_version' => $this->sourceMentions(["'force_update'"], ['app/Http/Middleware', 'bootstrap']),
+            'app.force_update.ios_min_version' => $this->sourceMentions(["'force_update'"], ['app/Http/Middleware', 'bootstrap']),
+        ];
 
-        foreach (['app.maintenance_mode', 'app.force_update.android_min_version', 'app.force_update.ios_min_version'] as $key) {
+        foreach ($enforcedKeys as $key => $enforced) {
             $helper = (string) (SettingsCatalog::field($key)['helper_ar'] ?? '');
             $saysUnenforced = str_starts_with($helper, 'لا يُطبَّق بعد');
 

@@ -182,6 +182,8 @@ class SettingsSeeder extends Seeder
 
             'app.force_update.android_min_version' => ['1.0.0', 'app'],
             'app.force_update.ios_min_version' => ['1.0.0', 'app'],
+            'app.force_update.store_url_android' => ['https://play.google.com/store/apps/details?id=com.cr7delivery.cr7_delivery', 'app'],
+            'app.force_update.store_url_ios' => ['https://apps.apple.com/app/id6815852436', 'app'],
             'app.maintenance_mode' => [false, 'app'],
         ];
 

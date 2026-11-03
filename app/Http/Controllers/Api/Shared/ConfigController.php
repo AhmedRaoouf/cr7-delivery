@@ -38,8 +38,8 @@ class ConfigController extends Controller
             'force_update' => [
                 'android_min' => $settings->get('app.force_update.android_min_version', '1.0.0'),
                 'ios_min' => $settings->get('app.force_update.ios_min_version', '1.0.0'),
-                'store_url_android' => null,
-                'store_url_ios' => null,
+                'store_url_android' => \App\Http\Middleware\EnforceMinimumAppVersion::storeUrl('android'),
+                'store_url_ios' => \App\Http\Middleware\EnforceMinimumAppVersion::storeUrl('ios'),
             ],
             'maintenance' => [
                 'enabled' => (bool) $settings->get('app.maintenance_mode', false),

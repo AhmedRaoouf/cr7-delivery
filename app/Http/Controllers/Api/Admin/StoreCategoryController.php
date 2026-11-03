@@ -11,7 +11,6 @@ use App\Http\Resources\Shared\StoreCategoryResource;
 use App\Models\StoreCategory;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
-use App\Support\FileUploader;
 use App\Support\Http\PublicCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,6 +67,11 @@ class StoreCategoryController extends Controller
     public function update(UpdateStoreCategoryRequest $request, StoreCategory $storeCategory): JsonResponse
     {
         $data = $request->validated();
+
+        // doc 99 §8 — a cleared layout field keeps the stored layout (the column is NOT NULL).
+        if (array_key_exists('product_layout', $data) && $data['product_layout'] === null) {
+            unset($data['product_layout']);
+        }
 
         if (array_key_exists('slug', $data) && $data['slug'] !== null) {
             $data['slug'] = $this->uniqueSlug($data['slug'], $storeCategory->id);

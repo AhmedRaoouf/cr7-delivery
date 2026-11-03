@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\PlaceGroupController;
 use App\Http\Controllers\Api\Admin\PlaceOrderController;
+use App\Http\Controllers\Api\Admin\PriceRequestController as AdminPriceRequestController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductGalleryController;
 use App\Http\Controllers\Api\Admin\ProductOptionController;
@@ -78,6 +79,7 @@ use App\Http\Controllers\Api\Restaurant\ComplaintController as RestaurantComplai
 use App\Http\Controllers\Api\Restaurant\DirectOrderController as RestaurantDirectOrderController;
 use App\Http\Controllers\Api\Restaurant\MediaPickerController as RestaurantMediaPickerController;
 use App\Http\Controllers\Api\Restaurant\OrderController as RestaurantOrderController;
+use App\Http\Controllers\Api\Restaurant\PriceRequestController as RestaurantPriceRequestController;
 use App\Http\Controllers\Api\Restaurant\ProductController as RestaurantProductController;
 use App\Http\Controllers\Api\Restaurant\ProductGalleryController as RestaurantProductGalleryController;
 use App\Http\Controllers\Api\Restaurant\ProductOptionController as RestaurantProductOptionController;
@@ -273,6 +275,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/scheduled-orders/{scheduledOrder}', [CustomerScheduledOrderController::class, 'show']);
         Route::delete('/scheduled-orders/{scheduledOrder}', [CustomerScheduledOrderController::class, 'destroy']);
         Route::get('/orders', [OrderController::class, 'index']);
+        // doc 99 §6–§7 — the home's rating card and «اطلب مرة أخرى» rail. Declared before
+        // `/orders/{orderGroup}` (which only takes digits anyway).
+        Route::get('/orders/rating-due', [OrderController::class, 'ratingDue']);
+        Route::get('/orders/reorder-suggestions', [OrderController::class, 'reorderSuggestions']);
         Route::get('/orders/{orderGroup}', [OrderController::class, 'show']);
         Route::get('/orders/{orderGroup}/tracking', [OrderController::class, 'tracking']);
         Route::get('/orders/{orderGroup}/confirmation', [OrderController::class, 'confirmation']);
@@ -281,6 +287,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{orderGroup}/cancel', [OrderController::class, 'cancel']);
         Route::post('/orders/{orderGroup}/reorder', [OrderController::class, 'reorder']);
         Route::post('/orders/{orderGroup}/ratings', [OrderController::class, 'ratings']);
+        // «لاحقًا» — remembered on the server, so the customer's other phone does not ask again.
+        Route::post('/orders/{orderGroup}/ratings/dismiss', [OrderController::class, 'dismissRating']);
 
         Route::get('/orders/{orderGroup}/payment', [PaymentController::class, 'show']);
         Route::post('/orders/{orderGroup}/payment/proof', [PaymentController::class, 'submitProof']);
@@ -424,6 +432,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/option-groups/{optionGroup}/options', [RestaurantProductOptionController::class, 'store']);
         Route::patch('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'update']);
         Route::delete('/option-groups/{optionGroup}/options/{option}', [RestaurantProductOptionController::class, 'destroy']);
+
+        // doc 99 §1 — D-169: the prices waiting for the office, and the answers.
+        Route::get('/price-requests', [RestaurantPriceRequestController::class, 'index']);
+        Route::delete('/price-requests/{priceRequest}', [RestaurantPriceRequestController::class, 'destroy']);
 
         // Read-only: a scheduled basket has nothing to accept yet.
         Route::get('/scheduled-orders', [RestaurantScheduledOrderController::class, 'index']);
@@ -641,6 +653,14 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:products.view')->scopeBindings()->group(function () {
             Route::get('/products/{product}/option-groups', [ProductOptionGroupController::class, 'index']);
             Route::get('/option-groups/{optionGroup}/options', [ProductOptionController::class, 'index']);
+        });
+
+        // doc 99 §1 — D-169, `ADM-60` موافقات الأسعار.
+        Route::middleware('permission:products.approve_prices')->group(function () {
+            Route::get('/price-requests', [AdminPriceRequestController::class, 'index']);
+            Route::get('/price-requests/{priceRequest}', [AdminPriceRequestController::class, 'show']);
+            Route::post('/price-requests/{priceRequest}/approve', [AdminPriceRequestController::class, 'approve']);
+            Route::post('/price-requests/{priceRequest}/reject', [AdminPriceRequestController::class, 'reject']);
         });
 
         Route::middleware('permission:products.update')->scopeBindings()->group(function () {

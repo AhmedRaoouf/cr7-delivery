@@ -44,7 +44,37 @@ class Restaurant extends Model
             'is_featured' => 'boolean',
             'direct_orders_enabled' => 'boolean',
             'is_24_7' => 'boolean',
+            'first_published_at' => 'datetime',
         ];
+    }
+
+    /**
+     * doc 99 §5 — D-173: the first time a place is saved active it is «published», and
+     * that moment is never moved again. Switching it off and on, renaming it or changing
+     * its picture leave it alone, so the welcome rating cannot be had twice.
+     *
+     * A new row with no `is_active` at all is active (the column defaults to true).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Restaurant $restaurant): void {
+            // A row loaded with a partial select says nothing about either column.
+            if ($restaurant->exists && ! array_key_exists('first_published_at', $restaurant->getAttributes())) {
+                return;
+            }
+
+            if ($restaurant->getAttribute('first_published_at') !== null) {
+                return;
+            }
+
+            $active = $restaurant->exists
+                ? $restaurant->getAttribute('is_active')
+                : ($restaurant->getAttribute('is_active') ?? true);
+
+            if ($active) {
+                $restaurant->first_published_at = now();
+            }
+        });
     }
 
     /** A cleared field on the form means «no surcharge», and the column is NOT NULL. */

@@ -35,12 +35,14 @@ class PlaceOrderTest extends TestCase
         $this->seedLocation();
         $this->seed([PermissionsSeeder::class, RolesSeeder::class, SettingsSeeder::class]);
 
+        // Established places: a place inside its welcome (doc 99 §5) ranks at its shown 5.0,
+        // which `WelcomeRatingTest` covers. These tests are about the operator's order.
         $this->a = $this->makeRestaurant('أ');
         $this->b = $this->makeRestaurant('ب');
         $this->c = $this->makeRestaurant('ج');
-        $this->a->forceFill(['rating_avg' => 3.0, 'orders_count' => 50])->save();
-        $this->b->forceFill(['rating_avg' => 4.9, 'orders_count' => 5])->save();
-        $this->c->forceFill(['rating_avg' => 4.0, 'orders_count' => 500])->save();
+        $this->a->forceFill(['rating_avg' => 3.0, 'orders_count' => 50, 'first_published_at' => now()->subYear()])->save();
+        $this->b->forceFill(['rating_avg' => 4.9, 'orders_count' => 5, 'first_published_at' => now()->subYear()])->save();
+        $this->c->forceFill(['rating_avg' => 4.0, 'orders_count' => 500, 'first_published_at' => now()->subYear()])->save();
     }
 
     private function admin(AdminScopeType $scope = AdminScopeType::Global): User

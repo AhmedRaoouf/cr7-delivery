@@ -28,6 +28,8 @@ class UpdateStoreCategoryRequest extends FormRequest
             'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['nullable', 'boolean'],
+            // doc 99 §8 — D-176.
+            'product_layout' => ['sometimes', 'nullable', 'in:list,grid'],
         ];
     }
 }

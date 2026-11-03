@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Driver;
 use App\Models\Order;
+use App\Support\Catalog\RatingBadge;
 
 /**
  * D-101 — everyone on an order sees everyone on it, in one shape.
@@ -208,6 +209,8 @@ final class OrderParties
             'latitude' => $restaurant->latitude === null ? null : (float) $restaurant->latitude,
             'longitude' => $restaurant->longitude === null ? null : (float) $restaurant->longitude,
             'logo' => $restaurant->logo,
+            // doc 99 §6 — the rating beside the name wherever a customer reads it.
+            'rating_badge' => RatingBadge::for($restaurant),
         ];
     }
 

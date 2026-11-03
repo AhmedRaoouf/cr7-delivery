@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
+use App\Support\Catalog\RatingBadge;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -40,7 +41,7 @@ class SearchController extends Controller
         // `serviceZone` and `openingHours` are what `RestaurantResource` reads per card —
         // the fee, the ETA and «مفتوح الآن» — and each was a query per row (batch 68).
         $query = Restaurant::query()
-            ->with(['serviceZone', 'openingHours'])
+            ->with(['serviceZone', 'openingHours', 'storeCategory'])
             ->where('is_active', true)
             ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId));
 
@@ -50,7 +51,7 @@ class SearchController extends Controller
 
         return $query
             ->orderBy(ArabicSearch::rank('name_ar', $search))
-            ->orderByDesc('rating_avg')
+            ->tap(fn ($q) => RatingBadge::orderByShown($q, 'desc'))
             ->limit(self::RESTAURANT_LIMIT)
             ->get();
     }
@@ -61,7 +62,7 @@ class SearchController extends Controller
         $query = Product::query()
             ->where('is_available', true)
             ->onMenu()
-            ->with(['restaurant:id,name_ar,name_en,is_active', 'optionGroups.options'])
+            ->with(['restaurant:id,name_ar,name_en,logo,is_active,rating_avg,rating_count,first_published_at', 'optionGroups.options'])
             ->whereHas('restaurant', fn ($q) => $q->where('is_active', true));
 
         ArabicSearch::apply($query, ['name_ar', 'name_en', 'description_ar', 'description_en'], $tokens);

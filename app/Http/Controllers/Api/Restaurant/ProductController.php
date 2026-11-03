@@ -9,7 +9,7 @@ use App\Http\Requests\Restaurant\StoreRestaurantProductRequest;
 use App\Models\Product;
 use App\Support\ApiResponse;
 use App\Support\Catalog\MenuWriter;
-use App\Support\Http\PublicCache;
+use App\Support\Catalog\PriceApproval;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +26,7 @@ class ProductController extends Controller
         $params = $this->listParams($request);
         $sort = $params->sort(['sort_order', 'name', 'price', 'sold_count', 'created_at'], 'sort_order');
 
-        $query = $restaurant->products()->getQuery()->with('optionGroups.options');
+        $query = $restaurant->products()->getQuery()->with(['optionGroups.options', 'openPriceRequest', 'recentPriceDecision']);
 
         $this->whereInList($query, 'products.menu_category_id', $params->ids('menu_category_id'));
 
@@ -41,7 +41,7 @@ class ProductController extends Controller
         ListSearch::apply($query, $params->search(), ['names' => ['name_ar', 'name_en']]);
 
         $products = $sort->apply($query, ['name' => 'products.name_ar'])->paginate($params->perPage(30));
-        $products->getCollection()->each->withGalleryMeta();
+        $products->getCollection()->each(fn (Product $product) => $product->withGalleryMeta()->withPriceReview());
 
         return $this->paginated($products, sort: $sort);
     }
@@ -50,25 +50,54 @@ class ProductController extends Controller
     {
         $this->ensureOwned($request, $product);
 
-        return ApiResponse::success($product->load('optionGroups.options')->withGalleryMeta());
+        return ApiResponse::success($product->load('optionGroups.options')->withGalleryMeta()->withPriceReview());
     }
 
     public function store(StoreRestaurantProductRequest $request): JsonResponse
     {
         $restaurant = $request->user()->restaurant()->firstOrFail();
 
-        $product = $this->createProductWithGallery($restaurant, $request, $request->validated());
+        // doc 99 §1 — a new dish has no «before»: its price goes live as it always did.
+        $data = $request->validated();
+        unset($data['price_note']);
 
-        return ApiResponse::success($product->withGalleryMeta(), 'تم إنشاء المنتج بنجاح', status: 201);
+        $product = $this->createProductWithGallery($restaurant, $request, $data);
+
+        return ApiResponse::success($product->withGalleryMeta()->withPriceReview(), 'تم إنشاء المنتج بنجاح', status: 201);
     }
 
     public function update(StoreRestaurantProductRequest $request, Product $product): JsonResponse
     {
         $this->ensureOwned($request, $product);
 
-        $product = $this->updateProductWithGallery($request, $product, $request->validated());
+        $data = $request->validated();
+        $note = $data['price_note'] ?? null;
+        unset($data['price_note']);
 
-        return ApiResponse::success($product->fresh()->withGalleryMeta(), 'تم تحديث المنتج بنجاح');
+        // doc 99 §1 — D-169. Every other field saves now; a changed price waits for the
+        // office and never touches `products` until it is approved.
+        $change = null;
+
+        if (PriceApproval::enabled()) {
+            $change = PriceApproval::productChange($product, $data);
+            unset($data['price'], $data['discount_price']);
+        }
+
+        $product = $this->updateProductWithGallery($request, $product, $data);
+
+        $filed = $change === null ? null : PriceApproval::file($product, $request->user(), $change, note: $note);
+
+        $payload = $product->fresh()->withGalleryMeta()->withPriceReview();
+
+        if ($filed === null) {
+            return ApiResponse::success($payload, 'تم تحديث المنتج بنجاح');
+        }
+
+        return ApiResponse::success(
+            $payload,
+            'أُرسل السعر الجديد إلى الإدارة للمراجعة، وسيظهر للعملاء بعد الاعتماد',
+            meta: ['price_request' => $filed['outcome']],
+        );
     }
 
     public function destroy(Request $request, Product $product): JsonResponse
@@ -85,7 +114,7 @@ class ProductController extends Controller
         $validated = $request->validate(['is_available' => ['required', 'boolean']]);
         $product->update($validated);
 
-        return ApiResponse::success($product->fresh(), 'تم تحديث حالة التوفر');
+        return ApiResponse::success($product->fresh()->withPriceReview(), 'تم تحديث حالة التوفر');
     }
 
     public function bulkAvailability(Request $request): JsonResponse

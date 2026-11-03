@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Exceptions\ApiException;
 use App\Models\Setting;
+use App\Support\Catalog\PlaceOrder;
 
 /**
  * D-113 — every key an operator may edit, declared once.
@@ -401,15 +402,42 @@ final class SettingsCatalog
             [
                 // Doc 87 — also edited, with the pinned places, on «ترتيب الأماكن».
                 'key' => 'catalog',
-                'title_ar' => 'ترتيب الأماكن',
-                'title_en' => 'Place order',
+                'title_ar' => 'الأماكن والأسعار',
+                'title_en' => 'Places and prices',
                 'fields' => [
                     [
                         'key' => 'catalog.places_order', 'type' => 'enum', 'default' => 'featured',
                         'label_ar' => 'ترتيب الأماكن في التطبيق', 'label_en' => 'Order of places in the app',
                         'helper_ar' => 'يسري حين لا يختار العميل ترتيبًا بنفسه. الأماكن المثبّتة تظهر قبلها دائمًا.',
                         'helper_en' => 'Applies when the customer has not chosen a sort. Pinned places always come first.',
-                        'options' => \App\Support\Catalog\PlaceOrder::modes(),
+                        'options' => PlaceOrder::modes(),
+                    ],
+                    // doc 99 §1 — D-169.
+                    [
+                        'key' => 'catalog.price_approval_enabled', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'مراجعة أسعار الأماكن قبل ظهورها', 'label_en' => "Review places' prices before they show",
+                        'helper_ar' => 'حين يعدّل مكان سعر صنف أو خيار قائم يُرسل التعديل إلى الإدارة، ويبقى السعر الحالي ظاهرًا للعملاء حتى الاعتماد.',
+                        'helper_en' => 'A place changing the price of an existing dish or option sends it to the office; customers keep seeing the live price until it is approved.',
+                    ],
+                    // doc 99 §5 — D-173.
+                    [
+                        'key' => 'catalog.welcome_rating_enabled', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'تقييم ترحيبي للأماكن الجديدة', 'label_en' => 'Welcome rating for new places',
+                        'helper_ar' => 'يظهر المكان الجديد بتقييم ‪5.0‬ حتى تنتهي المدة أو يكتمل عدد التقييمات، ولا تُكتب أي تقييمات وهمية.',
+                        'helper_en' => 'A new place shows 5.0 until the period ends or it reaches the rating count. No ratings are written.',
+                    ],
+                    [
+                        'key' => 'catalog.welcome_rating_days', 'type' => 'int', 'default' => 14, 'min' => 1, 'max' => 90,
+                        'suffix_ar' => 'يوم', 'suffix_en' => 'days',
+                        'label_ar' => 'مدة التقييم الترحيبي', 'label_en' => 'Welcome rating period',
+                        'helper_ar' => 'تُحسب من أول تفعيل للمكان، ولا يعيدها إيقاف المكان ثم تشغيله.',
+                        'helper_en' => 'Counted from the first time the place was switched on; switching it off and on does not restart it.',
+                    ],
+                    [
+                        'key' => 'catalog.welcome_rating_count', 'type' => 'int', 'default' => 20, 'min' => 1, 'max' => 1000,
+                        'label_ar' => 'عدد التقييمات الذي ينهي التقييم الترحيبي', 'label_en' => 'Ratings that end the welcome rating',
+                        'helper_ar' => 'بعده يظهر متوسط التقييمات الحقيقي.',
+                        'helper_en' => 'After it, the real average shows.',
                     ],
                 ],
             ],

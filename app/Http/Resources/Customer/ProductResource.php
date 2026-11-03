@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Customer;
 
 use App\Support\Catalog\OptionSelection;
+use App\Support\Catalog\RatingBadge;
 use App\Support\Locale;
 use App\Support\Media\MediaLibrary;
 use Illuminate\Http\Request;
@@ -35,6 +36,8 @@ class ProductResource extends JsonResource
             // Doc 82 — a cuisine's list is dishes from every place, so the row carries
             // the place's mark beside its name.
             'restaurant_logo' => $this->whenLoaded('restaurant', fn () => $this->restaurant->logo),
+            // doc 99 §6 — a row that names its place carries the place's rating beside it.
+            'restaurant_rating_badge' => $this->whenLoaded('restaurant', fn () => RatingBadge::for($this->restaurant)),
             'cuisine_id' => $this->cuisine_id,
             // FR-MENU-08 — «+» on a list row may not add a dish that still has a
             // choice to make; it has to open `CUS-15` instead. The app decided

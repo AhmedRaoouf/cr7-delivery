@@ -11,6 +11,7 @@ use App\Models\ServiceZone;
 use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
 use App\Support\Catalog\PlaceOrder;
+use App\Support\Catalog\RatingBadge;
 use App\Support\Lists\ListParams;
 use App\Support\Locale;
 use App\Support\MenuCategoryIcon;
@@ -71,7 +72,8 @@ class RestaurantController extends Controller
                 ->whereHas('products', fn ($pq) => $pq->where('products.cuisine_id', $cuisineId)
                     ->where('products.is_available', true)->onMenu())
                 ->orWhereHas('cuisines', fn ($cq) => $cq->where('cuisines.id', $cuisineId))))
-            ->when(($filter['min_rating'] ?? null) !== null, fn ($q) => $q->where('rating_avg', '>=', (float) $filter['min_rating']))
+            // doc 99 §5 — the shown value: a place in its welcome passes a 4-star filter.
+            ->when(($filter['min_rating'] ?? null) !== null, fn ($q) => RatingBadge::whereShownAtLeast($q, (float) $filter['min_rating']))
             ->when($filter['free_delivery'] ?? null, fn ($q) => $q->whereHas(
                 'serviceZone',
                 fn ($zq) => $zq->whereNotNull('free_delivery_over'),
@@ -99,8 +101,9 @@ class RestaurantController extends Controller
             // preset on the admin panel). A sort the customer picked is theirs, whole.
             ->when(PlaceOrder::isRequested($request), fn ($q) => PlaceOrder::apply($q), function ($q) use ($request, $lat, $lng) {
                 match ($request->string('sort')->value()) {
-                    '-rating_avg' => $q->orderByDesc('rating_avg'),
-                    'rating_avg' => $q->orderBy('rating_avg'),
+                    // «الأعلى تقييمًا» ranks the value the customer sees (doc 99 §5).
+                    '-rating_avg' => RatingBadge::orderByShown($q, 'desc'),
+                    'rating_avg' => RatingBadge::orderByShown($q, 'asc'),
                     // «الأكثر طلبًا»
                     '-orders_count', 'popular' => $q->orderByDesc('orders_count'),
                     // «الأسرع» — the zone's own average, not a guess per restaurant.

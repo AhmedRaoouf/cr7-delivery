@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Support\Catalog\RatingBadge;
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\OrderParties;
@@ -71,6 +72,8 @@ class OrderGroupDetailResource extends JsonResource
                     'latitude' => $order->restaurant->latitude === null ? null : (float) $order->restaurant->latitude,
                     'longitude' => $order->restaurant->longitude === null ? null : (float) $order->restaurant->longitude,
                     'logo' => $order->restaurant->logo,
+                    // doc 99 §6 — the rating beside the name.
+                    'rating_badge' => RatingBadge::for($order->restaurant),
                 ],
                 // D-101 — the same three blocks every party reads, trimmed to the customer.
                 'place' => OrderParties::place($order),

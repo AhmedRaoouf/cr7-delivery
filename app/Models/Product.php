@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
@@ -62,6 +63,48 @@ class Product extends Model
     public function withGalleryMeta(): static
     {
         return $this->append(['gallery_items', 'gallery_version']);
+    }
+
+    /** D-169 — the request the office has not answered yet (at most one, by a unique key). */
+    public function openPriceRequest(): HasOne
+    {
+        return $this->hasOne(ProductPriceRequest::class)->where('status', ProductPriceRequest::PENDING);
+    }
+
+    /** D-169 — the latest approved or rejected request of the last 14 days. */
+    public function recentPriceDecision(): HasOne
+    {
+        return $this->hasOne(ProductPriceRequest::class)->ofMany(
+            ['reviewed_at' => 'max', 'id' => 'max'],
+            fn (Builder $query) => $query
+                ->whereIn('product_price_requests.status', [ProductPriceRequest::APPROVED, ProductPriceRequest::REJECTED])
+                ->where('product_price_requests.reviewed_at', '>=', now()->subDays(14)),
+        );
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getPendingPriceRequestAttribute(): ?array
+    {
+        return $this->openPriceRequest?->toPlaceSummary();
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getLastPriceDecisionAttribute(): ?array
+    {
+        return $this->recentPriceDecision?->toDecisionSummary();
+    }
+
+    /**
+     * doc 99 §1 — publish `pending_price_request` and `last_price_decision` on this
+     * instance's JSON (every product payload the place reads). The relations behind them
+     * are hidden: the payload carries the summaries, never the raw rows.
+     */
+    public function withPriceReview(): static
+    {
+        $this->loadMissing(['openPriceRequest', 'recentPriceDecision']);
+        $this->makeHidden(['openPriceRequest', 'recentPriceDecision']);
+
+        return $this->append(['pending_price_request', 'last_price_decision']);
     }
 
     /**

@@ -298,6 +298,15 @@ class NotificationCopy
             'ar' => ['🔔 طلب جديد {order_number}', '{items} أصناف · حساب المكان {total} · {payment}'],
             'en' => ['🔔 New order {order_number}', '{items} items · your share {total} · {payment}'],
         ],
+        // doc 99 §1 — D-169: the office's answer to a place's price change.
+        'price_request.approved' => [
+            'ar' => ['تم اعتماد السعر الجديد', 'أصبح السعر الجديد لـ«{product}» ظاهرًا للعملاء'],
+            'en' => ['New price approved', 'The new price of "{product}" is now shown to customers'],
+        ],
+        'price_request.rejected' => [
+            'ar' => ['لم يُعتمد السعر الجديد', 'رفضت الإدارة تعديل سعر «{product}»: {reason}'],
+            'en' => ['New price not approved', 'The office declined the price change for "{product}": {reason}'],
+        ],
         // D-104 — the counter, from both sides.
         'settlement.recorded' => [
             'ar' => ['تمت تسوية حسابك', '{summary} — {balance}'],
@@ -348,6 +357,11 @@ class NotificationCopy
         'errand.no_driver_admin' => [
             'ar' => ['مشوار بلا كابتن منذ {minutes} دقيقة', '{reference} — {pickup} ← {dropoff} · العميل يعرض {fee}'],
             'en' => ['Errand unclaimed for {minutes} min', '{reference} — {pickup} → {dropoff} · offer {fee}'],
+        ],
+        // doc 99 §1 — D-169: a place's price change waits for the office.
+        'price_request.new_admin' => [
+            'ar' => ['سعر جديد بانتظار الموافقة', 'يطلب {restaurant} تعديل سعر «{product}»'],
+            'en' => ['A new price is waiting for approval', '{restaurant} asks to change the price of "{product}"'],
         ],
         // Batch 68 — the platform's SMS budget (`OtpBudget`). Once a day each.
         'sms.budget_warning_admin' => [

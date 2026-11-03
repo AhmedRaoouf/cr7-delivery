@@ -10,17 +10,19 @@ use App\Models\Driver;
 use App\Models\ErrandRequest;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\ProductPriceRequest;
 use App\Models\Setting;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\Catalog\PriceApproval;
 use App\Support\DriverTrip;
 use App\Support\Lists\ListParams;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /** doc 08 §7 — dashboard & alerts. */
 class DashboardController extends Controller
@@ -66,6 +68,10 @@ class DashboardController extends Controller
                 + (float) (clone $orders)->sum('cancellation_fee'),
             'active_orders' => (clone $orders)->whereNotIn('status', ['delivered', 'cancelled'])->count(),
             'online_drivers' => AdminScope::applyToDrivers(Driver::query(), $request->user())->where('is_online', true)->count(),
+            // doc 99 §1 — D-169: prices waiting for the office, now (not in the date range).
+            'pending_price_requests' => $this->canReviewPrices($request)
+                ? PriceRequestController::pendingQuery($request)->count()
+                : 0,
         ]);
     }
 
@@ -119,6 +125,7 @@ class DashboardController extends Controller
             'payments_to_verify' => $counts['payment_review'],
             'errands_unclaimed' => $counts['errand_unclaimed'],
             'complaints_open' => $counts['complaint_open'],
+            'price_reviews' => $counts['price_review'],
         ]);
     }
 
@@ -238,8 +245,29 @@ class DashboardController extends Controller
                 'receipts' => [],
             ]);
 
+        // doc 99 §1 — D-169: a place's price change the office has not answered. Only for
+        // an operator who may answer it; the rest would tap into a 403.
+        $prices = ! $this->canReviewPrices($request) ? collect() : PriceRequestController::pendingQuery($request)
+            ->whereKeyNot($this->dismissedIds($request, 'price_review'))
+            ->with(['product', 'restaurant:id,name_ar'])
+            ->oldest()
+            ->limit(self::ALERT_LIMIT)
+            ->get()
+            ->map(fn (ProductPriceRequest $row) => [
+                'kind' => 'price_review',
+                'id' => $row->id,
+                'title' => 'سعر جديد بانتظار الموافقة',
+                'reference' => $row->product?->name_ar,
+                'order_group_id' => null,
+                'amount' => PriceApproval::effectivePrices($row)['requested'],
+                'restaurant' => $row->restaurant?->name_ar,
+                'created_at' => $row->created_at,
+                'href' => '/price-requests/'.$row->id,
+                'receipts' => [],
+            ]);
+
         $items = $payments->concat($stranded)->concat($timedOut)->concat($issues)
-            ->concat($errands)->concat($complaints);
+            ->concat($errands)->concat($complaints)->concat($prices);
 
         /*
          * The counts are the **true** totals, not `$items->count()`.
@@ -276,7 +304,7 @@ class DashboardController extends Controller
     public function dismissAlert(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'kind' => ['required', 'in:payment_review,no_driver,restaurant_timeout,delivery_issue,errand_unclaimed,complaint_open'],
+            'kind' => ['required', 'in:payment_review,no_driver,restaurant_timeout,delivery_issue,errand_unclaimed,complaint_open,price_review'],
             'id' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -293,7 +321,7 @@ class DashboardController extends Controller
     /**
      * The four open-alert counts, scoped to the operator (D-50).
      *
-     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int, errand_unclaimed:int, complaint_open:int}
+     * @return array{payment_review:int, no_driver:int, restaurant_timeout:int, delivery_issue:int, errand_unclaimed:int, complaint_open:int, price_review:int}
      */
     private function alertCounts(Request $request): array
     {
@@ -312,7 +340,20 @@ class DashboardController extends Controller
             // Batch 67 — scoped through the linked order, else the reporter
             // (`AdminScope::applyToComplaints`); a global operator still sees them all.
             'complaint_open' => AdminScope::applyToComplaints(Complaint::query(), $request->user())->awaitingReply()->whereKeyNot($this->dismissedIds($request, 'complaint_open'))->count(),
+            'price_review' => $this->canReviewPrices($request)
+                ? PriceRequestController::pendingQuery($request)->whereKeyNot($this->dismissedIds($request, 'price_review'))->count()
+                : 0,
         ];
+    }
+
+    /** doc 99 §1 — whether this operator may answer a price request at all. */
+    private function canReviewPrices(Request $request): bool
+    {
+        try {
+            return (bool) $request->user()?->checkPermissionTo('products.approve_prices');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

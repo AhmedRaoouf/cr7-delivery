@@ -274,5 +274,14 @@
     "تم حظر الرقم": "Number blocked",
     "تم رفع الحظر عن الرقم": "Number unblocked",
     "لديك طلب جارٍ. انتظر حتى يكتمل أو ألغِه قبل حذف الحساب.": "You have an order in progress. Wait for it to finish, or cancel it, before deleting your account.",
-    "يتم حذف حسابات الكباتن والمطاعم بطلب مكتوب إلى الدعم — راجع صفحة حذف الحساب.": "Captain and restaurant accounts are deleted by written request to support — see the Delete account page."
+    "يتم حذف حسابات الكباتن والمطاعم بطلب مكتوب إلى الدعم — راجع صفحة حذف الحساب.": "Captain and restaurant accounts are deleted by written request to support — see the Delete account page.",
+    "أُرسل السعر الجديد إلى الإدارة للمراجعة، وسيظهر للعملاء بعد الاعتماد": "The new price was sent to the office for review; customers will see it once it is approved",
+    "تم اعتماد السعر الجديد، وأصبح ظاهرًا للعملاء": "The new price is approved and now shown to customers",
+    "تم رفض السعر الجديد، وأُبلغ المكان بالسبب": "The new price was declined and the place was told why",
+    "تم سحب طلب تعديل السعر، ويبقى السعر الحالي كما هو": "The price change was withdrawn; the current price stays as it is",
+    "تمت معالجة هذا الطلب من قبل": "This request has already been handled",
+    "تم حذف هذا الصنف، ولا يمكن اعتماد سعره": "This dish was deleted, so its price cannot be approved",
+    "سعر الخصم المطلوب لم يعد أقل من سعر الصنف — ارفض الطلب ليرسل المكان سعرًا جديدًا": "The requested discount is no longer below the price — decline the request so the place sends a new one",
+    "سعر الخصم يجب أن يكون أقل من سعر الصنف": "The discount price must be lower than the price",
+    "يمكنك تقييم الطلب لاحقًا من صفحة الطلب": "You can rate the order later from its page"
 }

@@ -52,6 +52,7 @@ class OrderGroup extends Model
             'confirm_deadline_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'completed_at' => 'datetime',
+            'rating_prompt_dismissed_at' => 'datetime',
         ];
     }
 

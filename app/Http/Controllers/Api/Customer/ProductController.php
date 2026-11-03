@@ -37,7 +37,7 @@ class ProductController extends Controller
         }
 
         $products = Product::query()
-            ->with(['restaurant:id,name_ar,name_en', 'optionGroups.options'])
+            ->with(['restaurant:id,name_ar,name_en,logo,rating_avg,rating_count,first_published_at', 'optionGroups.options'])
             ->whereIn('id', $ids)
             ->onMenu()
             ->get();
@@ -71,7 +71,7 @@ class ProductController extends Controller
         // Doc 82 — the dish's own cuisine, not its place's tags: «برجر» lists burgers,
         // not the drinks of a burger place, and finds a burger at a grill house too.
         $products = Product::query()
-            ->with(['restaurant:id,name_ar,name_en,logo', 'optionGroups.options'])
+            ->with(['restaurant:id,name_ar,name_en,logo,rating_avg,rating_count,first_published_at', 'optionGroups.options'])
             ->where('products.cuisine_id', $cuisine->id)
             ->orderableHere()
             ->when($cityId, fn ($q, $id) => $q->whereHas('restaurant', fn ($rq) => $rq->where('city_id', $id)))

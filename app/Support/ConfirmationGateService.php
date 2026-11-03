@@ -5,9 +5,11 @@ namespace App\Support;
 use App\Actions\Customer\ConfirmOrderGroupAction;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
+use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 /**
  * doc 04 §8-9, doc 16 D-40(a) — once every sub-order in a group has answered
@@ -91,7 +93,7 @@ class ConfirmationGateService
      * `ConfirmOrderGroupAction` does when they press «تأكيد», without the round trip.
      * Cash is confirmed; a transfer opens its window on the changed total.
      *
-     * @param  \Illuminate\Support\Collection<int, \App\Models\Order>  $survivors
+     * @param  Collection<int, Order>  $survivors
      */
     private function confirmByApproval(OrderGroup $group, $survivors, bool $isCash): void
     {

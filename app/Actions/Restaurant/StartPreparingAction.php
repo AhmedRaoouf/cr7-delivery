@@ -46,8 +46,14 @@ class StartPreparingAction
         // doc 99 §3 — D-171: with less than the lead left on the countdown the nearest
         // captain is assigned now; otherwise `cr7:tick` does it at `prep_due_at − lead`.
         // The place's answer is still «preparing» — the kitchen is not the captain.
+        // The kitchen's countdown is committed either way; a failure here is retried by the
+        // next tick and must not turn the place's «بدء التحضير» into an error.
         if (AutoAssign::enabled()) {
-            app(AutoAssign::class)->run($order);
+            try {
+                app(AutoAssign::class)->run($order);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('auto-assign at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+            }
         }
 
         return $order;

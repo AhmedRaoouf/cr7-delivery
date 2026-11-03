@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Events\OrderChanged;
 use App\Models\Order;
+use App\Support\Amendments\OrderAmendments;
 use App\Support\DriverTrip;
 use App\Support\Notifications\OrderNotifications;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +60,10 @@ class OrderObserver
         }
 
         $this->refreshTrips($order);
+
+        // doc 99 D-172 — a pending change dies with the `pending` it was proposed on. A row
+        // in the same transaction, like the trip, so it is not wrapped.
+        OrderAmendments::closeOnLeavingPending($order);
 
         $previous = $order->getOriginal('status');
         $previousStatus = match (true) {

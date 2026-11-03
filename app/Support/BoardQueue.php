@@ -49,38 +49,66 @@ class BoardQueue
             && $order->prep_due_at !== null;
     }
 
-    /** The column a card belongs in — its status, unless its food is still in the kitchen. */
+    /**
+     * The column a card belongs in. A `pending` order whose place proposed a change waits
+     * on the customer (doc 99 D-172) and sits in «بانتظار العميل» until it is answered; a
+     * rejected or expired change puts it back in «جديد». An order a captain carries while
+     * its food is still cooking stays in «قيد التحضير» (doc 99 §3). Otherwise its status.
+     */
     public static function forOrder(Order $order): string
     {
+        if ($order->status === OrderStatus::Pending && $order->amendment_status === 'pending') {
+            return 'awaiting_customer';
+        }
+
         return self::kitchenPending($order) ? 'preparing' : self::forStatus($order->status);
     }
 
     /**
      * Narrow a query to the union of these queues. `preparing` also holds the cards whose
-     * captain is already assigned while the kitchen cooks; `with_driver` does not.
+     * captain is already assigned while the kitchen cooks; `with_driver` does not; `new`
+     * leaves out an order whose proposed change waits on the customer, which
+     * `awaiting_customer` holds instead.
      *
-     * @param  Builder<Order>|\Illuminate\Database\Eloquent\Relations\Relation<Order>  $query
+     * @param  Builder<Order>|Relation<Order>  $query
      * @param  list<string>  $queues
+     * @return Builder<Order>|Relation<Order>
      */
-    public static function apply(Builder|Relation $query, array $queues): void
+    public static function apply(Builder|Relation $query, array $queues, string $table = 'orders'): Builder|Relation
     {
-        $query->where(function ($any) use ($queues) {
-            foreach ($queues as $queue) {
-                $statuses = self::QUEUES[$queue] ?? [];
+        $queues = array_values(array_intersect($queues, array_keys(self::QUEUES)));
 
-                $any->orWhere(function ($one) use ($queue, $statuses) {
-                    $one->whereIn('orders.status', $statuses);
+        if ($queues === []) {
+            return $query;
+        }
+
+        $query->where(function ($any) use ($queues, $table) {
+            foreach ($queues as $queue) {
+                $statuses = self::QUEUES[$queue];
+
+                $any->orWhere(function ($one) use ($queue, $statuses, $table) {
+                    $one->whereIn($table.'.status', $statuses);
 
                     if ($queue === 'with_driver') {
                         $one->whereNot(fn ($k) => self::whereKitchenPending($k));
+                    }
+
+                    if ($queue === 'new') {
+                        $one->where(fn ($a) => $a->whereNull($table.'.amendment_status')->orWhere($table.'.amendment_status', '!=', 'pending'));
                     }
                 });
 
                 if ($queue === 'preparing') {
                     $any->orWhere(fn ($k) => self::whereKitchenPending($k));
                 }
+
+                if ($queue === 'awaiting_customer') {
+                    $any->orWhere(fn ($one) => $one->where($table.'.status', OrderStatus::Pending->value)->where($table.'.amendment_status', 'pending'));
+                }
             }
         });
+
+        return $query;
     }
 
     /** @param Builder<Order>|\Illuminate\Database\Query\Builder $query */

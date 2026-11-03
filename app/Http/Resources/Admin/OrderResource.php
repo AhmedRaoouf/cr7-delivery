@@ -4,6 +4,7 @@ namespace App\Http\Resources\Admin;
 
 use App\Http\Resources\Shared\PaymentProofResource;
 use App\Support\AutoAssign;
+use App\Support\Amendments\AmendmentPayload;
 use App\Support\OrderParties;
 use App\Support\RefundPolicy;
 use Illuminate\Http\Request;
@@ -23,6 +24,10 @@ class OrderResource extends JsonResource
             'timeline' => $this->whenLoaded('statusHistory'),
             'attempts' => $this->whenLoaded('driverAttempts'),
             'refunds' => $this->whenLoaded('refunds'),
+            // doc 99 D-172 — every change proposed to this order, newest first.
+            'amendments' => $this->whenLoaded('amendments', fn () => $this->amendments
+                ->sortByDesc('id')->values()
+                ->map(fn ($amendment) => AmendmentPayload::forAdmin($amendment->setRelation('order', $this->resource)))),
             // D-65 — the refund an admin should be offered by default on this order.
             // D-101 — the same three blocks the parties read, and the whole money block,
             // the platform's margin included. The console used to print the guest phone

@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\OrderAmendmentController as AdminOrderAmendmentController;
+use App\Http\Controllers\Api\Customer\OrderAmendmentController as CustomerOrderAmendmentController;
+use App\Http\Controllers\Api\Restaurant\OrderAmendmentController as RestaurantOrderAmendmentController;
 use App\Http\Controllers\Api\Admin\AccountModerationController;
 use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\BannerController as AdminBannerController;
@@ -289,6 +292,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{orderGroup}/ratings', [OrderController::class, 'ratings']);
         // «لاحقًا» — remembered on the server, so the customer's other phone does not ask again.
         Route::post('/orders/{orderGroup}/ratings/dismiss', [OrderController::class, 'dismissRating']);
+        // doc 99 D-172 — a change the place proposed; the customer decides.
+        Route::get('/orders/{orderGroup}/amendment', [CustomerOrderAmendmentController::class, 'show']);
+        Route::post('/orders/{orderGroup}/amendments/{amendment}/accept', [CustomerOrderAmendmentController::class, 'accept'])->middleware('throttle:30,1');
+        Route::post('/orders/{orderGroup}/amendments/{amendment}/reject', [CustomerOrderAmendmentController::class, 'reject'])->middleware('throttle:30,1');
 
         Route::get('/orders/{orderGroup}/payment', [PaymentController::class, 'show']);
         Route::post('/orders/{orderGroup}/payment/proof', [PaymentController::class, 'submitProof']);
@@ -392,6 +399,9 @@ Route::prefix('v1')->group(function () {
         Route::patch('/orders/{order}/prep-time', [RestaurantOrderController::class, 'extendPrepTime']);
         Route::post('/orders/{order}/ready', [RestaurantOrderController::class, 'ready']);
         Route::get('/orders/{order}/pickup-otp', [RestaurantOrderController::class, 'pickupOtp']);
+        // doc 99 D-172 — «اقتراح تعديل», and taking it back.
+        Route::post('/orders/{order}/amendments', [RestaurantOrderAmendmentController::class, 'store']);
+        Route::delete('/orders/{order}/amendments/{amendment}', [RestaurantOrderAmendmentController::class, 'destroy']);
 
         Route::get('/categories', [RestaurantCategoryController::class, 'index']);
         // Doc 77 — PUTs, so `order` never collides with `{category}`'s PATCH/DELETE.
@@ -611,6 +621,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/restaurants/{restaurant}/zones', [RestaurantController::class, 'zones'])->middleware('permission:restaurants.update');
         Route::post('/restaurants/{restaurant}/reset-password', [RestaurantController::class, 'resetPassword'])->middleware('permission:restaurants.reset_password');
         Route::post('/restaurants/{restaurant}/direct-orders', [RestaurantController::class, 'directOrders'])->middleware('permission:restaurants.toggle_direct_orders');
+        Route::post('/restaurants/{restaurant}/amendments', [RestaurantController::class, 'amendments'])->middleware('permission:restaurants.toggle_amendments');
         Route::delete('/restaurants/{restaurant}', [RestaurantController::class, 'destroy'])->middleware('permission:restaurants.update');
 
         // Batch 67 — `scopeBindings()`: the child in the path must belong to the parent in
@@ -766,6 +777,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders/{order}/renotify-restaurant', [AdminOrderController::class, 'renotifyRestaurant'])->middleware('permission:orders.renotify');
         Route::post('/orders/{order}/extend-prep', [AdminOrderController::class, 'extendPrep'])->middleware('permission:orders.extend_prep');
         Route::post('/orders/{order}/notes', [AdminOrderController::class, 'addNote'])->middleware('permission:orders.note');
+        // doc 99 D-172 — a change proposed on the place's behalf; the customer decides.
+        Route::get('/orders/{order}/amendments', [AdminOrderAmendmentController::class, 'index'])->middleware('permission:orders.view');
+        Route::post('/orders/{order}/amendments', [AdminOrderAmendmentController::class, 'store'])->middleware('permission:orders.amend');
+        Route::delete('/orders/{order}/amendments/{amendment}', [AdminOrderAmendmentController::class, 'destroy'])->middleware('permission:orders.amend');
 
         // doc 40 — «اطلب كابتن». Reuses the order permissions rather than minting a
         // parallel set: an operator trusted to reassign a food delivery is the same

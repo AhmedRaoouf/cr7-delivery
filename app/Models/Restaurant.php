@@ -22,7 +22,7 @@ class Restaurant extends Model
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
         'min_order_value', 'delivery_surcharge', 'avg_prep_minutes', 'eta_min_minutes', 'eta_max_minutes',
         'is_open_manual', 'is_active',
-        'is_verified', 'is_featured', 'direct_orders_enabled', 'menu_layout',
+        'is_verified', 'is_featured', 'direct_orders_enabled', 'amendments_enabled', 'menu_layout',
         'store_category_id', 'is_24_7',
         'sort_order', 'price_band', 'tagline_ar', 'tagline_en', 'menu_sheets', 'brand_color',
     ];
@@ -43,6 +43,7 @@ class Restaurant extends Model
             'is_verified' => 'boolean',
             'is_featured' => 'boolean',
             'direct_orders_enabled' => 'boolean',
+            'amendments_enabled' => 'boolean',
             'is_24_7' => 'boolean',
             'first_published_at' => 'datetime',
         ];

@@ -3,6 +3,8 @@
 namespace App\Http\Resources\Customer;
 
 use App\Support\Catalog\RatingBadge;
+use App\Support\Amendments\AmendmentPayload;
+use App\Support\Amendments\AmendmentTimeline;
 use App\Support\LateCancellationFee;
 use App\Support\Locale;
 use App\Support\OrderParties;
@@ -58,6 +60,8 @@ class OrderGroupDetailResource extends JsonResource
             // be, and what it said. `CUS-33` draws its button off `can_rate` and its
             // stars off `rating`.
             ...RatingState::for($this->resource),
+            // doc 99 D-172 — the change waiting on this customer, if any.
+            'pending_amendment' => AmendmentPayload::pendingSummary($this->resource),
             'sub_orders' => $this->whenLoaded('orders', fn () => $this->orders->map(fn ($order) => [
                 'id' => $order->id,
                 'order_number' => $order->order_number,
@@ -131,10 +135,14 @@ class OrderGroupDetailResource extends JsonResource
                     'line_total' => (float) $item->line_total,
                     'note' => $item->note,
                 ]),
-                'timeline' => $order->statusHistory->map(fn ($h) => [
+                'timeline' => AmendmentTimeline::withoutAmendmentRows($order->statusHistory)->map(fn ($h) => [
                     'status' => $h->to_status,
                     'at' => $h->created_at,
-                ]),
+                ])->values(),
+                // doc 99 D-172 — the current change, or the last one, or null.
+                'amendment' => ($amendment = $order->latestAmendment()->first()) === null
+                    ? null
+                    : AmendmentPayload::forCustomer($amendment->setRelation('order', $order)->setRelation('orderGroup', $this->resource), $locale),
             ])),
         ];
     }

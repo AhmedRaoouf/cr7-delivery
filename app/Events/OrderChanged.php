@@ -64,6 +64,7 @@ class OrderChanged implements ShouldBroadcastNow
             cityId: $order->city_id === null ? null : (int) $order->city_id,
             status: $status,
             previousStatus: $previousStatus,
+            // doc 99 D-172 — a pending order with a pending change sits with the customer.
             queue: BoardQueue::forOrder($order),
             previousQueue: $previousQueue ?? ($previousStatus === null ? null : BoardQueue::forStatus($previousStatus)),
         );

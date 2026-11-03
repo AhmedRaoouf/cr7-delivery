@@ -22,6 +22,11 @@ class RejectOrderAction
             throw new ApiException('invalid_transition', 'لا يمكن رفض الطلب في حالته الحالية', 422);
         }
 
+        // doc 99 D-172 — see AcceptOrderAction: the customer is answering a change.
+        if ($order->hasPendingAmendment()) {
+            throw AcceptOrderAction::amendmentPending();
+        }
+
         return DB::transaction(function () use ($user, $order, $reasonCode, $note) {
             $from = $order->status;
 

@@ -14,6 +14,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Restaurant\AcceptOrderRequest;
 use App\Http\Requests\Restaurant\RejectOrderRequest;
 use App\Models\Order;
+use App\Support\Amendments\AmendmentPayload;
+use App\Support\Amendments\OrderAmendments;
 use App\Support\ApiResponse;
 use App\Support\BoardQueue;
 use App\Support\Lists\ListSearch;
@@ -40,11 +42,12 @@ class OrderController extends Controller
         // only `queue` reached the query, so all three were decoration: an operator
         // narrowing to «تم التسليم» in March got the same unfiltered page back.
         $query = $restaurant->orders()->getQuery()
-            ->with(['items.options', ...OrderParties::relations()]);
+            ->with(['items.options', 'latestAmendment', ...OrderParties::relations()]);
 
         // Several queues are the union of their statuses, not an intersection.
         // doc 99 §3 — a card whose captain is assigned while the kitchen still cooks is on
         // «قيد التحضير», not «مع الكابتن»: the queues are not a pure status map any more.
+        // A pending order with a pending change sits in «بانتظار العميل» (doc 99 D-172).
         if (($queues = $params->enum('queue', array_keys(self::QUEUES))) !== []) {
             BoardQueue::apply($query, $queues);
         }
@@ -77,7 +80,11 @@ class OrderController extends Controller
         // D-101 — and each card carries the three parties, so the board and the detail
         // screen read the customer and the captain from the same block.
         $items = array_map(
-            fn (Order $o) => OrderParties::present($o->revealPickupOtp()->withRestaurantMoney(), 'restaurant'),
+            function (Order $o) {
+                $amendment = self::amendmentFields($o);
+
+                return [...OrderParties::present($o->unsetRelation('latestAmendment')->revealPickupOtp()->withRestaurantMoney(), 'restaurant'), ...$amendment];
+            },
             $orders->items(),
         );
 
@@ -106,10 +113,14 @@ class OrderController extends Controller
     {
         $this->ensureOwned($request, $order);
 
-        $order->load(['items.options', 'statusHistory', ...OrderParties::relations()]);
+        $order->load(['items.options', 'statusHistory', 'latestAmendment', ...OrderParties::relations()]);
         $group = $order->orderGroup;
 
-        $payload = OrderParties::present($order->revealPickupOtp()->withRestaurantMoney(), 'restaurant');
+        $amendment = self::amendmentFields($order);
+        $payload = [
+            ...OrderParties::present($order->unsetRelation('latestAmendment')->revealPickupOtp()->withRestaurantMoney(), 'restaurant'),
+            ...$amendment,
+        ];
         $payload['awaiting_customer_payment'] = $group->rollup_status === 'awaiting_payment';
         $payload['payment_deadline_at'] = $group->payment?->deadline_at;
 
@@ -194,6 +205,24 @@ class OrderController extends Controller
         }
 
         return ApiResponse::success(['pickup_otp' => $order->getRawOriginal('pickup_otp')]);
+    }
+
+    /**
+     * doc 99 D-172 — the change this order carries (the current one, or the last one so a
+     * rejected or expired change shows its outcome in «جديد»), the column the card belongs
+     * in, and whether «اقتراح تعديل» may be pressed now.
+     *
+     * @return array{amendment: array<string, mixed>|null, board_queue: string, can_propose_amendment: bool}
+     */
+    private static function amendmentFields(Order $order): array
+    {
+        $amendment = $order->relationLoaded('latestAmendment') ? $order->latestAmendment : $order->latestAmendment()->first();
+
+        return [
+            'amendment' => $amendment === null ? null : AmendmentPayload::forPlace($amendment, $order),
+            'board_queue' => BoardQueue::forOrder($order),
+            'can_propose_amendment' => OrderAmendments::placeMayPropose($order),
+        ];
     }
 
     private function ensureOwned(Request $request, Order $order): void

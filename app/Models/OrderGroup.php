@@ -91,6 +91,17 @@ class OrderGroup extends Model
         return $this->hasMany(Order::class);
     }
 
+    /** doc 99 D-172 — the change waiting on this customer, if any. */
+    public function pendingAmendment(): HasOne
+    {
+        return $this->hasOne(OrderAmendment::class)->ofMany(['id' => 'max'], fn ($q) => $q->where('status', 'pending'));
+    }
+
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(OrderAmendment::class);
+    }
+
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);

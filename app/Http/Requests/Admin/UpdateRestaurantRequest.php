@@ -43,6 +43,8 @@ class UpdateRestaurantRequest extends FormRequest
             // publishes a single figure rather than a range — «‎35‎ دقيقة».
             'eta_min_minutes' => ['nullable', 'integer', 'min:1', 'max:240'],
             'eta_max_minutes' => ['nullable', 'integer', 'min:1', 'max:240', 'gte:eta_min_minutes'],
+            // doc 99 D-172 — authorised in the controller (`restaurants.toggle_amendments`).
+            'amendments_enabled' => ['nullable', 'boolean'],
             'menu_layout' => ['nullable', 'in:list,pager'],
             'sort_order' => ['nullable', 'integer'],
             'cuisine_ids' => ['nullable', 'array'],

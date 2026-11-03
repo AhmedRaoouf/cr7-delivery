@@ -11,6 +11,7 @@ use App\Enums\PaymentMethod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
@@ -44,6 +45,8 @@ class Order extends Model
         // was typed (D-101) and what the captain handed the place (D-103).
         'ring_attempts', 'ring_next_at', 'pickup_code_required', 'delivery_code_required',
         'free_delivery_reason', 'delivery_address_snapshot', 'place_paid_amount',
+        // doc 99 D-172 — the latest amendment's status, and the restarted answer window.
+        'amendment_status', 'answer_window_started_at',
     ];
 
     protected $hidden = ['pickup_otp', 'delivery_otp'];
@@ -255,6 +258,7 @@ class Order extends Model
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'ring_next_at' => 'datetime',
+            'answer_window_started_at' => 'datetime',
             'pickup_code_required' => 'boolean',
             'delivery_code_required' => 'boolean',
             'delivery_address_snapshot' => 'array',
@@ -315,6 +319,23 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /** doc 99 D-172 — every change a place proposed to this sub-order, newest last. */
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(OrderAmendment::class);
+    }
+
+    /** The current or the last one — what every payload's `amendment` block shows. */
+    public function latestAmendment(): HasOne
+    {
+        return $this->hasOne(OrderAmendment::class)->latestOfMany();
+    }
+
+    public function hasPendingAmendment(): bool
+    {
+        return $this->amendment_status === 'pending';
     }
 
     public function statusHistory(): HasMany

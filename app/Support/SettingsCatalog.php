@@ -430,6 +430,23 @@ final class SettingsCatalog
                 ],
             ],
             [
+                // doc 99 §4, D-172 — a place proposes a change to a new order; the customer decides.
+                'key' => 'amendments',
+                'title_ar' => 'تعديل الطلب من المكان',
+                'title_en' => 'Order changes from the place',
+                'fields' => [
+                    ['key' => 'orders.amendments_enabled', 'type' => 'bool', 'default' => true,
+                        'label_ar' => 'السماح باقتراح تعديل على الطلب', 'label_en' => 'Allow proposing a change to an order',
+                        'helper_ar' => 'مفتاح عام. يلزم أيضًا تفعيل الخاصية لكل مكان من صفحة المكان.',
+                        'helper_en' => 'A global switch. Each place must also be switched on from its own page.'],
+                    ['key' => 'orders.amendment_response_minutes', 'type' => 'int', 'default' => 10, 'min' => 2, 'max' => 30,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'مهلة رد العميل على التعديل', 'label_en' => 'Time for the customer to answer a change',
+                        'helper_ar' => 'بعدها يُغلق التعديل ويعود الطلب إلى المكان ليقبله كما هو أو يرفضه.',
+                        'helper_en' => 'Then the change closes and the order returns to the place to accept as it was or reject.'],
+                ],
+            ],
+            [
                 // Doc 87 — also edited, with the pinned places, on «ترتيب الأماكن».
                 'key' => 'catalog',
                 'title_ar' => 'الأماكن والأسعار',

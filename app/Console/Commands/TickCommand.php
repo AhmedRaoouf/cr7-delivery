@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\AutoAssign;
 use App\Support\BoardQueue;
+use App\Support\Amendments\OrderAmendments;
 use App\Support\DispatchService;
 use App\Support\DriverPresence;
 use App\Support\ErrandDispatcher;
@@ -120,6 +121,9 @@ class TickCommand extends Command
         // nearest captain; the widening sweep below then has nothing to do.
         $this->sweep('auto assign', fn () => app(AutoAssign::class)->sweep());
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
+        // doc 99 D-172 — a change the customer did not answer goes back to the place,
+        // before the accept windows so the window it restarts is read this pass.
+        $this->sweep('amendments', fn () => app(OrderAmendments::class)->expireDue());
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
         // doc 62 §9 — the customer's two deadlines, checked until now only when the
         // customer pressed a button, so an ignored basket sat on the board for ever.
@@ -238,10 +242,18 @@ class TickCommand extends Command
     {
         $minutes = SettingsCatalog::int('restaurant.accept_timeout_minutes');
 
+        $cutoff = now()->subMinutes($minutes);
+
         $orders = Order::query()
             ->where('status', OrderStatus::Pending)
             ->where('origin', '!=', 'restaurant_direct')
-            ->where('created_at', '<=', now()->subMinutes($minutes))
+            // doc 99 D-172 — while the customer is answering a change the place proposed,
+            // the place has answered: its window is paused, and it restarts from the moment
+            // the change closed (`answer_window_started_at`), not from the order's arrival.
+            ->where(fn ($q) => $q->whereNull('amendment_status')->orWhere('amendment_status', '!=', 'pending'))
+            ->where(fn ($q) => $q
+                ->where(fn ($w) => $w->whereNull('answer_window_started_at')->where('created_at', '<=', $cutoff))
+                ->orWhere('answer_window_started_at', '<=', $cutoff))
             ->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS))
             ->limit(50)
             ->get();

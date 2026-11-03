@@ -58,19 +58,29 @@ class ConfirmOrderGroupAction
                     'rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status')),
                 ]);
             } else {
-                $deadlineMinutes = (int) (Setting::query()->where('key', 'payment.transfer_deadline_minutes')->value('value') ?? 15);
-
-                $group->payment()->update([
-                    'status' => 'awaiting_proof',
-                    'amount' => $group->total,
-                    'gate_opened_at' => now(),
-                    'deadline_at' => now()->addMinutes($deadlineMinutes),
-                ]);
+                self::openTransfer($group);
 
                 $group->update(['rollup_status' => RollupStatus::compute($group->orders()->get()->pluck('status'))]);
             }
 
             return $group->fresh(['orders.restaurant', 'payment']);
         });
+    }
+
+    /**
+     * D-38 — the transfer window opens on the group's total as it stands now. Shared with
+     * an accepted amendment (doc 99 D-172), whose approval is the customer's confirmation,
+     * so the window opens on the changed total in exactly one way.
+     */
+    public static function openTransfer(OrderGroup $group): void
+    {
+        $deadlineMinutes = (int) (Setting::query()->where('key', 'payment.transfer_deadline_minutes')->value('value') ?? 15);
+
+        $group->payment()->update([
+            'status' => 'awaiting_proof',
+            'amount' => $group->fresh()->total,
+            'gate_opened_at' => now(),
+            'deadline_at' => now()->addMinutes($deadlineMinutes),
+        ]);
     }
 }

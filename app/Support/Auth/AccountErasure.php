@@ -189,6 +189,13 @@ final class AccountErasure
                     ]);
                 }
             });
+
+        // doc 99 D-172 — why the customer declined a place's change is their own words.
+        DB::table('order_amendments')
+            ->whereIn('order_group_id', DB::table('order_groups')->where('user_id', $userId)->select('id'))
+            ->whereNotNull('response_note')
+            ->where('response_note', '!=', 'order_closed')
+            ->update(['response_note' => null]);
     }
 
     /** An errand keeps its fee, its margin and its state; the two addresses and the story go. */

@@ -43,8 +43,10 @@ class OrderController extends Controller
             ->with(['items.options', ...OrderParties::relations()]);
 
         // Several queues are the union of their statuses, not an intersection.
+        // doc 99 §3 — a card whose captain is assigned while the kitchen still cooks is on
+        // «قيد التحضير», not «مع الكابتن»: the queues are not a pure status map any more.
         if (($queues = $params->enum('queue', array_keys(self::QUEUES))) !== []) {
-            $query->whereIn('orders.status', collect($queues)->flatMap(fn (string $q) => self::QUEUES[$q])->unique()->values()->all());
+            BoardQueue::apply($query, $queues);
         }
 
         $this->whereInList($query, 'orders.status', $params->enum('status', $statuses));
@@ -52,7 +54,7 @@ class OrderController extends Controller
         $this->whereInList($query, 'orders.origin', $params->enum('origin', ['app', 'restaurant_direct'], ['direct' => 'restaurant_direct']));
 
         if ($params->bool('overdue') === true) {
-            $query->where('orders.status', 'preparing')
+            $query->where(fn ($q) => $q->where('orders.status', 'preparing')->orWhere(fn ($k) => BoardQueue::whereKitchenPending($k)))
                 ->whereNotNull('orders.prep_due_at')
                 ->where('orders.prep_due_at', '<', now());
         }
@@ -87,12 +89,12 @@ class OrderController extends Controller
         $restaurant = $request->user()->restaurant()->firstOrFail();
         $counts = [];
 
-        foreach (self::QUEUES as $queue => $statuses) {
-            $counts[$queue] = $restaurant->orders()->whereIn('status', $statuses)->count();
+        foreach (array_keys(self::QUEUES) as $queue) {
+            $counts[$queue] = $restaurant->orders()->tap(fn ($q) => BoardQueue::apply($q, [$queue]))->count();
         }
 
         $counts['preparing_overdue'] = $restaurant->orders()
-            ->where('status', 'preparing')
+            ->where(fn ($q) => $q->where('orders.status', 'preparing')->orWhere(fn ($k) => BoardQueue::whereKitchenPending($k)))
             ->whereNotNull('prep_due_at')
             ->where('prep_due_at', '<', now())
             ->count();

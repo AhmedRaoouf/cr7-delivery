@@ -10,6 +10,7 @@ use App\Models\OrderGroup;
 use App\Models\Restaurant;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\AutoAssign;
 use App\Support\BusinessTime;
 use App\Support\DispatchService;
 use App\Support\OrderNumber;
@@ -167,6 +168,9 @@ class CreateDirectOrderAction
 
             if ($data['ready_now']) {
                 $this->dispatch->dispatchRound($order->fresh(), 1);
+            } elseif (AutoAssign::enabled()) {
+                // doc 99 §3 — a short countdown is due at once; a long one is the tick's.
+                app(AutoAssign::class)->run($order->fresh());
             }
 
             return $order->fresh();

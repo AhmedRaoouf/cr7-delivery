@@ -17,9 +17,11 @@ use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\UpdateMeRequest;
 use App\Http\Resources\UserResource;
+use App\Models\DriverPresenceSession;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\DriverPresence;
 use App\Support\OtpRequester;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
@@ -137,7 +139,17 @@ class AuthController extends Controller
      */
     private static function endCaptainShift(User $user): void
     {
-        $user->driver?->update(['is_online' => false, 'online_since' => null]);
+        $driver = $user->driver;
+
+        if ($driver === null) {
+            return;
+        }
+
+        $wasOnline = (bool) $driver->is_online;
+        $driver->update(['is_online' => false, 'online_since' => null]);
+
+        // doc 99 §2 — D-170: signing out is a check-out.
+        DriverPresence::end($driver, DriverPresenceSession::LOGGED_OUT, $wasOnline);
     }
 
     /**

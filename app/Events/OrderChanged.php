@@ -50,7 +50,8 @@ class OrderChanged implements ShouldBroadcastNow
         public readonly ?string $previousQueue,
     ) {}
 
-    public static function fromOrder(Order $order, ?string $previousStatus): self
+    /** @param  string|null  $previousQueue  when the card moved without a status change (doc 99 §3) */
+    public static function fromOrder(Order $order, ?string $previousStatus, ?string $previousQueue = null): self
     {
         $status = $order->status instanceof \BackedEnum ? $order->status->value : (string) $order->status;
 
@@ -63,8 +64,8 @@ class OrderChanged implements ShouldBroadcastNow
             cityId: $order->city_id === null ? null : (int) $order->city_id,
             status: $status,
             previousStatus: $previousStatus,
-            queue: BoardQueue::forStatus($status),
-            previousQueue: $previousStatus === null ? null : BoardQueue::forStatus($previousStatus),
+            queue: BoardQueue::forOrder($order),
+            previousQueue: $previousQueue ?? ($previousStatus === null ? null : BoardQueue::forStatus($previousStatus)),
         );
     }
 

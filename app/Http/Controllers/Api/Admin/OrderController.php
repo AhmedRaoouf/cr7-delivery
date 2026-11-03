@@ -311,12 +311,19 @@ class OrderController extends Controller
         $validated = $request->validate(['extra_minutes' => ['required', 'integer', 'min:1', 'max:60'], 'note' => ['nullable', 'string', 'max:500']]);
 
         // doc 04 E-30 — Admin's extension is uncapped and independent of the restaurant's single-use one.
-        if ($order->status->value !== 'preparing') {
+        // doc 99 §3 — until `ready_at`, whether or not a captain is already assigned.
+        $onTheCaptainsTrip = \App\Support\BoardQueue::kitchenPending($order);
+
+        if ($order->status->value !== 'preparing' && ! $onTheCaptainsTrip) {
             throw new ApiException('invalid_transition', 'لا يمكن تمديد الوقت في حالة الطلب الحالية', 422);
         }
 
         $order->update(['prep_due_at' => $order->prep_due_at->clone()->addMinutes($validated['extra_minutes'])]);
         AuditLogger::record($request->user(), 'orders.extend_prep', $order, ['extra_minutes' => $validated['extra_minutes']]);
+
+        if ($onTheCaptainsTrip) {
+            app(\App\Support\Notifications\OrderNotifications::class)->prepExtended($order, (int) $validated['extra_minutes']);
+        }
 
         return ApiResponse::success($order->fresh(), 'تم تمديد وقت التحضير');
     }

@@ -37,6 +37,8 @@ class Order extends Model
         'confirmed_at', 'preparing_at', 'prep_due_at', 'ready_at', 'dispatch_started_at',
         'driver_assigned_at', 'arrived_restaurant_at', 'waiting_started_at', 'picked_up_at',
         'arrived_customer_at', 'delivered_at', 'cancelled_at',
+        // doc 99 §3 — D-171: accept | basket | office | auto.
+        'assigned_via',
         // doc 62 — the ring's schedule (D-100), the two code switches as they stood at
         // placement (D-108), why a delivery fee was waived (D-105), the address as it
         // was typed (D-101) and what the captain handed the place (D-103).
@@ -45,6 +47,45 @@ class Order extends Model
     ];
 
     protected $hidden = ['pickup_otp', 'delivery_otp'];
+
+    /** doc 99 §3 — D-171: every order payload says whether the food is on the counter. */
+    protected $appends = ['kitchen_ready'];
+
+    /** The states before the kitchen has finished, whoever carries the order. */
+    private const KITCHEN_STATES = [
+        'pending', 'restaurant_timeout', 'accepted', 'awaiting_customer_confirmation',
+        'awaiting_payment', 'confirmed', 'preparing', 'cancelled',
+    ];
+
+    /**
+     * «The kitchen is not the captain» (doc 99 §3). An order can be on a captain's trip
+     * while it is still cooking — auto-assign gives it a captain ten minutes before it is
+     * due, and the office could always force one — so «assigned» no longer says «ready».
+     * True once `ready_at` is written, and for every state that only exists after the
+     * food left the kitchen. Null on a row read without the columns that decide it.
+     */
+    public function getKitchenReadyAttribute(): ?bool
+    {
+        if (! array_key_exists('status', $this->attributes) || ! array_key_exists('ready_at', $this->attributes)) {
+            return null;
+        }
+
+        if ($this->attributes['ready_at'] !== null) {
+            return true;
+        }
+
+        $status = $this->status instanceof OrderStatus ? $this->status->value : (string) $this->attributes['status'];
+
+        if (in_array($status, self::KITCHEN_STATES, true)) {
+            return false;
+        }
+
+        if (in_array($status, ['driver_assigned', 'arrived_restaurant', 'waiting_at_restaurant'], true)) {
+            return ($this->attributes['prep_due_at'] ?? null) === null;
+        }
+
+        return true;
+    }
 
     /**
      * How the write being announced assigned a captain — `basket` when doc 63's D-115 handed

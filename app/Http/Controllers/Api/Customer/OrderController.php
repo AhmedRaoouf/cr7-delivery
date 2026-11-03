@@ -121,6 +121,8 @@ class OrderController extends Controller
                 ],
                 'status' => $order->status,
                 'status_label' => $order->status->label(),
+                // doc 99 §3 — a captain may be on the way while the food still cooks.
+                'kitchen_ready' => $order->kitchen_ready,
                 'eta_minutes' => $etaMinutes,
                 'timeline' => $order->statusHistory->map(fn ($h) => ['status' => $h->to_status, 'at' => $h->created_at, 'done' => true]),
                 'driver' => $order->driver ? [

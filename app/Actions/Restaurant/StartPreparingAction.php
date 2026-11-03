@@ -7,6 +7,7 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\AutoAssign;
 use Illuminate\Support\Facades\DB;
 
 /** doc 08 §6 — POST /restaurant/orders/{id}/start-preparing: confirmed -> preparing, starts the countdown. */
@@ -22,7 +23,7 @@ class StartPreparingAction
             throw new ApiException('restaurant_order_ref_required', 'رقم الطلب في نظام المطعم مطلوب', 422);
         }
 
-        return DB::transaction(function () use ($user, $order, $restaurantOrderRef) {
+        $order = DB::transaction(function () use ($user, $order, $restaurantOrderRef) {
             $preparingAt = now();
 
             $order->update([
@@ -41,5 +42,20 @@ class StartPreparingAction
 
             return $order->fresh();
         });
+
+        // doc 99 §3 — D-171: with less than the lead left on the countdown the nearest
+        // captain is assigned now; otherwise `cr7:tick` does it at `prep_due_at − lead`.
+        // The place's answer is still «preparing» — the kitchen is not the captain.
+        // The kitchen's countdown is committed either way; a failure here is retried by the
+        // next tick and must not turn the place's «بدء التحضير» into an error.
+        if (AutoAssign::enabled()) {
+            try {
+                app(AutoAssign::class)->run($order);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('auto-assign at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return $order;
     }
 }

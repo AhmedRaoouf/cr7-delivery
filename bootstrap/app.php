@@ -64,6 +64,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // Batch 67 — doc 12 §10.1: users, roles, settings and the audit log are
             // global-only whatever the role grants. 404 for a scoped admin.
             'admin.global' => EnsureGlobalAdminScope::class,
+            // doc 99 §2 — D-170: every captain request is a heartbeat (throttled).
+            'driver.presence' => \App\Http\Middleware\RecordCaptainPresence::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,

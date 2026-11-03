@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Admin;
 
 use App\Http\Resources\Shared\PaymentProofResource;
+use App\Support\AutoAssign;
 use App\Support\OrderParties;
 use App\Support\RefundPolicy;
 use Illuminate\Http\Request;
@@ -29,6 +30,15 @@ class OrderResource extends JsonResource
             ...OrderParties::for($this->resource, 'admin'),
             'pickup_code_required' => (bool) ($this->pickup_code_required ?? true),
             'delivery_code_required' => ! $this->resource->isDirect() && (bool) ($this->delivery_code_required ?? true),
+            // doc 99 §3 — D-171: how this order gets (or got) its captain.
+            'dispatch' => [
+                'strategy' => AutoAssign::strategy(),
+                'auto_assign_at' => AutoAssign::enabled() && $this->resource->driver_id === null
+                    ? AutoAssign::dueAt($this->resource)
+                    : null,
+                'assigned_via' => $this->resource->assigned_via,
+                'no_candidate_since' => AutoAssign::noCandidateSince($this->resource),
+            ],
             'policy_full_refund_amount' => RefundPolicy::fullRefundAmount($this->resource),
             'platform_fee_refundable' => RefundPolicy::feeIsRefundable($this->resource),
             'order_group' => $this->whenLoaded('orderGroup', fn () => [

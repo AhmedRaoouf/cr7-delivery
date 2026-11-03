@@ -153,6 +153,23 @@ scope. A filter naming an out-of-scope id (`filter[restaurant_id]=<not mine>`) r
 | sort | `id` (default), `name`, `created_at`, `rating_avg`, `completed_orders`, `cash_in_hand`, `wallet_balance`, `location_updated_at` |
 | paging | 20 / 100, total: yes |
 
+### 1.4b `GET /admin/attendance` — and `GET /admin/attendance/export` (doc 99 §2, D-170)
+
+One row per **active** captain in scope for one Cairo day, absent ones included. Rows are
+computed from `driver_presence_sessions` before paging, so `state` and the sort apply to the
+whole scoped fleet. Permission `drivers.view`; scope = `AdminScope::applyToDrivers`.
+
+| | |
+|---|---|
+| `date` | `YYYY-MM-DD`, a Cairo day (also `filter[date]`); default today; anything else → **422** |
+| search | captain `users.name` (name, folded), `users.phone` (phone), `vehicle_plate`, id |
+| `city_id` | ids (`drivers.city_id`) |
+| `state` | enum `online offline absent` (multi) |
+| sort | `checked_in_at` (default, ascending), `name`, `online_seconds`, `last_seen_at`, `gap_seconds` — rows with no value (absent) last either way |
+| paging | 20 / 100, total: yes; `meta.date`, `meta.counts {online, offline, absent}` |
+
+`GET /admin/drivers/{driver}/attendance?date=` — one row plus `timeline[]` (404 out of scope).
+
 ### 1.5 `GET /admin/customers`
 
 | | |

@@ -8,6 +8,8 @@ use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\AutoAssign;
+use App\Support\BoardQueue;
 use App\Support\DispatchService;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Otp;
@@ -45,7 +47,12 @@ class UnassignDriverAction
                 ->update(['result' => 'unassigned_by_admin', 'reason_code' => $reasonCode, 'responded_at' => now()]);
 
             $from = $order->status;
-            $nextStatus = $requeue ? OrderStatus::SearchingDriver : OrderStatus::Ready;
+            // doc 99 §3 — in auto-assign mode an order whose food is still cooking goes
+            // back to «قيد التحضير»; the auto-assign pass gives it its next captain when due.
+            $backToTheKitchen = AutoAssign::enabled() && BoardQueue::kitchenPending($order);
+            $nextStatus = $backToTheKitchen
+                ? OrderStatus::Preparing
+                : ($requeue ? OrderStatus::SearchingDriver : OrderStatus::Ready);
 
             $order->update([
                 'driver_id' => null,
@@ -60,7 +67,7 @@ class UnassignDriverAction
                 // and the two-minute escalation has to be able to speak a second time.
                 // Without a requeue it sits on `ready` with nobody searching, which is
                 // exactly the state the operator most needs the dock to shout about.
-                'dispatch_started_at' => now(),
+                'dispatch_started_at' => $backToTheKitchen ? null : now(),
                 'dispatch_admin_notified_at' => null,
             ]);
 

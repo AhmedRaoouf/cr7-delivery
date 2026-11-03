@@ -72,6 +72,11 @@ class ModerateAccountAction
             // for good. It means «carries nothing» now, derived by `DriverTrip` (doc 63 §7).
             $target->driver?->update(['is_online' => false]);
 
+            // doc 99 §2 — D-170: the captain's open session ends as `blocked`.
+            if ($target->driver !== null) {
+                \App\Support\DriverPresence::end($target->driver, \App\Models\DriverPresenceSession::BLOCKED, false);
+            }
+
             // Refresh tokens too (D-120), or unblocking would hand back every session the
             // block was meant to end.
             Sessions::revokeAll($target);

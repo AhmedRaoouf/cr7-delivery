@@ -99,6 +99,8 @@ class OrderGroupDetailResource extends JsonResource
                 'delivery_otp_resends' => $order->delivery_otp_resends,
                 'prep_minutes' => $order->prep_minutes,
                 'prep_due_at' => $order->prep_due_at,
+                // doc 99 §3 — a captain may be on the way while the food still cooks.
+                'kitchen_ready' => $order->kitchen_ready,
                 'driver' => $order->driver ? [
                     'id' => $order->driver->id,
                     'name' => $order->driver->user->name,

@@ -7,7 +7,9 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Support\ApiResponse;
+use App\Models\DriverPresenceSession;
 use App\Support\DispatchService;
+use App\Support\DriverPresence;
 use App\Support\DriverTrip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,11 +48,20 @@ class DriverMeController extends Controller
         // DRV-07's «متصل منذ» reads this. Set only on the transition, so a captain
         // who re-sends `is_online: true` on a reconnect does not restart their shift.
         $goingOnline = $validated['is_online'] && ! $driver->is_online;
+        $wasOnline = (bool) $driver->is_online;
 
         $driver->update([
             'is_online' => $validated['is_online'],
             'online_since' => $validated['is_online'] ? ($goingOnline ? now() : $driver->online_since) : null,
         ]);
+
+        // doc 99 §2 — D-170: the switch opens the day's session (or keeps the open one
+        // alive), and switching off is a real check-out.
+        if ($validated['is_online']) {
+            DriverPresence::touch($driver);
+        } else {
+            DriverPresence::end($driver, DriverPresenceSession::WENT_OFFLINE, $wasOnline);
+        }
 
         // «لو في طلبات ملهاش حد وفي كابتن لسه فاتح، أهو تبدأ تبعتله طلب» — the
         // captain hears about the backlog the moment they come on shift rather
@@ -104,6 +115,10 @@ class DriverMeController extends Controller
         ]);
 
         $this->broadcastLocation($driver);
+
+        // doc 99 §2 — a ping is a touch, and the session's first fix is where the shift
+        // started (coverage).
+        DriverPresence::touch($driver, (float) $last['latitude'], (float) $last['longitude']);
 
         // The ping carries the duty flag back because it is the one request a
         // captain's app makes continuously, and because the two can disagree

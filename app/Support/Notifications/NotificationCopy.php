@@ -163,6 +163,11 @@ class NotificationCopy
             'ar' => ['طلب {number} من {place} جاهز — استلمه ضمن رحلتك', '{details}'],
             'en' => ['Order {number} from {place} is ready — pick it up on this trip', '{details}'],
         ],
+        // doc 99 §3 — the kitchen of an order on the captain's trip asked for more time.
+        'trip.order_prep_extended' => [
+            'ar' => ['مدّد {place} وقت تحضير الطلب {number}', 'أُضيفت {minutes} دقيقة — الجاهزية المتوقعة {time}'],
+            'en' => ['{place} extended the preparation of order {number}', '{minutes} more minutes — expected ready at {time}'],
+        ],
         // doc 63 §7 — the captain carrying (or holding) a sub-order that was cancelled. Nothing
         // told them before: a captain on the way to a cancelled pickup learned it at the counter.
         'trip.order_cancelled' => [

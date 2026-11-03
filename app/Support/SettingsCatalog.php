@@ -210,6 +210,36 @@ final class SettingsCatalog
                     ['key' => 'dispatch.batch_radius_km', 'type' => 'decimal', 'default' => 1.5, 'min' => 0.2, 'max' => 10, 'step' => 0.1,
                         'suffix_ar' => 'كم', 'suffix_en' => 'km',
                         'label_ar' => 'أقصى مسافة بين الأماكن لضم طلب إلى الرحلة (كم)', 'label_en' => 'Farthest a place may be from the trip\'s places to join it (km)'],
+                    // doc 99 §3 — D-171. Off by default: switching it is the operator's
+                    // decision, once the captains run 1.0.24.
+                    [
+                        'key' => 'dispatch.strategy', 'type' => 'enum', 'default' => 'broadcast',
+                        'label_ar' => 'طريقة إسناد الطلبات', 'label_en' => 'How orders reach a captain',
+                        'options' => [
+                            ['value' => 'broadcast', 'label_ar' => 'عرض الطلب على الكباتن وينتظر قبول أحدهم', 'label_en' => 'Offer the order to captains and wait for one to accept'],
+                            ['value' => 'auto_assign', 'label_ar' => 'إسناد تلقائي إلى أقرب كابتن قبل جاهزية الطلب', 'label_en' => 'Assign the nearest captain automatically before the food is ready'],
+                        ],
+                        'helper_ar' => 'في الإسناد التلقائي يُسند الطلب مباشرة إلى أقرب كابتن متصل من المكان، دون عرض أو قبول. لا يسري على المشاوير.',
+                        'helper_en' => 'With automatic assignment the order goes straight to the nearest connected captain, with no offer to accept. Errands are not affected.',
+                        'warning_ar' => 'لا تفعّل الإسناد التلقائي قبل أن يحدّث الكباتن التطبيق إلى الإصدار 1.0.24.',
+                        'warning_en' => 'Do not switch to automatic assignment before the captains run app 1.0.24.',
+                    ],
+                    ['key' => 'dispatch.auto_assign_lead_minutes', 'type' => 'int', 'default' => 10, 'min' => 0, 'max' => 60,
+                        'suffix_ar' => 'دقيقة', 'suffix_en' => 'min',
+                        'label_ar' => 'إسناد الكابتن قبل انتهاء وقت التحضير بـ', 'label_en' => 'Assign the captain this long before the food is due',
+                        'helper_ar' => 'إذا كان المتبقي من وقت التحضير أقل من ذلك يُسند الكابتن فورًا.',
+                        'helper_en' => 'When less than this remains of the preparation time the captain is assigned at once.'],
+                    ['key' => 'dispatch.auto_fix_max_age_seconds', 'type' => 'int', 'default' => 600, 'min' => 60, 'max' => 3600,
+                        'suffix_ar' => 'ثانية', 'suffix_en' => 's',
+                        'label_ar' => 'أقصى عمر لموقع الكابتن في الإسناد التلقائي', 'label_en' => 'Oldest captain location automatic assignment trusts',
+                        'helper_ar' => 'الكابتن المتوقف لا يرسل موقعًا جديدًا، فآخر موقع له ما زال مكانه.',
+                        'helper_en' => 'A parked captain sends no new location; his last one is still where he is.'],
+                    // doc 99 §2 — D-170: a captain's day.
+                    ['key' => 'attendance.gap_seconds', 'type' => 'int', 'default' => 180, 'min' => 60, 'max' => 1800,
+                        'suffix_ar' => 'ثانية', 'suffix_en' => 's',
+                        'label_ar' => 'يُحسب انقطاعًا إذا لم يُسمع من تطبيق الكابتن لأكثر من', 'label_en' => 'Count a gap when the captain\'s app is silent for more than',
+                        'helper_ar' => 'الانقطاع يُسجَّل ولا يُعد مخالفة، ولا يغيّر حالة الكابتن (متصل أو غير متصل).',
+                        'helper_en' => 'A gap is recorded, never a violation, and never changes the captain\'s online switch.'],
                 ],
             ],
             [

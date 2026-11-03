@@ -155,6 +155,11 @@ class DriverController extends Controller
         $validated = $request->validate(['is_active' => ['required', 'boolean']]);
         $driver->update($validated);
 
+        // doc 99 §2 — D-170: a captain the office suspends is off shift as of now.
+        if (! $validated['is_active']) {
+            \App\Support\DriverPresence::end($driver, \App\Models\DriverPresenceSession::ADMIN, false);
+        }
+
         return ApiResponse::success($driver, 'تم تحديث حالة الكابتن بنجاح');
     }
 
@@ -219,6 +224,8 @@ class DriverController extends Controller
         if ($driver->user !== null) {
             Sessions::revokeAll($driver->user);
         }
+
+        \App\Support\DriverPresence::end($driver, \App\Models\DriverPresenceSession::ADMIN, false);
 
         $driver->delete();
 

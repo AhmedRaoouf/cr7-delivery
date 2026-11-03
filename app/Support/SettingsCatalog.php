@@ -233,14 +233,7 @@ final class SettingsCatalog
                         'label_ar' => 'أقصى عمر لموقع الكابتن في الإسناد التلقائي', 'label_en' => 'Oldest captain location automatic assignment trusts',
                         'helper_ar' => 'الكابتن المتوقف لا يرسل موقعًا جديدًا، فآخر موقع له ما زال مكانه.',
                         'helper_en' => 'A parked captain sends no new location; his last one is still where he is.'],
-                ],
-            ],
-            // doc 99 §2 — D-170.
-            [
-                'key' => 'attendance',
-                'title_ar' => 'حضور الكباتن',
-                'title_en' => 'Captain attendance',
-                'fields' => [
+                    // doc 99 §2 — D-170: a captain's day.
                     ['key' => 'attendance.gap_seconds', 'type' => 'int', 'default' => 180, 'min' => 60, 'max' => 1800,
                         'suffix_ar' => 'ثانية', 'suffix_en' => 's',
                         'label_ar' => 'يُحسب انقطاعًا إذا لم يُسمع من تطبيق الكابتن لأكثر من', 'label_en' => 'Count a gap when the captain\'s app is silent for more than',

@@ -464,8 +464,10 @@ Route::prefix('v1')->group(function () {
     | an order (doc 05 §4), never the app.
     |----------------------------------------------------------------------
     */
-    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:driver', 'throttle.account'])->group(function () {
+    Route::prefix('driver')->middleware(['auth:sanctum', 'client.type', 'account.active', 'password.fresh', 'type:driver', 'throttle.account', 'driver.presence'])->group(function () {
         Route::get('/me', [DriverMeController::class, 'show']);
+        // doc 99 §2 — D-170: the captain's own day.
+        Route::get('/attendance/today', [\App\Http\Controllers\Api\Driver\DriverAttendanceController::class, 'today']);
         Route::post('/status', [DriverMeController::class, 'status']);
         Route::post('/location', [DriverMeController::class, 'location']);
 
@@ -657,6 +659,10 @@ Route::prefix('v1')->group(function () {
 
         // Drivers
         Route::middleware('permission:drivers.view')->group(function () {
+            // doc 99 §2 — D-170, `ADM-59` «الحضور».
+            Route::get('/attendance', [\App\Http\Controllers\Api\Admin\AttendanceController::class, 'index']);
+            Route::get('/attendance/export', [\App\Http\Controllers\Api\Admin\AttendanceController::class, 'export']);
+            Route::get('/drivers/{driver}/attendance', [\App\Http\Controllers\Api\Admin\AttendanceController::class, 'show']);
             Route::get('/drivers', [DriverController::class, 'index']);
             // Before `/drivers/{driver}`, or `finance` binds as a captain id and 404s.
             Route::get('/finance/drivers', [DriverFinanceController::class, 'index']);

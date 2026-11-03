@@ -12,8 +12,10 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Setting;
 use App\Support\AdminScope;
+use App\Support\AutoAssign;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\DriverPresence;
 use App\Support\DriverTrip;
 use App\Support\Lists\ListParams;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,6 +68,12 @@ class DashboardController extends Controller
                 + (float) (clone $orders)->sum('cancellation_fee'),
             'active_orders' => (clone $orders)->whereNotIn('status', ['delivered', 'cancelled'])->count(),
             'online_drivers' => AdminScope::applyToDrivers(Driver::query(), $request->user())->where('is_online', true)->count(),
+            // doc 99 §2/§3 — the operations strip on `ADM-02`. «Now» figures, not the
+            // date range: who is heard from, and what is waiting for a captain.
+            'connected_drivers' => DriverPresence::whereConnected(AdminScope::applyToDrivers(Driver::query(), $request->user()))
+                ->where('drivers.is_online', true)
+                ->count(),
+            'awaiting_assignment' => self::awaitingAssignment(AdminScope::applyToOrders(Order::query(), $request->user()))->count(),
         ]);
     }
 
@@ -333,11 +341,44 @@ class DashboardController extends Controller
     {
         $seconds = (int) (Setting::query()->where('key', 'dispatch.escalate_after_seconds')->value('value') ?? 120);
 
+        // doc 99 §3 — in auto-assign mode a cooking order past its assign time that found
+        // nobody is stranded too; its clock starts on the first pass that found nobody.
+        $statuses = ['ready', 'searching_driver', 'waiting_for_driver'];
+
+        if (AutoAssign::enabled()) {
+            $statuses[] = 'preparing';
+        }
+
         return $orders
-            ->whereIn('status', ['ready', 'searching_driver', 'waiting_for_driver'])
+            ->whereIn('status', $statuses)
             ->whereNull('driver_id')
             ->whereNotNull('dispatch_started_at')
             ->where('dispatch_started_at', '<=', now()->subSeconds(max(30, $seconds)));
+    }
+
+    /**
+     * doc 99 §3 — orders waiting for a captain right now: searching or waiting for one,
+     * and in auto-assign mode the cooking ones already past their assign time.
+     *
+     * @param  Builder<Order>  $orders
+     * @return Builder<Order>
+     */
+    private static function awaitingAssignment(Builder $orders): Builder
+    {
+        return $orders
+            ->whereNull('driver_id')
+            ->where('created_at', '>=', now()->subHours(24))
+            ->where(function (Builder $q) {
+                $q->whereIn('status', ['searching_driver', 'waiting_for_driver']);
+
+                if (AutoAssign::enabled()) {
+                    $q->orWhere(fn (Builder $p) => $p
+                        ->where('status', 'preparing')
+                        ->where(fn (Builder $d) => $d
+                            ->whereNull('prep_due_at')
+                            ->orWhere('prep_due_at', '<=', now()->addMinutes(AutoAssign::leadMinutes()))));
+                }
+            });
     }
 
     private function orderAlert(Order $order, string $kind, string $title): array

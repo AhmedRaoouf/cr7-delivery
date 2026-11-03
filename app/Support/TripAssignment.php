@@ -32,6 +32,9 @@ final class TripAssignment
     /** An operator made it theirs (`ReassignDriverAction`). */
     public const VIA_OFFICE = 'office';
 
+    /** doc 99 §3 — D-171: the server chose the nearest captain (`AutoAssign`). */
+    public const VIA_AUTO = 'auto';
+
     /**
      * @param  OrderDriverAttempt|null  $attempt  the offer being answered; without one an
      *                                            `accepted` row is written, because unassign, reassign and cancel-trip all work by
@@ -80,6 +83,8 @@ final class TripAssignment
                     'driver_id' => $driver->id,
                     'status' => OrderStatus::DriverAssigned,
                     'driver_assigned_at' => now(),
+                    // doc 99 §3 — how this captain was chosen, on every path.
+                    'assigned_via' => $via,
                     // D-70 — both halves of the delivery fee, snapshotted together, the same
                     // way on every path. D-105: a waived fee pays nobody.
                     'driver_earning' => DriverEarningCalculator::calculate($order, $driver),

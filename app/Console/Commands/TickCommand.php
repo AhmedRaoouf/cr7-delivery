@@ -10,7 +10,10 @@ use App\Enums\UserType;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AdminScope;
+use App\Support\AutoAssign;
+use App\Support\BoardQueue;
 use App\Support\DispatchService;
+use App\Support\DriverPresence;
 use App\Support\ErrandDispatcher;
 use App\Support\OrderDeadlines;
 use App\Support\SettingsCatalog;
@@ -110,6 +113,12 @@ class TickCommand extends Command
         // D-100 — rings two and three for a place that has not answered.
         $this->sweep('rings', fn () => OrderDeadlines::ringAgain());
         $this->sweep('prep timers', fn () => $this->expirePrepTimers($markReady));
+        // doc 99 §2 — a session silent past the gap ends at its last sign of life. The
+        // captain's switch (`is_online`) is never touched here.
+        $this->sweep('presence', fn () => DriverPresence::closeStale());
+        // doc 99 §3 — D-171: in auto-assign mode, every order that is due gets the
+        // nearest captain; the widening sweep below then has nothing to do.
+        $this->sweep('auto assign', fn () => app(AutoAssign::class)->sweep());
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         $this->sweep('accept windows', fn () => $this->expireAcceptWindows());
         // doc 62 §9 — the customer's two deadlines, checked until now only when the
@@ -164,7 +173,14 @@ class TickCommand extends Command
     private function expirePrepTimers(MarkOrderReadyAction $markReady): int
     {
         $orders = Order::query()
-            ->where('status', OrderStatus::Preparing)
+            // doc 99 §3 — and the orders whose captain was assigned while they cooked: the
+            // timer sets their `ready_at` and tells the captain, without moving the status.
+            ->where(fn ($q) => $q
+                ->where('status', OrderStatus::Preparing)
+                ->orWhere(function ($k) {
+                    BoardQueue::whereKitchenPending($k);
+                    $k->where('created_at', '>=', now()->subHours(self::TIMEOUT_MAX_AGE_HOURS));
+                }))
             ->whereNotNull('prep_due_at')
             ->where('prep_due_at', '<=', now())
             ->with('restaurant.owner')
@@ -258,6 +274,12 @@ class TickCommand extends Command
      */
     private function widenSearches(DispatchService $dispatch): int
     {
+        // doc 99 §3 — in auto-assign mode nobody is offered anything; the auto-assign
+        // sweep above is this pass.
+        if (AutoAssign::enabled()) {
+            return 0;
+        }
+
         $seconds = self::seconds('dispatch.rebroadcast_interval_seconds');
 
         $orders = Order::query()
@@ -296,8 +318,16 @@ class TickCommand extends Command
     {
         $seconds = self::seconds('dispatch.escalate_after_seconds');
 
+        // doc 99 §3 — in auto-assign mode a cooking order past its assign time that found
+        // nobody is just as stranded (its clock starts on the first pass that found nobody).
+        $statuses = [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver];
+
+        if (AutoAssign::enabled()) {
+            $statuses[] = OrderStatus::Preparing;
+        }
+
         $orders = Order::query()
-            ->whereIn('status', [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver])
+            ->whereIn('status', $statuses)
             ->whereNull('driver_id')
             ->whereNull('dispatch_admin_notified_at')
             ->whereNotNull('dispatch_started_at')

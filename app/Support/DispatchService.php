@@ -40,6 +40,16 @@ class DispatchService
      */
     public function dispatchRound(Order $order, int $round, bool $retry = false): void
     {
+        // doc 99 §3 — D-171. With `dispatch.strategy = auto_assign` there is no round:
+        // the nearest eligible captain is given the order (the basket's holder first).
+        // Every caller — the kitchen's «جاهز», a direct order made ready, a cancelled trip,
+        // an office requeue — reaches the same routine through here.
+        if (AutoAssign::enabled()) {
+            app(AutoAssign::class)->run($order);
+
+            return;
+        }
+
         // doc 63 D-115 — a sibling of a basket somebody already carries is theirs: no round,
         // no offer to anyone else. Every path to `ready` comes through here, and so does
         // every retry — which is why the holder rule excludes a captain who refused,
@@ -431,6 +441,12 @@ class DispatchService
      */
     public function rebroadcast(Order $order): int
     {
+        // doc 99 §3 — in auto-assign mode the two-minute «ask everybody again» is the
+        // auto-assign pass; nobody is offered anything.
+        if (AutoAssign::enabled()) {
+            return app(AutoAssign::class)->run($order) !== null ? 1 : 0;
+        }
+
         if (! in_array($order->status, [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver], true)) {
             return 0;
         }
@@ -529,6 +545,12 @@ class DispatchService
      */
     public function offerBacklogTo(Driver $driver, int $limit = 10): int
     {
+        // doc 99 §3 — in auto-assign mode a captain coming free creates no offers: the
+        // orders that are due are assigned, nearest captain first — which may be him.
+        if (AutoAssign::enabled()) {
+            return app(AutoAssign::class)->sweep($limit);
+        }
+
         $driver = $driver->fresh() ?? $driver;
 
         // Offline or suspended hears nothing; a captain mid-errand hears no orders
@@ -827,7 +849,7 @@ class DispatchService
      * @param  Collection<string, mixed>|null  $settings  already-loaded rows, if the
      *                                                    caller has them
      */
-    private static function zoneRestricts(?Collection $settings = null): bool
+    public static function zoneRestricts(?Collection $settings = null): bool
     {
         $value = $settings !== null
             ? ($settings['dispatch.allow_neighbour_zones'] ?? null)
@@ -839,7 +861,7 @@ class DispatchService
     }
 
     /** Whether this captain's own areas include the order's — a ranking input, not a gate. */
-    private static function coversZone(Driver $driver, Order $order): bool
+    public static function coversZone(Driver $driver, Order $order): bool
     {
         $zoneIds = $driver->relationLoaded('assignedZones')
             ? $driver->assignedZones->pluck('id')

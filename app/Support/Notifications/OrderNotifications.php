@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\BusinessTime;
 use App\Support\DriverTrip;
 use App\Support\TripAssignment;
 use Illuminate\Support\Facades\DB;
@@ -341,6 +342,25 @@ class OrderNotifications
                 $order->id,
                 ['order_id' => (string) $order->id, 'order_number' => (string) $order->order_number, 'kind' => 'trip'],
             );
+        } elseif ($order->assignedVia === TripAssignment::VIA_AUTO) {
+            // doc 99 §3 — D-171: nobody pressed «قبول»; the server chose the nearest
+            // captain. The loud channel, because there is no offer for him to have seen,
+            // and `via = auto` so 1.0.24 draws «تم إسناد طلب جديد». 1.0.23 routes every
+            // `order.*` to the active order, which is this one.
+            $this->dispatcher->send(
+                $order->driver?->user,
+                'order.assigned',
+                ['details' => $this->assignmentDetails($order)],
+                'cr7://order/'.$order->id,
+                $order->id,
+                [
+                    'order_id' => (string) $order->id,
+                    'order_number' => (string) $order->order_number,
+                    'via' => TripAssignment::VIA_AUTO,
+                    'kitchen_ready' => $order->kitchen_ready === false ? '0' : '1',
+                ],
+                channel: 'offers',
+            );
         } else {
             $this->toDriver($order, 'order.assigned', ['details' => $this->assignmentDetails($order)]);
         }
@@ -353,6 +373,64 @@ class OrderNotifications
             'order_number' => $order->order_number,
             'captain' => ['ar' => $captain, 'en' => str_replace(['‪', '‬'], '', $captain)],
         ]);
+    }
+
+    /**
+     * doc 99 §3 — the food of an order already on a captain's trip is ready: «جاهز» from
+     * the place, or its timer. The status does not move (the captain has it); the
+     * captain is told, and the place is told when its timer, not its hand, did it.
+     */
+    public function kitchenReady(Order $order): void
+    {
+        $order->loadMissing(['driver.user', 'restaurant.owner', 'serviceZone']);
+
+        $this->dispatcher->send(
+            $order->driver?->user,
+            'trip.order_ready',
+            [
+                'number' => '#'.$order->order_number,
+                'place' => $this->placeName($order),
+                'details' => $this->assignmentDetails($order),
+            ],
+            'cr7://trip/'.$order->id,
+            $order->id,
+            ['order_id' => (string) $order->id, 'order_number' => (string) $order->order_number, 'kind' => 'trip'],
+        );
+
+        if (($order->ready_source?->value ?? $order->ready_source) === 'timer') {
+            $this->toRestaurant($order, 'order.prep_timer_expired', [
+                'order_number' => $order->order_number,
+            ]);
+        }
+    }
+
+    /** doc 99 §3 — the place (or the office) gave the kitchen more time; the captain on the way is told the new time. */
+    public function prepExtended(Order $order, int $minutes): void
+    {
+        $order->loadMissing(['driver.user', 'restaurant']);
+
+        if ($order->driver?->user === null || $order->prep_due_at === null) {
+            return;
+        }
+
+        $this->dispatcher->send(
+            $order->driver->user,
+            'trip.order_prep_extended',
+            [
+                'number' => '#'.$order->order_number,
+                'place' => $this->placeName($order),
+                'minutes' => $minutes,
+                'time' => BusinessTime::localTime($order->prep_due_at),
+            ],
+            'cr7://trip/'.$order->id,
+            $order->id,
+            [
+                'order_id' => (string) $order->id,
+                'order_number' => (string) $order->order_number,
+                'kind' => 'trip',
+                'prep_due_at' => $order->prep_due_at->toIso8601ZuluString(),
+            ],
+        );
     }
 
     /**

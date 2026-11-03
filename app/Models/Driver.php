@@ -71,6 +71,12 @@ class Driver extends Model
         return $this->hasMany(DriverDocument::class);
     }
 
+    /** doc 99 §2 — D-170: the stretches of «online and heard from» that make a captain's day. */
+    public function presenceSessions(): HasMany
+    {
+        return $this->hasMany(DriverPresenceSession::class);
+    }
+
     public function locations(): HasMany
     {
         return $this->hasMany(DriverLocation::class);

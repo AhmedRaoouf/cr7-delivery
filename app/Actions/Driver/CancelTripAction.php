@@ -7,6 +7,8 @@ use App\Enums\OrderStatusActorType;
 use App\Exceptions\ApiException;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Support\AutoAssign;
+use App\Support\BoardQueue;
 use App\Support\DispatchService;
 use App\Support\RollupStatus;
 use Illuminate\Support\Facades\DB;
@@ -42,16 +44,23 @@ class CancelTripAction
             //
             // The search starts again, so the two-minute clock does too: this order has
             // been without a captain for zero seconds, not since it was first made ready.
+            // doc 99 §3 — in auto-assign mode a captain may step off an order whose food is
+            // still cooking: it goes back to «قيد التحضير», not to «ready», and the next
+            // nearest captain is assigned below (at once if it is already due).
+            $next = AutoAssign::enabled() && BoardQueue::kitchenPending($order)
+                ? OrderStatus::Preparing
+                : OrderStatus::SearchingDriver;
+
             $order->update([
                 'driver_id' => null,
-                'status' => OrderStatus::SearchingDriver,
-                'dispatch_started_at' => now(),
+                'status' => $next,
+                'dispatch_started_at' => $next === OrderStatus::Preparing ? null : now(),
                 'dispatch_admin_notified_at' => null,
             ]);
 
             $order->statusHistory()->create([
                 'from_status' => $from->value,
-                'to_status' => OrderStatus::SearchingDriver->value,
+                'to_status' => $next->value,
                 'actor_type' => OrderStatusActorType::Driver,
                 'actor_id' => $driver->user_id,
                 'reason_code' => $reasonCode,

@@ -6,13 +6,19 @@ use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\Setting;
+use App\Support\BoardQueue;
+use App\Support\Notifications\OrderNotifications;
 
 /** doc 08 §6 — PATCH /restaurant/orders/{id}/prep-time: one extension per order, max 15 min. */
 class ExtendPrepTimeAction
 {
     public function execute(Order $order, int $extraMinutes): Order
     {
-        if ($order->status !== OrderStatus::Preparing) {
+        // doc 99 §3 — while the food is still in the kitchen, even when its captain is
+        // already assigned; the captain is told the new time.
+        $onTheCaptainsTrip = BoardQueue::kitchenPending($order);
+
+        if ($order->status !== OrderStatus::Preparing && ! $onTheCaptainsTrip) {
             throw new ApiException('invalid_transition', 'لا يمكن تمديد الوقت في حالة الطلب الحالية', 422);
         }
 
@@ -30,6 +36,10 @@ class ExtendPrepTimeAction
             'prep_extended_minutes' => $extraMinutes,
             'prep_due_at' => $order->prep_due_at->clone()->addMinutes($extraMinutes),
         ]);
+
+        if ($onTheCaptainsTrip) {
+            app(OrderNotifications::class)->prepExtended($order, $extraMinutes);
+        }
 
         return $order->fresh();
     }

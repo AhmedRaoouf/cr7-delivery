@@ -5,6 +5,7 @@ namespace App\Support\Notifications;
 use App\Enums\OrderStatus;
 use App\Models\Notification;
 use App\Models\Order;
+use App\Models\OrderAmendment;
 use App\Models\User;
 use App\Support\DriverTrip;
 use App\Support\TripAssignment;
@@ -75,6 +76,59 @@ class OrderNotifications
             OrderStatus::DeliveryIssue => $this->issue($order),
             default => null,
         };
+    }
+
+    // ------------------------------------------------------------ doc 99 D-172
+
+    /**
+     * A place (or the office) proposed a change: the customer decides. Not a status move —
+     * the order is still `pending` — so it is sent from the action, not from the observer.
+     */
+    public function amendmentProposed(Order $order, OrderAmendment $amendment): void
+    {
+        $this->dispatcher->send(
+            $order->user,
+            'order.amendment_proposed',
+            [
+                'place' => $this->placeName($order),
+                'order_number' => $order->orderGroup?->group_number ?? $order->order_number,
+                'minutes' => max(1, (int) ceil(now()->diffInSeconds($amendment->expires_at, false) / 60)),
+            ],
+            'cr7://order/'.$order->order_group_id.'/amendment',
+            $order->id,
+            [
+                'order_id' => (string) $order->id,
+                'group_id' => (string) $order->order_group_id,
+                'amendment_id' => (string) $amendment->id,
+            ],
+        );
+    }
+
+    /** The customer's answer — or the clock's — told to the place. */
+    public function amendmentAnswered(Order $order, OrderAmendment $amendment): void
+    {
+        $type = match ($amendment->status->value) {
+            'accepted' => 'order.amendment_accepted_restaurant',
+            'rejected' => 'order.amendment_rejected_restaurant',
+            'expired' => 'order.amendment_expired_restaurant',
+            default => null,
+        };
+
+        if ($type === null) {
+            return;
+        }
+
+        $this->dispatcher->send(
+            $order->restaurant?->owner,
+            $type,
+            [
+                'order_number' => $order->order_number,
+                'total' => $this->money($amendment->money_after['order_subtotal'] ?? $order->subtotal),
+            ],
+            '/orders/'.$order->id,
+            $order->id,
+            ['order_id' => (string) $order->id, 'amendment_id' => (string) $amendment->id],
+        );
     }
 
     // ------------------------------------------------------------ transitions

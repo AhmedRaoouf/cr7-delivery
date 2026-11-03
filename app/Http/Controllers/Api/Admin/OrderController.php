@@ -66,6 +66,7 @@ class OrderController extends Controller
 
         return ApiResponse::success(new OrderResource($order->load([
             'restaurant', 'driver.user', 'user', 'items.options', 'statusHistory', 'driverAttempts.driver.user', 'refunds', 'orderGroup.payment.proofs.reviewedBy',
+            'amendments.proposer:id,name',
         ])));
     }
 

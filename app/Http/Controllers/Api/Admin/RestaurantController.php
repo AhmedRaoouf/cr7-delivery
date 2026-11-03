@@ -48,7 +48,7 @@ class RestaurantController extends Controller
             $query->whereHas('cuisines', fn ($c) => $c->whereIn('cuisines.id', $cuisines));
         }
 
-        foreach (['is_active', 'is_verified', 'is_featured', 'direct_orders_enabled'] as $flag) {
+        foreach (['is_active', 'is_verified', 'is_featured', 'direct_orders_enabled', 'amendments_enabled'] as $flag) {
             if (($value = $params->bool($flag)) !== null) {
                 $query->where('restaurants.'.$flag, $value);
             }
@@ -106,6 +106,7 @@ class RestaurantController extends Controller
         $this->ensureInScope($request, $restaurant);
 
         $data = $this->guardCommission($request, $restaurant, $request->validated());
+        $data = $this->guardAmendments($request, $restaurant, $data);
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', $restaurant, MediaField::RestaurantLogo);
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', $restaurant, MediaField::RestaurantCover);
         $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus', $restaurant);
@@ -152,6 +153,34 @@ class RestaurantController extends Controller
         $restaurant->update(['direct_orders_enabled' => $enabled]);
 
         return ApiResponse::success($restaurant, 'تم تحديث إعداد الطلبات المباشرة بنجاح');
+    }
+
+    /**
+     * doc 99 §4, D-172 — «صلاحية … مش لكل اليوزرات»: whether this place may propose a change
+     * to a new order. Off by default; `restaurants.toggle_amendments`. Either name, the
+     * same way the direct-orders switch takes either.
+     */
+    public function amendments(Request $request, Restaurant $restaurant): JsonResponse
+    {
+        $this->ensureInScope($request, $restaurant);
+
+        $validated = $request->validate([
+            'enabled' => ['required_without:amendments_enabled', 'boolean'],
+            'amendments_enabled' => ['required_without:enabled', 'boolean'],
+        ]);
+
+        $enabled = array_key_exists('enabled', $validated) && $validated['enabled'] !== null
+            ? (bool) $validated['enabled']
+            : (bool) $validated['amendments_enabled'];
+
+        $before = (bool) $restaurant->amendments_enabled;
+        $restaurant->update(['amendments_enabled' => $enabled]);
+
+        if ($before !== $enabled) {
+            AuditLogger::record($request->user(), 'restaurants.toggle_amendments', $restaurant, ['amendments_enabled' => $enabled], ['amendments_enabled' => $before]);
+        }
+
+        return ApiResponse::success($restaurant->fresh(), $enabled ? 'تم السماح للمكان باقتراح تعديل على الطلبات' : 'تم إيقاف اقتراح التعديل لهذا المكان');
     }
 
     public function commission(Request $request, Restaurant $restaurant): JsonResponse
@@ -249,6 +278,35 @@ class RestaurantController extends Controller
                 403,
             );
         }
+
+        return $data;
+    }
+
+    /**
+     * doc 99 D-172 — `amendments_enabled` rides on `ADM-12`'s form, but it is its own grant:
+     * an admin who may edit the place's details and not this switch is refused by name, and
+     * a value that does not move the switch is dropped rather than refused.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function guardAmendments(Request $request, Restaurant $restaurant, array $data): array
+    {
+        if (! array_key_exists('amendments_enabled', $data)) {
+            return $data;
+        }
+
+        if ($data['amendments_enabled'] === null || (bool) $data['amendments_enabled'] === (bool) $restaurant->amendments_enabled) {
+            unset($data['amendments_enabled']);
+
+            return $data;
+        }
+
+        if (! $request->user()->can('restaurants.toggle_amendments')) {
+            throw new ApiException('amendments_toggle_not_permitted', 'لا تملك صلاحية تفعيل اقتراح التعديل لهذا المكان', 403);
+        }
+
+        $data['amendments_enabled'] = (bool) $data['amendments_enabled'];
 
         return $data;
     }

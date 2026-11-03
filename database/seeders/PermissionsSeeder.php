@@ -17,11 +17,15 @@ class PermissionsSeeder extends Seeder
                 'orders.force_status', 'orders.resolve_issue', 'orders.cancel_sub_order',
                 'orders.recalculate_group', 'orders.renotify', 'orders.extend_prep',
                 'orders.raise_issue', 'orders.note',
+                // doc 99 D-172 — propose a change to an order on the place's behalf.
+                'orders.amend',
             ],
             'restaurants' => [
                 'restaurants.view', 'restaurants.create', 'restaurants.update', 'restaurants.toggle_status',
                 'restaurants.set_commission', 'restaurants.reset_password', 'restaurants.manage_menu',
                 'restaurants.toggle_direct_orders',
+                // doc 99 D-172 — the per-place «اقتراح تعديل» switch.
+                'restaurants.toggle_amendments',
             ],
             'direct_orders' => [
                 'direct_orders.view', 'direct_orders.view_all', 'direct_orders.cancel', 'direct_orders.manage_limits',

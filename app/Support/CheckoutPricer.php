@@ -6,6 +6,8 @@ use App\Enums\PaymentMethod;
 use App\Exceptions\ApiException;
 use App\Models\Cart;
 use App\Models\DeliveryPricingRule;
+use App\Models\Order;
+use App\Models\OrderGroup;
 use App\Models\PromoCode;
 use App\Models\Restaurant;
 use App\Models\Setting;
@@ -135,25 +137,23 @@ class CheckoutPricer
             }
         }
 
-        $discountBase = round($restaurantSubtotals->only($discountedIds)->sum(), 2);
+        // The money each place carries — one rule, shared with an amendment's re-price
+        // (doc 99 D-172) so a changed order is priced exactly as it was checked out.
+        $shares = $this->shares($restaurantSubtotals, $discountAmount, $discountedIds, $deliveryFee, $platformFee);
 
-        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($restaurantSubtotals, $subtotal, $discountAmount, $discountedIds, $discountBase, $deliveryFee, $platformFee, $distances) {
+        $groups = $byRestaurant->map(function (Collection $lines, $restaurantId) use ($shares, $distances) {
             $restaurant = $lines->first()->restaurant;
-            $lineSubtotal = round($restaurantSubtotals[$restaurantId], 2);
-            $share = $subtotal > 0 ? $lineSubtotal / $subtotal : 0;
-            $discountShare = $discountBase > 0 && in_array((int) $restaurantId, $discountedIds, true)
-                ? $lineSubtotal / $discountBase
-                : 0;
+            $share = $shares[(int) $restaurantId];
 
             return [
                 'restaurant_id' => $restaurant->id,
                 'restaurant_name' => $restaurant->name_ar,
                 'distance_km' => round($distances[$restaurantId], 2),
-                'subtotal' => $lineSubtotal,
-                'discount_share' => round($discountAmount * $discountShare, 2),
-                'delivery_fee_share' => round($deliveryFee * $share, 2),
-                'platform_fee_share' => round($platformFee * $share, 2),
-                'meets_min_order' => $lineSubtotal >= (float) $restaurant->min_order_value,
+                'subtotal' => $share['subtotal'],
+                'discount_share' => $share['discount_share'],
+                'delivery_fee_share' => $share['delivery_fee_share'],
+                'platform_fee_share' => $share['platform_fee_share'],
+                'meets_min_order' => $share['subtotal'] >= (float) $restaurant->min_order_value,
                 // The place's own window first, its zone's average after — the
                 // same numbers the menu and the basket print. Zone-only left a
                 // place with no zone promising «خلال 0–0 دقيقة» at checkout.
@@ -162,11 +162,6 @@ class CheckoutPricer
                 'is_open_now' => $restaurant->isOpenNow(),
             ];
         })->values();
-
-        // Rounding remainder goes to the largest subtotal (doc 08 §4).
-        $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount, $discountedIds);
-        $groups = $this->assignRoundingRemainder($groups, 'delivery_fee_share', $deliveryFee);
-        $groups = $this->assignRoundingRemainder($groups, 'platform_fee_share', $platformFee);
 
         foreach ($groups as $group) {
             if (! $group['meets_min_order']) {
@@ -490,6 +485,114 @@ class CheckoutPricer
             : $names->join('، ', ' و');
 
         return 'هذا الكود خاص بـ '.$list.' فقط';
+    }
+
+    /**
+     * Each place's share of the discount, the delivery fee and the service fee, split
+     * pro-rata by subtotal with every rounding remainder on the largest subtotal (doc 08
+     * §4) — the discount's only among the places the code covers (doc 96).
+     *
+     * Pure: no query, no setting. `price()` and an amendment's re-price (doc 99 D-172) both
+     * read it, so there is one piece of arithmetic for the money on a sub-order.
+     *
+     * @param  Collection<int|string, float>  $restaurantSubtotals  keyed by restaurant id, in the basket's order
+     * @param  list<int>  $discountedIds
+     * @return Collection<int, array{restaurant_id: int, subtotal: float, discount_share: float, delivery_fee_share: float, platform_fee_share: float}> keyed by restaurant id
+     */
+    public function shares(Collection $restaurantSubtotals, float $discountAmount, array $discountedIds, float $deliveryFee, float $platformFee): Collection
+    {
+        $subtotal = round($restaurantSubtotals->sum(), 2);
+        $discountBase = round($restaurantSubtotals->only($discountedIds)->sum(), 2);
+
+        $groups = $restaurantSubtotals->map(function ($value, $restaurantId) use ($subtotal, $discountAmount, $discountedIds, $discountBase, $deliveryFee, $platformFee) {
+            $lineSubtotal = round((float) $value, 2);
+            $share = $subtotal > 0 ? $lineSubtotal / $subtotal : 0;
+            $discountShare = $discountBase > 0 && in_array((int) $restaurantId, $discountedIds, true)
+                ? $lineSubtotal / $discountBase
+                : 0;
+
+            return [
+                'restaurant_id' => (int) $restaurantId,
+                'subtotal' => $lineSubtotal,
+                'discount_share' => round($discountAmount * $discountShare, 2),
+                'delivery_fee_share' => round($deliveryFee * $share, 2),
+                'platform_fee_share' => round($platformFee * $share, 2),
+            ];
+        })->values();
+
+        $groups = $this->assignRoundingRemainder($groups, 'discount_share', $discountAmount, $discountedIds);
+        $groups = $this->assignRoundingRemainder($groups, 'delivery_fee_share', $deliveryFee);
+        $groups = $this->assignRoundingRemainder($groups, 'platform_fee_share', $platformFee);
+
+        return $groups->keyBy('restaurant_id');
+    }
+
+    /**
+     * doc 99 D-172 — a placed basket re-priced after a place changed one of its sub-orders.
+     *
+     * The same rules as checkout, applied to what checkout already fixed: the delivery fee,
+     * the far-place surcharge in it, the service fee and a carried fee stay exactly as they
+     * were stored (the customer was quoted them and nothing about the trip changed); the
+     * discount is taken again by the code's own rules and places (doc 96) — a code whose
+     * places' dishes fall below its minimum no longer discounts; and every share is split
+     * by {@see shares()}.
+     *
+     * A basket that carried no discount gets none: `promo_code_id` is also written for a
+     * code that was refused at checkout, and re-pricing must never grant one.
+     *
+     * @param  array<int, float>  $newSubtotals  sub-order id => its subtotal after the change; the others keep theirs
+     * @return array{group: array{subtotal: float, discount_amount: float, delivery_fee: float, platform_fee: float, outstanding_fees: float, total: float}, orders: array<int, array{subtotal: float, discount_share: float, delivery_fee_share: float, platform_fee_share: float, total: float}>}
+     */
+    public function repriceGroup(OrderGroup $group, array $newSubtotals): array
+    {
+        $orders = $group->orders()->orderBy('group_sequence')->orderBy('id')->get(['id', 'restaurant_id', 'subtotal']);
+
+        $byRestaurant = $orders->mapWithKeys(fn (Order $order) => [
+            (int) $order->restaurant_id => round((float) ($newSubtotals[$order->id] ?? $order->subtotal), 2),
+        ]);
+
+        $discountAmount = 0.0;
+        $discountedIds = $byRestaurant->keys()->map(fn ($id) => (int) $id)->all();
+
+        if ((float) $group->discount_amount > 0 && $group->promo_code_id !== null && ($promo = PromoCode::query()->find($group->promo_code_id)) !== null) {
+            $discountedIds = self::discountedIds($promo, $byRestaurant);
+            $base = round($byRestaurant->only($discountedIds)->sum(), 2);
+
+            if ($discountedIds !== [] && $base >= (float) $promo->min_order_value) {
+                $discountAmount = self::discountOn($promo, $byRestaurant);
+            }
+        }
+
+        $deliveryFee = round((float) $group->delivery_fee, 2);
+        $platformFee = round((float) $group->platform_fee, 2);
+        $outstanding = round((float) $group->outstanding_fees, 2);
+        $subtotal = round($byRestaurant->sum(), 2);
+
+        $shares = $this->shares($byRestaurant, $discountAmount, $discountedIds, $deliveryFee, $platformFee);
+
+        $perOrder = [];
+        foreach ($orders as $order) {
+            $share = $shares[(int) $order->restaurant_id];
+            $perOrder[$order->id] = [
+                'subtotal' => $share['subtotal'],
+                'discount_share' => $share['discount_share'],
+                'delivery_fee_share' => $share['delivery_fee_share'],
+                'platform_fee_share' => $share['platform_fee_share'],
+                'total' => round($share['subtotal'] - $share['discount_share'] + $share['delivery_fee_share'] + $share['platform_fee_share'], 2),
+            ];
+        }
+
+        return [
+            'group' => [
+                'subtotal' => $subtotal,
+                'discount_amount' => $discountAmount,
+                'delivery_fee' => $deliveryFee,
+                'platform_fee' => $platformFee,
+                'outstanding_fees' => $outstanding,
+                'total' => round($subtotal - $discountAmount + $deliveryFee + $platformFee + $outstanding, 2),
+            ],
+            'orders' => $perOrder,
+        ];
     }
 
     /** @param  list<int>|null  $onlyIds  the groups allowed to carry it — doc 96, a code's own places */

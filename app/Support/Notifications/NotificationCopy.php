@@ -320,6 +320,23 @@ class NotificationCopy
             'ar' => ['تم إلغاء الطلب {order_number}', 'لم يُتمّ العميل التحويل في الوقت المحدد — لا حاجة لتحضيره'],
             'en' => ['Order {order_number} was cancelled', 'The customer did not pay in time — no need to prepare it'],
         ],
+        // doc 99 D-172 — a change the place proposed, and the customer's answer to it.
+        'order.amendment_proposed' => [
+            'ar' => ['اقترح {place} تعديلًا على طلبك', 'راجع التعديل على الطلب {order_number} ووافق عليه أو ارفضه خلال {minutes} دقائق'],
+            'en' => ['{place} proposed a change to your order', 'Review the change to order {order_number} and accept or decline it within {minutes} min'],
+        ],
+        'order.amendment_accepted_restaurant' => [
+            'ar' => ['وافق العميل على تعديل الطلب {order_number}', 'تم قبول الطلب بالتعديل — حساب المكان {total}'],
+            'en' => ['The customer accepted the change to order {order_number}', 'The order is accepted as changed — your share {total}'],
+        ],
+        'order.amendment_rejected_restaurant' => [
+            'ar' => ['رفض العميل تعديل الطلب {order_number}', 'الطلب ما زال بانتظار ردّك — اقبله كما هو أو ارفضه'],
+            'en' => ['The customer declined the change to order {order_number}', 'The order is still waiting for you — accept it as it was or reject it'],
+        ],
+        'order.amendment_expired_restaurant' => [
+            'ar' => ['لم يرد العميل على تعديل الطلب {order_number}', 'الطلب ما زال بانتظار ردّك — اقبله كما هو أو ارفضه'],
+            'en' => ['The customer did not answer the change to order {order_number}', 'The order is still waiting for you — accept it as it was or reject it'],
+        ],
         'order.confirm_expired' => [
             'ar' => ['تم إلغاء الطلب', 'لم يصلنا تأكيدك للطلب {order_number} في الوقت المحدد — يمكنك إعادة الطلب في أي وقت'],
             'en' => ['Order cancelled', 'We did not receive your confirmation of order {order_number} in time — you can reorder any time'],

@@ -16,6 +16,8 @@ use App\Http\Requests\Customer\CreateOrderRequest;
 use App\Http\Requests\Customer\RateOrderRequest;
 use App\Http\Resources\Customer\OrderGroupCreatedResource;
 use App\Http\Resources\Customer\OrderGroupDetailResource;
+use App\Support\Amendments\AmendmentPayload;
+use App\Support\Amendments\AmendmentTimeline;
 use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
 use App\Support\ApiResponse;
@@ -99,7 +101,7 @@ class OrderController extends Controller
         // the place and the office, so the three screens agree on one captain.
         $staleSeconds = DriverLiveness::staleSeconds();
 
-        $subOrders = $orders->map(function ($order) use ($locale, $staleSeconds) {
+        $subOrders = $orders->map(function ($order) use ($locale, $staleSeconds, $orderGroup) {
             $etaMinutes = $order->serviceZone?->avg_delivery_minutes ?? 30;
 
             return [
@@ -118,7 +120,11 @@ class OrderController extends Controller
                 'status' => $order->status,
                 'status_label' => $order->status->label(),
                 'eta_minutes' => $etaMinutes,
-                'timeline' => $order->statusHistory->map(fn ($h) => ['status' => $h->to_status, 'at' => $h->created_at, 'done' => true]),
+                'timeline' => AmendmentTimeline::withoutAmendmentRows($order->statusHistory)->map(fn ($h) => ['status' => $h->to_status, 'at' => $h->created_at, 'done' => true])->values(),
+                // doc 99 D-172 — the current change, or the last one, or null.
+                'amendment' => ($amendment = $order->latestAmendment()->first()) === null
+                    ? null
+                    : AmendmentPayload::forCustomer($amendment->setRelation('order', $order)->setRelation('orderGroup', $orderGroup), $locale),
                 'driver' => $order->driver ? [
                     'id' => $order->driver->id,
                     'name' => $order->driver->user->name,
@@ -160,6 +166,7 @@ class OrderController extends Controller
             // order is delivered, and «يظهر على طول التقييم» is measured from that
             // moment. It cannot ask a second endpoint to find out whether to.
             ...RatingState::for($orderGroup->setRelation('orders', $orders)),
+            'pending_amendment' => AmendmentPayload::pendingSummary($orderGroup),
             'sub_orders' => $subOrders,
         ]);
     }

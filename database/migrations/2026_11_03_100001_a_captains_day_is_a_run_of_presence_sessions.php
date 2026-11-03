@@ -20,7 +20,10 @@ return new class extends Migration
     {
         Schema::create('driver_presence_sessions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('driver_id')->constrained()->cascadeOnDelete();
+            // No foreign key: MySQL refuses a cascading key on a column a stored generated
+            // column (`open_driver_id`) is computed from, and a captain is soft-deleted, so
+            // his days stay readable after he leaves.
+            $table->unsignedBigInteger('driver_id');
             $table->timestamp('started_at');
             $table->timestamp('last_seen_at');
             $table->timestamp('ended_at')->nullable();

@@ -7,6 +7,7 @@ use App\Models\ServiceZone;
 use App\Models\User;
 use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\PlaceOrder;
+use App\Support\Catalog\RatingBadge;
 use App\Support\FirstOrderPerk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -113,6 +114,9 @@ final class PublicCache
             // doc 87 — an app before 1.0.22 reads its untouched `sort=nearest` as the
             // operator's order; a newer one asking for «الأقرب» means it.
             PlaceOrder::isLegacyClient($request) ? 'nearest-default' : 'nearest-chosen',
+            // doc 99 §5 — an app before 1.0.24 reads the welcome 5.0 in `rating_avg`; a
+            // newer one reads the true average there and the 5.0 in `rating_badge`.
+            RatingBadge::isLegacyClient($request) ? 'welcome-in-avg' : 'welcome-in-badge',
             http_build_query($query),
         ]);
 

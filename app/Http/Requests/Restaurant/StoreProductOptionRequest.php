@@ -16,7 +16,10 @@ class StoreProductOptionRequest extends FormRequest
 
     public function rules(): array
     {
-        return $this->optionRules($this->isMethod('post'));
+        return $this->optionRules($this->isMethod('post')) + [
+            // doc 99 §1 — a word to the office beside a price change.
+            'price_note' => ['nullable', 'string', 'max:500'],
+        ];
     }
 
     public function messages(): array

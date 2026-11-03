@@ -4,8 +4,11 @@ namespace App\Http\Requests\Restaurant;
 
 use App\Http\Requests\Concerns\FallsBackToArabic;
 use App\Http\Requests\Concerns\ValidatesProductGallery;
+use App\Models\Product;
+use App\Support\Catalog\PriceApproval;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreRestaurantProductRequest extends FormRequest
 {
@@ -40,7 +43,16 @@ class StoreRestaurantProductRequest extends FormRequest
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             ...$this->galleryRules(),
             'price' => [$required, 'numeric', 'min:0'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
+            // A new dish compares the two fields it was sent. An edit may send only one of
+            // them, so it is compared in `after()` against the other's real value (the live
+            // row, or the price already waiting for the office) — `lt:price` against an
+            // absent `price` refused every discount-only edit, and let a price lowered under
+            // the live discount through.
+            'discount_price' => $this->isMethod('post')
+                ? ['nullable', 'numeric', 'min:0', 'lt:price']
+                : ['nullable', 'numeric', 'min:0'],
+            // doc 99 §1 — a word to the office beside a price change.
+            'price_note' => ['nullable', 'string', 'max:500'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],
             'calories' => ['nullable', 'integer', 'min:0'],
             'ingredients_ar' => ['nullable', 'string'],
@@ -56,5 +68,32 @@ class StoreRestaurantProductRequest extends FormRequest
             'remove_image' => ['nullable', 'boolean'],
             'remove_gallery' => ['nullable', 'boolean'],
         ];
+    }
+
+    /** @return list<callable> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $product = $this->route('product');
+
+            if ($this->isMethod('post') || ! $product instanceof Product || $validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            // Another place's dish is the controller's 404, never a hint about its price.
+            if ((int) $product->restaurant_id !== (int) $this->user()?->restaurant?->id) {
+                return;
+            }
+
+            if (! $this->has('price') && ! $this->has('discount_price')) {
+                return;
+            }
+
+            [$price, $discount] = PriceApproval::effectivePair($product, $this->only(['price', 'discount_price']));
+
+            if ($discount !== null && $discount >= $price) {
+                $validator->errors()->add('discount_price', __('سعر الخصم يجب أن يكون أقل من سعر الصنف'));
+            }
+        }];
     }
 }

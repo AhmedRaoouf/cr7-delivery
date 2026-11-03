@@ -8,6 +8,7 @@ use App\Models\Restaurant;
 use App\Models\ServiceZone;
 use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\OptionSelection;
+use App\Support\Catalog\RatingBadge;
 use Illuminate\Http\Request;
 
 /** doc 08 §4 — GET /cart response shape: always grouped by restaurant, even for one restaurant. */
@@ -105,6 +106,8 @@ class CartFormatter
                     'id' => $restaurant->id,
                     'name' => $restaurant->{"name_{$locale}"},
                     'logo' => $restaurant->logo,
+                    // doc 99 §6 — the rating beside the name, in the basket too.
+                    'rating_badge' => RatingBadge::for($restaurant),
                     'is_open_now' => $restaurant->isOpenNow(),
                     // The basket's «التوصيل خلال …» — the same window the menu prints.
                     'delivery_time_min' => $restaurant->etaWindow()[0],

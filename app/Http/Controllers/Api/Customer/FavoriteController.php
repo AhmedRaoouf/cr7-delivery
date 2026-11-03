@@ -22,7 +22,8 @@ class FavoriteController extends Controller
         // and today's hours — loaded once for the list, not once per card (batch 68).
         $favorites = $request->user()->favorites()
             ->with(['favoritable' => fn (MorphTo $morph) => $morph->morphWith([
-                Restaurant::class => ['serviceZone', 'openingHours'],
+                Restaurant::class => ['serviceZone', 'openingHours', 'storeCategory'],
+                Product::class => ['restaurant'],
             ])])
             ->latest()
             ->get();

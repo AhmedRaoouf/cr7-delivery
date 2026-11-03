@@ -31,6 +31,8 @@ class PermissionsSeeder extends Seeder
             ],
             'products' => [
                 'products.view', 'products.create', 'products.update', 'products.delete', 'products.toggle_availability',
+                // doc 99 §1 — D-169: approve or reject a place's price change.
+                'products.approve_prices',
             ],
             'drivers' => [
                 'drivers.view', 'drivers.create', 'drivers.update', 'drivers.toggle_status',

@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\Customer;
 
+use App\Models\StoreCategory;
+use App\Support\Catalog\RatingBadge;
 use App\Support\Geo;
 use App\Support\Locale;
 use App\Support\Media\MediaLibrary;
@@ -41,8 +43,14 @@ class RestaurantDetailResource extends JsonResource
                 'name' => $this->storeCategory->{"name_{$locale}"},
                 'icon' => $this->storeCategory->icon,
             ]),
-            'rating_avg' => (float) $this->rating_avg,
+            // doc 99 §5 — the true average; an app before 1.0.24 is sent the welcome 5.0
+            // here (its only field), and `PublicCache` keeps that body apart.
+            'rating_avg' => RatingBadge::ratingAvgFor($this->resource, $request),
             'rating_count' => $this->rating_count,
+            // doc 99 §5–§6 — what the customer sees beside the name.
+            'rating_badge' => RatingBadge::for($this->resource),
+            // doc 99 §8 — D-176: rows (`list`) or the two-column shelf (`grid`).
+            'product_layout' => StoreCategory::layoutOf($this->storeCategory),
             'delivery_fee' => $zone?->delivery_fee !== null ? (float) $zone->delivery_fee : null,
             // doc 97 — added to the customer's area fee when this place is in the basket.
             'delivery_surcharge' => (float) $this->delivery_surcharge,

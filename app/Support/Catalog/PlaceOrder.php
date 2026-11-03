@@ -73,7 +73,9 @@ final class PlaceOrder
     private static function applyPreset(Builder $query, string $mode): void
     {
         match ($mode) {
-            'top_rated' => $query->orderByDesc('restaurants.rating_avg')->orderByDesc('restaurants.orders_count'),
+            // doc 99 §5 — by the value the customer sees: a place in its welcome ranks at
+            // 5.0; every other place is where it always was.
+            'top_rated' => RatingBadge::orderByShown($query, 'desc')->orderByDesc('restaurants.orders_count'),
             'most_ordered' => $query->orderByDesc('restaurants.orders_count')->orderByDesc('restaurants.rating_avg'),
             'newest' => $query->orderByDesc('restaurants.created_at'),
             // The zone's own average, as the customer's «الأسرع» sort reads it. A place

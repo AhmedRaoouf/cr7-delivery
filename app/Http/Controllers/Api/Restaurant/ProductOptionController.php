@@ -8,6 +8,7 @@ use App\Models\ProductOption;
 use App\Models\ProductOptionGroup;
 use App\Support\ApiResponse;
 use App\Support\Catalog\OptionGroupWriter;
+use App\Support\Catalog\PriceApproval;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -36,9 +37,44 @@ class ProductOptionController extends Controller
     {
         $this->ensureOwned($request, $optionGroup);
         abort_unless($option->product_option_group_id === $optionGroup->id, 404);
-        $option = OptionGroupWriter::saveOption($optionGroup, $option, $request->validated());
 
-        return ApiResponse::success($option, 'تم تحديث الخيار بنجاح');
+        $data = $request->validated();
+        $note = $data['price_note'] ?? null;
+        unset($data['price_note']);
+
+        // doc 99 §1 — D-169: an existing option's price waits for the office like the
+        // dish's own. A cleared field means «adds nothing», exactly as the writer reads it.
+        $delta = null;
+
+        if (PriceApproval::enabled() && array_key_exists('price_delta', $data)) {
+            $sent = round((float) ($data['price_delta'] ?? 0), 2);
+
+            if (abs($sent - round((float) $option->price_delta, 2)) >= 0.005) {
+                $delta = $sent;
+            }
+
+            unset($data['price_delta']);
+        }
+
+        $option = OptionGroupWriter::saveOption($optionGroup, $option, $data);
+
+        $filed = $delta === null
+            ? null
+            : PriceApproval::file($optionGroup->product, $request->user(), null, [$option->id => $delta], $note);
+
+        $payload = $option->toArray() + [
+            'pending_price_request' => $optionGroup->product?->openPriceRequest()->first()?->toPlaceSummary(),
+        ];
+
+        if ($filed === null) {
+            return ApiResponse::success($payload, 'تم تحديث الخيار بنجاح');
+        }
+
+        return ApiResponse::success(
+            $payload,
+            'أُرسل السعر الجديد إلى الإدارة للمراجعة، وسيظهر للعملاء بعد الاعتماد',
+            meta: ['price_request' => $filed['outcome']],
+        );
     }
 
     public function order(Request $request, ProductOptionGroup $optionGroup): JsonResponse

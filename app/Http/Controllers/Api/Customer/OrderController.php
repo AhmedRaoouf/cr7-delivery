@@ -19,6 +19,8 @@ use App\Http\Resources\Customer\OrderGroupDetailResource;
 use App\Http\Resources\Customer\OrderGroupListResource;
 use App\Models\OrderGroup;
 use App\Support\ApiResponse;
+use App\Support\Catalog\RatingBadge;
+use App\Support\CustomerHomeOrders;
 use App\Support\DriverLiveness;
 use App\Support\LateCancellationFee;
 use App\Support\Lists\ListSearch;
@@ -114,6 +116,8 @@ class OrderController extends Controller
                     'phone' => $order->restaurant->phone,
                     'address' => $order->restaurant->address,
                     'logo' => $order->restaurant->logo,
+                    // doc 99 §6 — the rating beside the name.
+                    'rating_badge' => RatingBadge::for($order->restaurant),
                 ],
                 'status' => $order->status,
                 'status_label' => $order->status->label(),
@@ -304,6 +308,49 @@ class OrderController extends Controller
             ),
             'تم إرسال التقييم بنجاح',
         );
+    }
+
+    /**
+     * doc 99 §6 — `GET /orders/rating-due`: the basket the home's rating card asks about,
+     * or `{due: false, order: null}`. See {@see CustomerHomeOrders::ratingDue()}.
+     */
+    public function ratingDue(Request $request): JsonResponse
+    {
+        $group = CustomerHomeOrders::ratingDue($request->user());
+
+        return ApiResponse::success([
+            'due' => $group !== null,
+            'order' => $group === null ? null : CustomerHomeOrders::ratingDuePayload($group, Locale::current($request)),
+        ]);
+    }
+
+    /**
+     * doc 99 §6 — `POST /orders/{group}/ratings/dismiss` («لاحقًا»). Remembered on the
+     * basket, so another device does not ask again; the receipt still offers the rating.
+     * Pressing it twice keeps the first moment.
+     */
+    public function dismissRating(Request $request, OrderGroup $orderGroup): JsonResponse
+    {
+        $this->ensureOwned($request, $orderGroup);
+
+        if ($orderGroup->rating_prompt_dismissed_at === null) {
+            $orderGroup->forceFill(['rating_prompt_dismissed_at' => now()])->save();
+        }
+
+        return ApiResponse::success([
+            'id' => $orderGroup->id,
+            'rating_prompt_dismissed_at' => $orderGroup->rating_prompt_dismissed_at,
+            ...RatingState::for($orderGroup),
+        ], 'يمكنك تقييم الطلب لاحقًا من صفحة الطلب');
+    }
+
+    /**
+     * doc 99 §7 — `GET /orders/reorder-suggestions`: «اطلب مرة أخرى». Reordering is the
+     * existing `POST /orders/{group}/reorder`.
+     */
+    public function reorderSuggestions(Request $request): JsonResponse
+    {
+        return ApiResponse::success(CustomerHomeOrders::reorderSuggestions($request->user(), Locale::current($request)));
     }
 
     private function ensureOwned(Request $request, OrderGroup $orderGroup): void

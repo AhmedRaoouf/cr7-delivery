@@ -66,7 +66,7 @@ class AppServiceProvider extends ServiceProvider
         'address', 'application', 'banner', 'category', 'city', 'complaint', 'cuisine',
         'customer', 'deliveryIssue', 'driver', 'driverDocument', 'faq', 'item',
         'menuCategory', 'notification', 'option', 'optionGroup', 'order', 'orderGroup',
-        'orderId', 'payment', 'pricingRule', 'product', 'promoCode', 'proof', 'refund',
+        'orderId', 'payment', 'priceRequest', 'pricingRule', 'product', 'promoCode', 'proof', 'refund',
         'restaurant', 'role', 'settlement', 'user', 'zone',
     ];
 

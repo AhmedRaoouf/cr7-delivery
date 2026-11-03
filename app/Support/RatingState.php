@@ -24,7 +24,7 @@ use Illuminate\Support\Collection;
  */
 class RatingState
 {
-    /** @return array{is_rated: bool, can_rate: bool, rating: array<string, mixed>|null} */
+    /** @return array{is_rated: bool, can_rate: bool, rating: array<string, mixed>|null, rating_prompt_dismissed: bool} */
     public static function for(OrderGroup $group): array
     {
         $orders = $group->relationLoaded('orders')
@@ -51,6 +51,9 @@ class RatingState
             // spend the single rating on half an order.
             'can_rate' => $delivered && ! $stillLive && ! $isRated,
             'rating' => $isRated ? self::payload($ratings) : null,
+            // doc 99 §6 — «لاحقًا» was pressed on some device: do not open the sheet by
+            // itself again. The receipt still offers the button while `can_rate`.
+            'rating_prompt_dismissed' => $group->rating_prompt_dismissed_at !== null,
         ];
     }
 
@@ -76,6 +79,16 @@ class RatingState
                 'tags' => $driver->tags,
                 'comment' => $driver->comment,
             ],
+            // doc 99 §6 — every captain rated, when a basket had more than one.
+            'drivers' => $ratings
+                ->where('rateable_type', 'driver')
+                ->map(fn (Rating $rating) => [
+                    'driver_id' => (int) $rating->rateable_id,
+                    'stars' => (int) $rating->stars,
+                    'tags' => $rating->tags,
+                    'comment' => $rating->comment,
+                ])
+                ->values(),
         ];
     }
 

@@ -24,6 +24,13 @@ class RateOrderRequest extends FormRequest
             'driver.stars' => ['required_with:driver', 'integer', 'between:1,5'],
             'driver.tags' => ['nullable', 'array'],
             'driver.comment' => ['nullable', 'string', 'max:500'],
+            // doc 99 §6 — D-174: every captain who carried a part of the basket, each rated
+            // on its own. `driver` stays for an app that knows one captain.
+            'drivers' => ['nullable', 'array', 'max:3'],
+            'drivers.*.driver_id' => ['required', 'integer', 'exists:drivers,id'],
+            'drivers.*.stars' => ['required', 'integer', 'between:1,5'],
+            'drivers.*.tags' => ['nullable', 'array'],
+            'drivers.*.comment' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

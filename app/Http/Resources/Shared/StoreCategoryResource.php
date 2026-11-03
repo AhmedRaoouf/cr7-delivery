@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Shared;
 
+use App\Models\StoreCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,6 +18,8 @@ class StoreCategoryResource extends JsonResource
             'image' => $this->image,
             'icon' => $this->icon,
             'color' => $this->color,
+            // doc 99 §8 — D-176: how this category's places lay out their products.
+            'product_layout' => StoreCategory::layoutOf($this->resource),
             'sort_order' => $this->sort_order,
             'is_active' => (bool) $this->is_active,
             // Absent unless the query asked for it — `whenCounted` keeps the public

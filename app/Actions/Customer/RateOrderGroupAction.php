@@ -35,11 +35,17 @@ class RateOrderGroupAction
             fn ($entry) => ! empty($entry['restaurant_id']) && ! empty($entry['stars']),
         ));
 
-        $driverEntry = ! empty($data['driver']['driver_id']) && ! empty($data['driver']['stars'])
-            ? $data['driver']
-            : null;
+        // doc 99 §6 — D-174: `drivers[]` beside the old single `driver`. One entry per
+        // captain; when both name the same captain, `drivers[]` is the newer client's word.
+        $driverEntries = [];
 
-        if ($restaurantEntries === [] && $driverEntry === null) {
+        foreach ([$data['driver'] ?? null, ...array_values($data['drivers'] ?? [])] as $entry) {
+            if (is_array($entry) && ! empty($entry['driver_id']) && ! empty($entry['stars'])) {
+                $driverEntries[(int) $entry['driver_id']] = $entry;
+            }
+        }
+
+        if ($restaurantEntries === [] && $driverEntries === []) {
             throw new ApiException('rating_required', 'اختر تقييمًا واحدًا على الأقل قبل الإرسال', 422);
         }
 
@@ -47,7 +53,7 @@ class RateOrderGroupAction
             throw new ApiException('already_rated', 'تم تقييم هذا الطلب من قبل', 409);
         }
 
-        DB::transaction(function () use ($user, $group, $restaurantEntries, $driverEntry) {
+        DB::transaction(function () use ($user, $group, $restaurantEntries, $driverEntries) {
             foreach ($restaurantEntries as $entry) {
                 $order = $group->orders()->where('restaurant_id', $entry['restaurant_id'])->first();
 
@@ -63,15 +69,20 @@ class RateOrderGroupAction
                 $this->recomputeRatingAverage($order->restaurant);
             }
 
-            if ($driverEntry !== null) {
-                $order = $group->orders()->where('driver_id', $driverEntry['driver_id'])->first();
+            foreach ($driverEntries as $driverId => $driverEntry) {
+                // The captain's delivered sub-order when he carried more than one.
+                $order = $group->orders()
+                    ->where('driver_id', $driverId)
+                    ->orderByRaw("status = 'delivered' desc")
+                    ->orderBy('id')
+                    ->first();
 
                 if (! $order || $order->status !== OrderStatus::Delivered) {
                     throw new ApiException('validation_failed', 'لا يمكن تقييم كابتن لم يكمل التوصيل بعد', 422);
                 }
 
                 $user->ratings()->updateOrCreate(
-                    ['order_id' => $order->id, 'rateable_type' => 'driver', 'rateable_id' => $driverEntry['driver_id']],
+                    ['order_id' => $order->id, 'rateable_type' => 'driver', 'rateable_id' => $driverId],
                     ['stars' => $driverEntry['stars'], 'tags' => $driverEntry['tags'] ?? null, 'comment' => $driverEntry['comment'] ?? null],
                 );
 

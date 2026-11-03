@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 /**
  * What kind of shop this is — «مطاعم», «صيدليات», «كافيهات», «سوبرماركت», «خضروات».
@@ -37,6 +38,15 @@ class StoreCategory extends Model
                 $category->product_layout = in_array($category->slug, self::GRID_SLUGS, true) ? 'grid' : 'list';
             }
         });
+    }
+
+    /**
+     * The migration's data default (doc 99 §8): the five shop slugs on `grid`, rows already
+     * on the database included. Query builder on purpose — a deploy step, not an edit.
+     */
+    public static function applyDefaultLayouts(): int
+    {
+        return DB::table('store_categories')->whereIn('slug', self::GRID_SLUGS)->update(['product_layout' => 'grid']);
     }
 
     /** `list` unless the category says `grid` — a null or unknown value never breaks a payload. */

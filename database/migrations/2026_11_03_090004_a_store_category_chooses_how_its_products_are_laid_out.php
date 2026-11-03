@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\StoreCategory;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -14,15 +14,14 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
-    private const GRID = ['pharmacies', 'supermarkets', 'greengrocers', 'gifts-surprises', 'cr-offers'];
-
     public function up(): void
     {
         Schema::table('store_categories', function (Blueprint $table) {
             $table->string('product_layout', 10)->default('list')->after('color');
         });
 
-        DB::table('store_categories')->whereIn('slug', self::GRID)->update(['product_layout' => 'grid']);
+        // pharmacies, supermarkets, greengrocers, gifts-surprises, cr-offers.
+        StoreCategory::applyDefaultLayouts();
     }
 
     public function down(): void

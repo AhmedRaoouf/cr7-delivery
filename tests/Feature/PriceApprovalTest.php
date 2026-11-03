@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Customer\CreateOrderAction;
+use App\Enums\AdminScopeType;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Product;
@@ -12,6 +13,7 @@ use App\Models\ProductPriceRequest;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Support\Settings;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\BuildsListFixtures;
@@ -438,7 +440,7 @@ class PriceApprovalTest extends TestCase
 
         $viewer = User::query()->create(['name' => 'مشاهد', 'phone' => '01000000077', 'type' => 'admin', 'is_active' => true]);
         $viewer->assignRole('viewer');
-        $viewer->adminScopes()->create(['scope_type' => \App\Enums\AdminScopeType::Global]);
+        $viewer->adminScopes()->create(['scope_type' => AdminScopeType::Global]);
 
         $this->actingAsAdmin($viewer)->getJson('/api/v1/admin/price-requests')->assertForbidden();
         $this->actingAsAdmin($viewer)->postJson("/api/v1/admin/price-requests/{$id}/approve")->assertForbidden();
@@ -476,7 +478,7 @@ class PriceApprovalTest extends TestCase
         $this->patchDish(['price' => 130])->assertOk();
         $row = ProductPriceRequest::query()->first();
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         ProductPriceRequest::query()->create([
             'product_id' => $this->dish->id, 'restaurant_id' => $this->place->id, 'status' => 'pending',

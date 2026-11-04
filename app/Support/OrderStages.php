@@ -18,9 +18,9 @@ use Illuminate\Support\Collection;
  * request as the transition, is the time. It is written *before* the history row — the
  * observer announcing the write runs between the two — so on production the row can be
  * a second or two late (order 1642: column 17:45:20, row 17:45:22). The history row is
- * the fallback when the column is empty although the transition happened; the only
- * writer that does that is `ForceStatusAction`, which writes the status and the row and
- * no column. A stage with neither a column nor a row did not happen and is absent:
+ * the fallback when the column is empty although the transition happened — an order
+ * forced before 2026-11-04, when `ForceStatusAction` wrote the status and the row and no
+ * column (it writes the column now, see `ForceStatusAction::STAGE_COLUMNS`). A stage with neither a column nor a row did not happen and is absent:
  * nothing is guessed.
  *
  * **The rules that are not «read the column»:**
@@ -324,12 +324,20 @@ final class OrderStages
         return $history->first(fn ($r) => $r->to_status === $status);
     }
 
-    /** @return array{actor: string|null, forced: bool} */
+    /**
+     * A forced stage carries the note the admin wrote with it: «فرضته الإدارة» alone says
+     * that nobody on the order did it, the note says why.
+     *
+     * @return array{actor: string|null, forced: bool, note?: string|null}
+     */
     private static function actorOf(?OrderStatusHistory $row): array
     {
+        $forced = $row?->reason_code === 'force_status';
+
         return [
             'actor' => $row?->actor_type?->value,
-            'forced' => $row?->reason_code === 'force_status',
+            'forced' => $forced,
+            ...($forced ? ['note' => $row->note] : []),
         ];
     }
 

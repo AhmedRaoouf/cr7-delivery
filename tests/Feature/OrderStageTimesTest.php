@@ -349,23 +349,73 @@ class OrderStageTimesTest extends TestCase
         $this->assertNull($data['durations']['wait_at_place_seconds']);
     }
 
-    public function test_a_stage_the_office_forced_falls_back_to_its_history_row(): void
+    public function test_a_forced_cancellation_writes_its_column_who_cancelled_and_the_admins_note(): void
     {
         $this->at('09:00:00');
         [$order] = $this->basket([$this->place]);
 
-        // `force-status` writes the status and the history row, and no `*_at` column.
         $this->at('09:10:00');
         $this->asAdmin()
             ->postJson("/api/v1/admin/orders/{$order->id}/force-status", ['status' => 'cancelled', 'note' => 'طلب تجريبي'])
             ->assertOk();
-        $this->assertNull($order->fresh()->cancelled_at);
+
+        $fresh = $order->fresh();
+        $this->assertSame('2026-11-05 09:10:00', $fresh->cancelled_at->utc()->format('Y-m-d H:i:s'));
+        $this->assertSame('admin', $fresh->cancelled_by->value);
+        $this->assertSame('طلب تجريبي', $fresh->cancellation_note);
 
         $cancelled = collect($this->detail($order)->json('data.stages'))->firstWhere('key', 'cancelled');
         $this->assertSame('2026-11-05T11:10:00+02:00', $cancelled['at']);
         $this->assertSame(600, $cancelled['since_previous_seconds']);
         $this->assertTrue($cancelled['forced']);
         $this->assertSame('admin', $cancelled['actor']);
+        $this->assertSame('طلب تجريبي', $cancelled['note']);
+    }
+
+    public function test_an_order_forced_before_the_column_was_written_falls_back_to_its_history_row(): void
+    {
+        $this->at('09:00:00');
+        [$order] = $this->basket([$this->place]);
+
+        $this->at('09:10:00');
+        $this->asAdmin()
+            ->postJson("/api/v1/admin/orders/{$order->id}/force-status", ['status' => 'cancelled', 'note' => 'طلب تجريبي'])
+            ->assertOk();
+        // What `force-status` left behind until 2026-11-04: the status and the row, no column.
+        $order->newQuery()->whereKey($order->id)->update(['cancelled_at' => null]);
+
+        $cancelled = collect($this->detail($order)->json('data.stages'))->firstWhere('key', 'cancelled');
+        $this->assertSame('2026-11-05T11:10:00+02:00', $cancelled['at']);
+        $this->assertTrue($cancelled['forced']);
+    }
+
+    public function test_a_forced_delivery_without_a_captain_is_on_the_places_statement_and_forcing_again_keeps_the_first_time(): void
+    {
+        $this->at('09:00:00');
+        [$order] = $this->basket([$this->place]);
+
+        $this->at('09:30:00');
+        $this->asAdmin()
+            ->postJson("/api/v1/admin/orders/{$order->id}/force-status", ['status' => 'delivered', 'note' => 'سُلِّم يدويًا'])
+            ->assertOk();
+        $this->assertSame('2026-11-05 09:30:00', $order->fresh()->delivered_at->utc()->format('Y-m-d H:i:s'));
+
+        // Off and back on: the stage happened at 09:30, not at the second forcing.
+        $this->at('09:40:00');
+        $this->asAdmin()->postJson("/api/v1/admin/orders/{$order->id}/force-status", ['status' => 'on_the_way', 'note' => 'خطأ'])->assertOk();
+        $this->at('09:45:00');
+        $this->asAdmin()->postJson("/api/v1/admin/orders/{$order->id}/force-status", ['status' => 'delivered', 'note' => 'سُلِّم'])->assertOk();
+        $this->assertSame('2026-11-05 09:30:00', $order->fresh()->delivered_at->utc()->format('Y-m-d H:i:s'));
+
+        $this->asAdmin()
+            ->postJson('/api/v1/admin/settlements/generate', [
+                'party_type' => 'restaurant',
+                'party_id' => $this->place->id,
+                'period_start' => '2026-11-05',
+                'period_end' => '2026-11-05',
+            ])
+            ->assertSuccessful();
+        $this->assertNotNull($order->fresh()->restaurant_settlement_id);
     }
 
     public function test_the_fields_the_detail_already_carried_are_unchanged(): void

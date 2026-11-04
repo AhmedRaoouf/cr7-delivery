@@ -43,7 +43,7 @@ class ForceStatusAction
         return DB::transaction(function () use ($admin, $order, $newStatus, $note) {
             $from = $order->status;
 
-            $order->update(['status' => $newStatus]);
+            $order->update(['status' => $newStatus, ...self::stampsFor($order, $newStatus, $note)]);
 
             $order->statusHistory()->create([
                 'from_status' => $from->value,
@@ -62,5 +62,52 @@ class ForceStatusAction
 
             return $order->fresh();
         });
+    }
+
+    /**
+     * The stage column a forced status stands for. Every normal transition writes its
+     * `*_at` in the same request; a forced one wrote the status and the history row only,
+     * so a forced `delivered` was missing from every report and statement that reads
+     * `delivered_at` (settlements, the place's balance, the delivered-time sort) and a
+     * forced `cancelled` said nothing about who cancelled it.
+     *
+     * A column that already holds a time keeps it: that is when the stage really happened,
+     * and forcing the same status again must not move it.
+     */
+    public const STAGE_COLUMNS = [
+        'accepted' => 'accepted_at',
+        'confirmed' => 'confirmed_at',
+        'preparing' => 'preparing_at',
+        'ready' => 'ready_at',
+        'searching_driver' => 'dispatch_started_at',
+        'driver_assigned' => 'driver_assigned_at',
+        'arrived_restaurant' => 'arrived_restaurant_at',
+        'waiting_at_restaurant' => 'waiting_started_at',
+        'picked_up' => 'picked_up_at',
+        'arrived_customer' => 'arrived_customer_at',
+        'delivered' => 'delivered_at',
+        'cancelled' => 'cancelled_at',
+    ];
+
+    /** @return array<string, mixed> */
+    public static function stampsFor(Order $order, OrderStatus $status, string $note): array
+    {
+        $changes = [];
+
+        $column = self::STAGE_COLUMNS[$status->value] ?? null;
+        if ($column !== null && $order->{$column} === null) {
+            $changes[$column] = now();
+        }
+
+        if ($status === OrderStatus::Cancelled) {
+            if ($order->cancelled_by === null) {
+                $changes['cancelled_by'] = 'admin';
+            }
+            if ($order->cancellation_note === null || $order->cancellation_note === '') {
+                $changes['cancellation_note'] = $note;
+            }
+        }
+
+        return $changes;
     }
 }

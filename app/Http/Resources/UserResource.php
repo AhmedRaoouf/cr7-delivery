@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\AdminScopeType;
 use App\Enums\UserType;
+use App\Support\Auth\SuperAdmin;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -40,7 +41,11 @@ class UserResource extends JsonResource
             // a customer or a restaurant has no roles and no scope to publish.
             ...($this->type === UserType::Admin ? [
                 'roles' => $this->getRoleNames()->values()->all(),
-                'permissions' => $this->getAllPermissions()->pluck('name')->values()->all(),
+                // A super admin holds the whole catalogue by role, whatever rows the
+                // role happens to carry — see SuperAdmin.
+                'permissions' => SuperAdmin::is($this->resource)
+                    ? SuperAdmin::everyPermission()
+                    : $this->getAllPermissions()->pluck('name')->values()->all(),
                 'scope' => $this->adminScopePayload(),
             ] : []),
             // The restaurant dashboard resolves its own restaurant from the session

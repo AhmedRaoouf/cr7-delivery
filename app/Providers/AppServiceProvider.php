@@ -42,11 +42,14 @@ use App\Services\Otp\SmsMisrChannel;
 use App\Services\Otp\ZadxChannel;
 use App\Support\ApiResponse;
 use App\Support\Auth\Sessions;
+use App\Support\Auth\SuperAdmin;
+use App\Support\Database\RetryingMySqlConnector;
 use App\Support\OtpRequester;
 use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -104,7 +107,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         // A busy shared host refuses a MySQL connection now and then; ask again before failing.
-        $this->app->bind('db.connector.mysql', \App\Support\Database\RetryingMySqlConnector::class);
+        $this->app->bind('db.connector.mysql', RetryingMySqlConnector::class);
 
         // Telescope is registered by hand rather than by package discovery
         // (`dont-discover` in composer.json), so the decision is one readable
@@ -193,6 +196,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // A super admin passes every registered permission, by role (SuperAdmin).
+        // `null` for anything else leaves the ordinary checks in charge.
+        Gate::before(static fn (User $user, string $ability): ?bool => SuperAdmin::is($user) && SuperAdmin::isPermission($ability) ? true : null);
+
         /*
          * Every route id is a number, and a request that says otherwise is a 404.
          *

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Exceptions\ApiException;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Auth\SuperAdmin;
 
 /**
  * doc 24 §1.3 / doc 16 D-51 — an admin can never create, or grant, a permission or role
@@ -17,7 +18,8 @@ class PermissionEscalationGuard
     /** @param  string[]  $permissions */
     public static function assertCanGrantPermissions(User $actor, array $permissions): void
     {
-        if ($permissions === []) {
+        // A super admin holds every permission by role (SuperAdmin), so it can grant any.
+        if ($permissions === [] || SuperAdmin::is($actor)) {
             return;
         }
 

@@ -120,6 +120,8 @@ class TickCommand extends Command
         // doc 99 §3 — D-171: in auto-assign mode, every order that is due gets the
         // nearest captain; the widening sweep below then has nothing to do.
         $this->sweep('auto assign', fn () => app(AutoAssign::class)->sweep());
+        // 2026-11-06 — `auto_offer`: the cooking orders that are due are offered.
+        $this->sweep('early offers', fn () => app(\App\Support\EarlyOffer::class)->sweep());
         $this->sweep('dispatch rounds', fn () => $this->advanceRounds($dispatch));
         // doc 99 D-172 — a change the customer did not answer goes back to the place,
         // before the accept windows so the window it restarts is read this pass.
@@ -334,7 +336,7 @@ class TickCommand extends Command
         // nobody is just as stranded (its clock starts on the first pass that found nobody).
         $statuses = [OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver];
 
-        if (AutoAssign::enabled()) {
+        if (AutoAssign::beforeReady()) {
             $statuses[] = OrderStatus::Preparing;
         }
 

@@ -49,8 +49,8 @@ class StoreRestaurantProductRequest extends FormRequest
             // absent `price` refused every discount-only edit, and let a price lowered under
             // the live discount through.
             'discount_price' => $this->isMethod('post')
-                ? ['nullable', 'numeric', 'min:0', 'lt:price']
-                : ['nullable', 'numeric', 'min:0'],
+                ? ['nullable', 'numeric', 'gt:0', 'lt:price']
+                : ['nullable', 'numeric', 'gt:0'],
             // doc 99 §1 — a word to the office beside a price change.
             'price_note' => ['nullable', 'string', 'max:500'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],

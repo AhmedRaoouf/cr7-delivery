@@ -26,6 +26,22 @@ class Product extends Model
         'serving_size_en', 'tags', 'is_available', 'is_featured', 'sort_order',
     ];
 
+    /**
+     * The discount a customer is charged, or null. A discount counts only when it is above
+     * 0 and below the price (2026-11-06): a stored 0.00 made a pharmacy item free, and an
+     * admin lowering only the price could leave the old discount above it.
+     */
+    public function liveDiscount(): ?float
+    {
+        if ($this->discount_price === null) {
+            return null;
+        }
+
+        $discount = (float) $this->discount_price;
+
+        return $discount > 0 && $discount < (float) $this->price ? $discount : null;
+    }
+
     protected function casts(): array
     {
         return [

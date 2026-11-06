@@ -26,7 +26,7 @@ class LinePrice
     /** The dish's own price for one unit, before any choice. */
     public static function effective(Product $product): float
     {
-        return (float) ($product->discount_price ?? $product->price);
+        return $product->liveDiscount() ?? (float) $product->price;
     }
 
     public static function isFinal(?ProductOptionGroup $group): bool

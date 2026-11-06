@@ -22,7 +22,7 @@ class ProductResource extends JsonResource
             'description' => $this->{"description_{$locale}"},
             'image' => MediaLibrary::orPlaceholder($this->image),
             'price' => (float) $this->price,
-            'discount_price' => $this->discount_price !== null ? (float) $this->discount_price : null,
+            'discount_price' => $this->resource->liveDiscount(),
             'is_available' => $this->is_available,
             'is_featured' => $this->is_featured,
             'rating_avg' => (float) $this->rating_avg,

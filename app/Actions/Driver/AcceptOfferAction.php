@@ -50,7 +50,9 @@ class AcceptOfferAction
                     throw new ApiException('already_assigned', 'تم قبول الطلب بواسطة كابتن آخر', 409);
                 }
 
-                if ($order->status !== OrderStatus::SearchingDriver) {
+                // `preparing` / `ready`: an offer sent while the food cooked (`auto_offer`,
+                // 2026-11-06); the captain's own `sent` row below is still the gate.
+                if (! in_array($order->status, [OrderStatus::SearchingDriver, OrderStatus::Preparing, OrderStatus::Ready], true)) {
                     throw new ApiException('offer_expired', 'انتهت صلاحية هذا العرض', 422);
                 }
 

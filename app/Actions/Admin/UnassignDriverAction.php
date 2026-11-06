@@ -49,7 +49,7 @@ class UnassignDriverAction
             $from = $order->status;
             // doc 99 §3 — in auto-assign mode an order whose food is still cooking goes
             // back to «قيد التحضير»; the auto-assign pass gives it its next captain when due.
-            $backToTheKitchen = AutoAssign::enabled() && BoardQueue::kitchenPending($order);
+            $backToTheKitchen = AutoAssign::beforeReady() && BoardQueue::kitchenPending($order);
             $nextStatus = $backToTheKitchen
                 ? OrderStatus::Preparing
                 : ($requeue ? OrderStatus::SearchingDriver : OrderStatus::Ready);

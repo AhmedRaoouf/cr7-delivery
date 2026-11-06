@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\AutoAssign;
+use App\Support\EarlyOffer;
 use Illuminate\Support\Facades\DB;
 
 /** doc 08 §6 — POST /restaurant/orders/{id}/start-preparing: confirmed -> preparing, starts the countdown. */
@@ -53,6 +54,13 @@ class StartPreparingAction
                 app(AutoAssign::class)->run($order);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('auto-assign at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+            }
+        } elseif (AutoAssign::offers()) {
+            // 2026-11-06 — the same moment, as an offer the captain accepts or refuses.
+            try {
+                app(EarlyOffer::class)->run($order);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('early offer at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
             }
         }
 

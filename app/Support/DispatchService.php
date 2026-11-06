@@ -50,6 +50,15 @@ class DispatchService
             return;
         }
 
+        // 2026-11-06 — `auto_offer`: an order still cooking is offered, never moved to
+        // `searching_driver` (the kitchen owns `preparing → ready`). A captain stepping off
+        // it, or the office requeueing it, comes through here.
+        if (AutoAssign::offers() && $order->status === OrderStatus::Preparing) {
+            app(EarlyOffer::class)->run($order);
+
+            return;
+        }
+
         // doc 63 D-115 — a sibling of a basket somebody already carries is theirs: no round,
         // no offer to anyone else. Every path to `ready` comes through here, and so does
         // every retry — which is why the holder rule excludes a captain who refused,
@@ -193,9 +202,15 @@ class DispatchService
 
             if ($stillOpen) {
                 $order->update([
+                    // An order made ready while captains still hold the offers they were
+                    // sent as it cooked (`auto_offer`) is looking for a captain: «قبول»
+                    // and the two-minute rebroadcast both read `searching_driver`.
+                    ...($order->status === OrderStatus::Ready ? ['status' => OrderStatus::SearchingDriver] : []),
                     'dispatch_round' => $round,
+                    'dispatch_started_at' => $order->dispatch_started_at ?? now(),
                     'dispatch_last_offer_at' => now(),
                 ]);
+                $this->syncGroupRollup($order);
 
                 return;
             }
@@ -551,6 +566,12 @@ class DispatchService
             return app(AutoAssign::class)->sweep($limit);
         }
 
+        // `auto_offer` — the cooking orders that are due are offered to whoever fits,
+        // which may be this captain; the backlog below is the orders already ready.
+        if (AutoAssign::offers()) {
+            app(EarlyOffer::class)->sweep($limit);
+        }
+
         $driver = $driver->fresh() ?? $driver;
 
         // Offline or suspended hears nothing; a captain mid-errand hears no orders
@@ -728,7 +749,7 @@ class DispatchService
             ->whereHas('order', fn ($q) => $q
                 ->where('order_group_id', $order->order_group_id)
                 ->whereNull('driver_id')
-                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
+                ->whereIn('status', [OrderStatus::Preparing, OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
             ->exists();
     }
 
@@ -779,7 +800,7 @@ class DispatchService
      *
      * @param  array{driver: Driver, distance_km: float|null}  $candidate
      */
-    private function wake(Order $order, array $candidate, int $round): void
+    public function wake(Order $order, array $candidate, int $round): void
     {
         // A broadcast failure is not a dispatch failure: the attempt row is the offer,
         // this is only the notification, and the app's own poll still finds it.

@@ -31,7 +31,7 @@ class StoreProductRequest extends FormRequest
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
             ...$this->galleryRules(),
             'price' => ['required', 'numeric', 'min:0'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
+            'discount_price' => ['nullable', 'numeric', 'gt:0', 'lt:price'],
             'prep_minutes' => ['nullable', 'integer', 'min:1'],
             'calories' => ['nullable', 'integer', 'min:0'],
             'ingredients_ar' => ['nullable', 'string'],

@@ -29,7 +29,7 @@ class ProductDetailResource extends JsonResource
             'image' => MediaLibrary::orPlaceholder($this->image),
             'gallery' => $this->gallery,
             'price' => $legacy ? 0.0 : (float) $this->price,
-            'discount_price' => $legacy || $this->discount_price === null ? null : (float) $this->discount_price,
+            'discount_price' => $legacy ? null : $this->resource->liveDiscount(),
             'is_available' => $this->is_available,
             'prep_minutes' => $this->prep_minutes,
             'calories' => $this->calories,

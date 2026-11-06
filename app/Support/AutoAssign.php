@@ -48,6 +48,13 @@ final class AutoAssign
 {
     public const STRATEGY = 'auto_assign';
 
+    /**
+     * 2026-11-06 — the owners' correction of D-171: the same captains at the same moment
+     * (nearest, free, connected, `prep_due_at − lead`), but as an **offer** they accept or
+     * refuse, not an assignment. See {@see EarlyOffer}.
+     */
+    public const STRATEGY_OFFER = 'auto_offer';
+
     /** The states in which an unassigned order is waiting for a captain with its food done. */
     public const READY_STATES = ['ready', 'searching_driver', 'waiting_for_driver'];
 
@@ -59,6 +66,22 @@ final class AutoAssign
     public static function enabled(): bool
     {
         return self::strategy() === self::STRATEGY;
+    }
+
+    /** `auto_offer` — captains are offered the order while it cooks (EarlyOffer). */
+    public static function offers(): bool
+    {
+        return self::strategy() === self::STRATEGY_OFFER;
+    }
+
+    /**
+     * Either mode in which a captain may hold an order before its food is ready: a cooking
+     * order a captain steps off goes back to the kitchen, and one past its due time with
+     * nobody is stranded.
+     */
+    public static function beforeReady(): bool
+    {
+        return self::enabled() || self::offers();
     }
 
     public static function leadMinutes(): int

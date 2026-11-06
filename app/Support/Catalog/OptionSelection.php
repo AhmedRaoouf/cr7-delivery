@@ -123,7 +123,7 @@ class OptionSelection
      */
     public static function fromPrice(Product $product, bool $base = false): float
     {
-        $own = $base ? (float) $product->price : (float) ($product->discount_price ?? $product->price);
+        $own = $base ? (float) $product->price : ($product->liveDiscount() ?? (float) $product->price);
         $price = $own;
         $extras = 0.0;
 

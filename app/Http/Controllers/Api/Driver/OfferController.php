@@ -74,7 +74,8 @@ class OfferController extends Controller
             // because only the accepting path ever superseded its siblings.
             ->whereHas('order', fn ($q) => $q
                 ->whereNull('driver_id')
-                ->whereIn('status', [OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
+                // `preparing` / `ready` — offered while it cooks (`auto_offer`, 2026-11-06).
+                ->whereIn('status', [OrderStatus::Preparing, OrderStatus::Ready, OrderStatus::SearchingDriver, OrderStatus::WaitingForDriver]))
             ->with(['order.restaurant', 'order.serviceZone', 'order.orderGroup', 'assignedBy:id,name'])
             ->get();
     }

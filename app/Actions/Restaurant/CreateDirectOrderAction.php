@@ -171,6 +171,8 @@ class CreateDirectOrderAction
             } elseif (AutoAssign::enabled()) {
                 // doc 99 §3 — a short countdown is due at once; a long one is the tick's.
                 app(AutoAssign::class)->run($order->fresh());
+            } elseif (AutoAssign::offers()) {
+                app(\App\Support\EarlyOffer::class)->run($order->fresh());
             }
 
             return $order->fresh();

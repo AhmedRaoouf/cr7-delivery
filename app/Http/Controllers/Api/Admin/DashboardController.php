@@ -386,7 +386,7 @@ class DashboardController extends Controller
         // nobody is stranded too; its clock starts on the first pass that found nobody.
         $statuses = ['ready', 'searching_driver', 'waiting_for_driver'];
 
-        if (AutoAssign::enabled()) {
+        if (AutoAssign::beforeReady()) {
             $statuses[] = 'preparing';
         }
 
@@ -412,7 +412,7 @@ class DashboardController extends Controller
             ->where(function (Builder $q) {
                 $q->whereIn('status', ['searching_driver', 'waiting_for_driver']);
 
-                if (AutoAssign::enabled()) {
+                if (AutoAssign::beforeReady()) {
                     $q->orWhere(fn (Builder $p) => $p
                         ->where('status', 'preparing')
                         ->where(fn (Builder $d) => $d

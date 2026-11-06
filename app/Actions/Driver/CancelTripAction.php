@@ -47,7 +47,7 @@ class CancelTripAction
             // doc 99 §3 — in auto-assign mode a captain may step off an order whose food is
             // still cooking: it goes back to «قيد التحضير», not to «ready», and the next
             // nearest captain is assigned below (at once if it is already due).
-            $next = AutoAssign::enabled() && BoardQueue::kitchenPending($order)
+            $next = AutoAssign::beforeReady() && BoardQueue::kitchenPending($order)
                 ? OrderStatus::Preparing
                 : OrderStatus::SearchingDriver;
 

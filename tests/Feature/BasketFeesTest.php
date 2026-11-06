@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\Admin\AdminCancelOrderAction;
 use App\Actions\Customer\CancelOrderGroupAction;
+use App\Actions\Customer\ConfirmOrderGroupAction;
 use App\Actions\Customer\CreateOrderAction;
 use App\Actions\Restaurant\RejectOrderAction;
 use App\Enums\OrderStatus;
@@ -17,6 +18,7 @@ use App\Support\DriverEarningCalculator;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\BuildsTrips;
 use Tests\TestCase;
 
@@ -152,7 +154,7 @@ class BasketFeesTest extends TestCase
 
         app(RejectOrderAction::class)->execute($this->second->owner, $second, 'out_of_stock', null);
 
-        $this->assertEqualsWithDelta(320.0, (float) $group->payment()->value('amount'), 0.001);
+        $this->assertEqualsWithDelta(175.0, (float) $group->payment()->value('amount'), 0.001, 'the place still coming, not the declined food');
     }
 
     public function test_a_fee_carried_from_an_earlier_basket_moves_to_the_first_place_still_coming(): void
@@ -177,6 +179,27 @@ class BasketFeesTest extends TestCase
         $this->assertEqualsWithDelta(5.0, $priced['orders'][$first->id]['platform_fee_share'], 0.001);
         $this->assertArrayNotHasKey($second->id, $priced['orders']);
         $this->assertEqualsWithDelta(120.0 + 145.0 + 70.0 + 5.0, $priced['group']['total'], 0.001);
+    }
+
+    public function test_a_transfer_after_a_place_said_no_asks_only_for_the_places_that_said_yes(): void
+    {
+        [$first, $second] = $this->order([[$this->first, 100], [$this->second, 145]], 'vodafone_cash');
+        $group = $first->orderGroup;
+
+        app(RejectOrderAction::class)->execute($this->second->owner, $second, 'out_of_stock', null);
+        $first->update(['status' => OrderStatus::AwaitingCustomerConfirmation]);
+        $group->update(['confirmation_opened_at' => now(), 'confirm_deadline_at' => now()->addMinutes(10)]);
+
+        Sanctum::actingAs($group->user);
+        $this->withHeaders(['X-App' => 'app'])->getJson("/api/v1/orders/{$group->id}/confirmation")
+            ->assertOk()
+            ->assertJsonPath('data.subtotal', 100)
+            ->assertJsonPath('data.delivery_fee', 70)
+            ->assertJsonPath('data.total', 175);
+
+        app(ConfirmOrderGroupAction::class)->execute($group->user, $group->fresh());
+
+        $this->assertEqualsWithDelta(175.0, (float) $group->payment()->value('amount'), 0.001, 'not 320 with the declined food');
     }
 
     // ------------------------------------------------------------------ helpers

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\DispatchMode;
 use App\Enums\OrderGroupConfirmedBy;
 use App\Enums\OrderOrigin;
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -120,5 +121,29 @@ class OrderGroup extends Model
     public function isDirect(): bool
     {
         return $this->origin === OrderOrigin::RestaurantDirect;
+    }
+
+    /**
+     * doc 102 — what the customer owes for the places still on the basket. `total` keeps a
+     * cancelled place's food (it always has); the money asked for — the confirmation screen,
+     * the transfer window — must not.
+     *
+     * @return array{subtotal: float, discount_amount: float, delivery_fee: float, platform_fee: float, outstanding_fees: float, total: float}
+     */
+    public function owed(): array
+    {
+        $live = $this->orders()->where('status', '!=', OrderStatus::Cancelled->value)
+            ->get(['id', 'subtotal', 'discount_share', 'delivery_fee_share', 'platform_fee_share', 'total']);
+
+        $outstanding = $live->isEmpty() ? 0.0 : round((float) $this->outstanding_fees, 2);
+
+        return [
+            'subtotal' => round((float) $live->sum('subtotal'), 2),
+            'discount_amount' => round((float) $live->sum('discount_share'), 2),
+            'delivery_fee' => round((float) $live->sum('delivery_fee_share'), 2),
+            'platform_fee' => round((float) $live->sum('platform_fee_share'), 2),
+            'outstanding_fees' => $outstanding,
+            'total' => round((float) $live->sum('total') + $outstanding, 2),
+        ];
     }
 }

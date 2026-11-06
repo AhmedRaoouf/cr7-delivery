@@ -156,7 +156,7 @@ class BasketFees
             $payment = $group->payment()->first();
 
             if ($payment !== null && $payment->status === PaymentStatus::AwaitingProof) {
-                $payment->update(['amount' => round((float) $group->total, 2)]);
+                $payment->update(['amount' => $group->owed()['total']]);
             }
         });
     }

@@ -187,6 +187,7 @@ class OrderController extends Controller
 
         $locale = Locale::current($request);
         $orders = $orderGroup->orders()->with(['restaurant', 'items.options'])->get();
+        $owed = $orderGroup->owed();
 
         return ApiResponse::success([
             'surviving_restaurants' => $orders->reject(fn ($o) => $o->status === OrderStatus::Cancelled)->map(fn ($o) => [
@@ -215,10 +216,12 @@ class OrderController extends Controller
                 'restaurant_name' => $o->restaurant->{"name_{$locale}"},
                 'reason_code' => $o->cancellation_reason_code,
             ])->values(),
-            'subtotal' => (float) $orderGroup->subtotal,
-            'discount_amount' => (float) $orderGroup->discount_amount,
-            'delivery_fee' => (float) $orderGroup->delivery_fee,
-            'total' => (float) $orderGroup->total,
+            // doc 102 — what is being confirmed: the places that said yes, not the
+            // food of a place listed above as declined.
+            'subtotal' => $owed['subtotal'],
+            'discount_amount' => $owed['discount_amount'],
+            'delivery_fee' => $owed['delivery_fee'],
+            'total' => $owed['total'],
             'confirm_deadline_at' => $orderGroup->confirm_deadline_at,
             'seconds_left' => $orderGroup->confirm_deadline_at ? max(0, now()->diffInSeconds($orderGroup->confirm_deadline_at, false)) : null,
         ]);

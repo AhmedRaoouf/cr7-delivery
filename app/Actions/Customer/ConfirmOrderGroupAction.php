@@ -78,7 +78,8 @@ class ConfirmOrderGroupAction
 
         $group->payment()->update([
             'status' => 'awaiting_proof',
-            'amount' => $group->fresh()->total,
+            // doc 102 — the places still on the basket, not a rejected one's food.
+            'amount' => $group->fresh()->owed()['total'],
             'gate_opened_at' => now(),
             'deadline_at' => now()->addMinutes($deadlineMinutes),
         ]);

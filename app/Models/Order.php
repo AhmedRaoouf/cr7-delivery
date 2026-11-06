@@ -182,11 +182,28 @@ class Order extends Model
             return round((float) $this->total + $food, 2);
         }
 
-        $carried = (int) $this->group_sequence === 1
-            ? (float) ($this->orderGroup?->outstanding_fees ?? 0)
-            : 0.0;
+        return round((float) $this->total + $this->carriedFees(), 2);
+    }
 
-        return round((float) $this->total + $carried, 2);
+    /**
+     * A late-cancellation fee from an earlier basket (`order_groups.outstanding_fees`) is
+     * collected once, by the basket's first sub-order — and by the first one still on the
+     * basket when that one was cancelled (doc 102), or nobody would ever collect it.
+     */
+    public function carriedFees(): float
+    {
+        $fees = (float) ($this->orderGroup?->outstanding_fees ?? 0);
+
+        if ($fees <= 0 || $this->status === OrderStatus::Cancelled) {
+            return 0.0;
+        }
+
+        $carrier = $this->orderGroup->orders()
+            ->where('status', '!=', OrderStatus::Cancelled->value)
+            ->orderBy('group_sequence')->orderBy('id')
+            ->value('id');
+
+        return (int) $carrier === (int) $this->id ? round($fees, 2) : 0.0;
     }
 
     /**

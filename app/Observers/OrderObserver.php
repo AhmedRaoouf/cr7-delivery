@@ -2,9 +2,12 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderStatus;
 use App\Events\OrderChanged;
 use App\Models\Order;
+use App\Models\OrderGroup;
 use App\Support\Amendments\OrderAmendments;
+use App\Support\BasketFees;
 use App\Support\DriverTrip;
 use App\Support\Notifications\OrderNotifications;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +68,8 @@ class OrderObserver
         // in the same transaction, like the trip, so it is not wrapped.
         OrderAmendments::closeOnLeavingPending($order);
 
+        $this->rebalanceBasket($order);
+
         $previous = $order->getOriginal('status');
         $previousStatus = match (true) {
             $previous instanceof \BackedEnum => (string) $previous->value,
@@ -103,6 +108,37 @@ class OrderObserver
 
         foreach ($drivers as $driverId) {
             DriverTrip::refresh($driverId);
+        }
+    }
+
+    /**
+     * doc 102 — a cancelled sub-order hands its share of the basket's delivery and service
+     * fees to the siblings still on their way ({@see BasketFees}). Every cancellation path
+     * writes `status` through the model, so this is the one place that sees them all.
+     *
+     * Wrapped: a cancellation is never refused because the fees could not be moved. The
+     * failure is reported, and the savepoint `BasketFees` opened is rolled back on its own.
+     */
+    private function rebalanceBasket(Order $order): void
+    {
+        if (! $order->wasChanged('status') || $order->status !== OrderStatus::Cancelled || $order->order_group_id === null) {
+            return;
+        }
+
+        try {
+            BasketFees::rebalance(OrderGroup::query()->find($order->order_group_id), $order);
+        } catch (Throwable $e) {
+            report($e);
+
+            return;
+        }
+
+        // The instance the caller holds carries the numbers it now has, so a refund taken
+        // from it right after the write is the food, not the fees that moved on.
+        $money = Order::query()->whereKey($order->id)->first(['delivery_fee_share', 'platform_fee_share', 'total']);
+
+        if ($money !== null) {
+            $order->forceFill($money->only(['delivery_fee_share', 'platform_fee_share', 'total']));
         }
     }
 

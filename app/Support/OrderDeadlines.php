@@ -148,20 +148,11 @@ final class OrderDeadlines
         DB::transaction(function () use ($group, $from, $reason) {
             $orders = $group->orders()->where('status', $from)->get();
 
-            foreach ($orders as $order) {
-                $order->update([
-                    'status' => OrderStatus::Cancelled,
-                    'cancelled_by' => 'system',
-                    'cancellation_reason_code' => $reason,
-                    'cancelled_at' => now(),
-                ]);
-
-                $order->statusHistory()->create([
-                    'from_status' => $from->value,
-                    'to_status' => OrderStatus::Cancelled->value,
-                    'actor_type' => OrderStatusActorType::System,
-                    'reason_code' => $reason,
-                ]);
+            // doc 102 — a basket that times out whole keeps its fees where checkout put them.
+            if (BasketFees::takesTheWholeBasket($group, $orders)) {
+                BasketFees::suspended(fn () => self::cancelEach($orders, $from, $reason));
+            } else {
+                self::cancelEach($orders, $from, $reason);
             }
 
             $statuses = $group->orders()->get()->pluck('status');
@@ -171,5 +162,25 @@ final class OrderDeadlines
                 'completed_at' => $statuses->every(fn ($s) => in_array($s->value, ['delivered', 'cancelled'], true)) ? now() : null,
             ]);
         });
+    }
+
+    /** @param  iterable<Order>  $orders */
+    private static function cancelEach(iterable $orders, OrderStatus $from, string $reason): void
+    {
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => OrderStatus::Cancelled,
+                'cancelled_by' => 'system',
+                'cancellation_reason_code' => $reason,
+                'cancelled_at' => now(),
+            ]);
+
+            $order->statusHistory()->create([
+                'from_status' => $from->value,
+                'to_status' => OrderStatus::Cancelled->value,
+                'actor_type' => OrderStatusActorType::System,
+                'reason_code' => $reason,
+            ]);
+        }
     }
 }

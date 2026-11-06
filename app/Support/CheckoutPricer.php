@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Exceptions\ApiException;
 use App\Models\Cart;
@@ -545,7 +546,16 @@ class CheckoutPricer
      */
     public function repriceGroup(OrderGroup $group, array $newSubtotals): array
     {
-        $orders = $group->orders()->orderBy('group_sequence')->orderBy('id')->get(['id', 'restaurant_id', 'subtotal']);
+        $all = $group->orders()->orderBy('group_sequence')->orderBy('id')
+            ->get(['id', 'restaurant_id', 'subtotal', 'discount_share', 'status']);
+
+        // doc 102 — a cancelled sub-order carries only its food ({@see BasketFees}); the
+        // fees are spread over the places still on the basket, and the cancelled food stays
+        // in the basket's subtotal and total exactly as the cancellation left it.
+        $cancelled = $all->filter(fn (Order $order) => $order->status === OrderStatus::Cancelled);
+        $orders = $all->diff($cancelled)->values();
+        $cancelledSubtotal = round((float) $cancelled->sum('subtotal'), 2);
+        $cancelledDiscount = round((float) $cancelled->sum('discount_share'), 2);
 
         $byRestaurant = $orders->mapWithKeys(fn (Order $order) => [
             (int) $order->restaurant_id => round((float) ($newSubtotals[$order->id] ?? $order->subtotal), 2),
@@ -566,9 +576,10 @@ class CheckoutPricer
         $deliveryFee = round((float) $group->delivery_fee, 2);
         $platformFee = round((float) $group->platform_fee, 2);
         $outstanding = round((float) $group->outstanding_fees, 2);
-        $subtotal = round($byRestaurant->sum(), 2);
+        $subtotal = round($byRestaurant->sum() + $cancelledSubtotal, 2);
 
         $shares = $this->shares($byRestaurant, $discountAmount, $discountedIds, $deliveryFee, $platformFee);
+        $discountAmount = round($discountAmount + $cancelledDiscount, 2);
 
         $perOrder = [];
         foreach ($orders as $order) {

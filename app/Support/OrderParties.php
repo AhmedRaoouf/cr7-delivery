@@ -257,7 +257,7 @@ final class OrderParties
             'discount' => round((float) $order->discount_share, 2),
             'delivery_fee' => round((float) $order->delivery_fee_share, 2),
             'service_fee' => round((float) $order->platform_fee_share, 2),
-            'outstanding_fees' => (int) $order->group_sequence === 1 ? round((float) ($group?->outstanding_fees ?? 0), 2) : 0.0,
+            'outstanding_fees' => $order->carriedFees(),
             'total' => round((float) $order->total, 2),
             'declared_order_value' => $order->isDirect() ? round((float) $order->declared_order_value, 2) : null,
             'cash_to_collect' => $order->cashToCollect(),

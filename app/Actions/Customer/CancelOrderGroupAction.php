@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\User;
+use App\Support\BasketFees;
 use App\Support\LateCancellationFee;
 use App\Support\RefundPolicy;
 use App\Support\RollupStatus;
@@ -48,37 +49,47 @@ class CancelOrderGroupAction
             $feeCharged = false;
             $cancelled = [];
 
-            foreach ($cancellable as $order) {
-                $from = $order->status;
-                $chargeable = ! $from->customerCancelIsFree() && $fee > 0 && ! $feeCharged;
+            // doc 102 — a basket cancelled whole keeps its fees where checkout put them;
+            // one cancelled in part hands them on as each place goes (`BasketFees`).
+            $cancelEach = function () use ($cancellable, $fee, $user, $group, $reasonCode, $note, &$feeCharged, &$cancelled) {
+                foreach ($cancellable as $order) {
+                    $from = $order->status;
+                    $chargeable = ! $from->customerCancelIsFree() && $fee > 0 && ! $feeCharged;
 
-                $order->update([
-                    'status' => OrderStatus::Cancelled,
-                    'cancelled_by' => 'customer',
-                    'cancellation_reason_code' => $reasonCode,
-                    'cancellation_note' => $note,
-                    'cancellation_fee' => $chargeable ? $fee : 0,
-                    'cancelled_at' => now(),
-                ]);
+                    $order->update([
+                        'status' => OrderStatus::Cancelled,
+                        'cancelled_by' => 'customer',
+                        'cancellation_reason_code' => $reasonCode,
+                        'cancellation_note' => $note,
+                        'cancellation_fee' => $chargeable ? $fee : 0,
+                        'cancelled_at' => now(),
+                    ]);
 
-                $order->statusHistory()->create([
-                    'from_status' => $from->value,
-                    'to_status' => OrderStatus::Cancelled->value,
-                    'actor_type' => OrderStatusActorType::Customer,
-                    'actor_id' => $user->id,
-                    'reason_code' => $reasonCode,
-                    'note' => $note,
-                    'meta' => $chargeable ? ['cancellation_fee' => $fee] : null,
-                ]);
+                    $order->statusHistory()->create([
+                        'from_status' => $from->value,
+                        'to_status' => OrderStatus::Cancelled->value,
+                        'actor_type' => OrderStatusActorType::Customer,
+                        'actor_id' => $user->id,
+                        'reason_code' => $reasonCode,
+                        'note' => $note,
+                        'meta' => $chargeable ? ['cancellation_fee' => $fee] : null,
+                    ]);
 
-                if ($chargeable) {
-                    $this->collect($user, $group, $order->fresh(), $reasonCode, $note, $fee);
-                    $feeCharged = true;
-                } elseif ($this->owesARefund($group)) {
-                    $this->refund($group, $order->fresh(), $reasonCode, $note, 0.0);
+                    if ($chargeable) {
+                        $this->collect($user, $group, $order->fresh(), $reasonCode, $note, $fee);
+                        $feeCharged = true;
+                    } elseif ($this->owesARefund($group)) {
+                        $this->refund($group, $order->fresh(), $reasonCode, $note, 0.0);
+                    }
+
+                    $cancelled[] = $order->id;
                 }
+            };
 
-                $cancelled[] = $order->id;
+            if (BasketFees::takesTheWholeBasket($group, $cancellable)) {
+                BasketFees::suspended($cancelEach);
+            } else {
+                $cancelEach();
             }
 
             $orders = $group->orders()->get();

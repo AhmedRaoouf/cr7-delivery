@@ -51,7 +51,7 @@ final class EarlyOffer
             return 0;
         }
 
-        $candidates = app(AutoAssign::class)->candidates($order);
+        $candidates = app(AutoAssign::class)->candidates($order, connectedOnly: false);
 
         if ($candidates->isEmpty()) {
             if ($order->dispatch_started_at === null) {

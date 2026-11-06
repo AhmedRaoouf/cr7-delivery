@@ -233,7 +233,7 @@ final class AutoAssign
      *
      * @return Collection<int, array{driver: Driver, distance_km: float, in_zone: bool}>
      */
-    public function candidates(Order $order): Collection
+    public function candidates(Order $order, bool $connectedOnly = true): Collection
     {
         $order->loadMissing('restaurant');
         $place = $order->restaurant;
@@ -253,7 +253,9 @@ final class AutoAssign
             ->where('drivers.is_online', true)
             ->whereHas('user', fn ($q) => $q->where('is_active', true))
             ->tap(fn ($q) => ReviewAccess::exceptFromDrivers($q))
-            ->tap(fn ($q) => DriverPresence::whereConnected($q))
+            // An offer (`auto_offer`) only needs the switch on and a recent fix: the ring
+            // wakes a phone in a pocket. An assignment needs the app heard from just now.
+            ->when($connectedOnly, fn ($q) => DriverPresence::whereConnected($q))
             ->whereNotNull('drivers.location_updated_at')
             ->where('drivers.location_updated_at', '>=', now()->subSeconds(self::fixMaxAgeSeconds()))
             ->whereNotIn('drivers.id', $excluded)

@@ -69,6 +69,17 @@ class EarlyOfferTest extends TestCase
             ->assertJsonPath('data.0.order_id', $order->id);
     }
 
+    public function test_an_online_captain_whose_app_is_in_the_background_is_offered_too(): void
+    {
+        // Switch on, a fix three minutes old, no request in the last two minutes.
+        $pocket = $this->captain('كابتن في جيبه', 31.3845, 31.4845, ['location_updated_at' => now()->subMinutes(3)]);
+        $order = $this->confirmed($this->single($this->home), 7);
+
+        app(StartPreparingAction::class)->execute($this->home->owner, $order, 'P-7');
+
+        $this->assertSame(1, $pocket->driverAttempts()->where('order_id', $order->id)->where('result', 'sent')->count());
+    }
+
     public function test_accepting_takes_the_order_while_it_cooks(): void
     {
         $near = $this->connected($this->captain('كابتن قريب', 31.3845, 31.4845));

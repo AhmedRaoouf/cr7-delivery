@@ -26,7 +26,7 @@ class Order extends Model
         'service_zone_id', 'status', 'payment_method', 'restaurant_name_snapshot', 'customer_name_snapshot',
         'delivery_address_text', 'delivery_contact_phone', 'delivery_latitude',
         'delivery_longitude', 'distance_km', 'delivery_pricing_rule_id', 'subtotal',
-        'discount_share', 'delivery_fee_share', 'platform_fee_share', 'total',
+        'discount_share', 'place_discount', 'delivery_fee_share', 'platform_fee_share', 'total',
         'min_order_value_snapshot',
         'commission_rate_snapshot', 'commission_amount', 'driver_earning',
         'platform_delivery_margin', 'pickup_otp', 'pickup_otp_attempts', 'delivery_otp',
@@ -138,17 +138,39 @@ class Order extends Model
     }
 
     /**
-     * What the place is owed for its own food — «حساب المكان».
+     * What the place earns from this order — «حساب المكان».
      *
-     * `subtotal − commission`, which is exactly what `GenerateSettlementAction` pays it
-     * per item. D-75 retires the commission (every rate is 0), so today it equals the
-     * subtotal; the subtraction stays because the historical orders in the table do carry
-     * one, and a settlement and a board card that disagree about an old order is worse
-     * than an expression with a zero in it.
+     * The food, less the platform's commission on it, less the part of the discount the
+     * place agreed to pay for (doc 103). On an online order the platform pays the place
+     * this in its statement; on a cash order the place already took the whole food from
+     * the captain, and owes back the difference.
      */
     public function getRestaurantAmountAttribute(): float
     {
-        return round((float) $this->subtotal - (float) $this->commission_amount, 2);
+        return round((float) $this->subtotal - (float) $this->commission_amount - (float) $this->place_discount, 2);
+    }
+
+    /**
+     * doc 103 — the commission on a sub-order's food at a place's rate.
+     *
+     * On the food as the place priced it, dish discounts included, before any promo code:
+     * a code the platform runs is the platform's cost, not a reason to charge the place less.
+     */
+    public static function commissionOn(float $subtotal, float $rate): float
+    {
+        return $rate <= 0 ? 0.0 : round($subtotal * $rate / 100, 2);
+    }
+
+    /**
+     * What the place owes the platform on this order, or the platform the place — the
+     * order's line on the statement. Positive: the platform pays the place. Negative: the
+     * place pays the platform (a cash order, where the place took the whole food).
+     */
+    public function placeBalance(): float
+    {
+        $paid = $this->place_paid_amount !== null ? (float) $this->place_paid_amount : $this->placePaidAtPickup();
+
+        return round($this->restaurant_amount - $paid, 2);
     }
 
     /** The two figures the place's own screens and its push are entitled to. */
@@ -210,7 +232,8 @@ class Order extends Model
      * D-103 — what the captain hands the place when he takes the bag.
      *
      * Operator, 2026-09-13: «الكابتن يدفع للمكان وقت الاستلام». On a cash order the
-     * captain pays the place its own figure («حساب المكان») and collects the whole cash
+     * captain pays the place its whole food (doc 103 — before, «حساب المكان», which was
+     * the same while every commission was 0) and collects the whole cash
      * total at the door; on a direct order whose food money the captain collects, he pays
      * the declared food value the same way. An online order's food is the platform's to
      * pay, in the place's statement, so the captain hands over nothing.
@@ -231,7 +254,9 @@ class Order extends Model
                 : 0.0;
         }
 
-        return $this->restaurant_amount;
+        // doc 103 — «يتم دفع قيمة الطلب المدفوع نقدًا بالكامل للتاجر»: the place takes its
+        // whole food from the captain, and its commission is settled in its statement.
+        return round((float) $this->subtotal, 2);
     }
 
     protected function casts(): array
@@ -249,6 +274,7 @@ class Order extends Model
             'distance_km' => 'decimal:3',
             'subtotal' => 'decimal:2',
             'discount_share' => 'decimal:2',
+            'place_discount' => 'decimal:2',
             'delivery_fee_share' => 'decimal:2',
             'platform_fee_share' => 'decimal:2',
             'cancellation_fee' => 'decimal:2',

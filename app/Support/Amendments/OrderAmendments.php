@@ -7,12 +7,14 @@ use App\Enums\OrderAmendmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
 use App\Enums\PaymentMethod;
+use App\Enums\PromoCostBearer;
 use App\Exceptions\ApiException;
 use App\Models\Order;
 use App\Models\OrderAmendment;
 use App\Models\OrderGroup;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\PromoCode;
 use App\Models\PromoCodeUsage;
 use App\Models\User;
 use App\Support\AuditLogger;
@@ -454,8 +456,18 @@ class OrderAmendments
             'total' => $priced['group']['total'],
         ]);
 
+        // doc 103 — the commission follows the new food at the rate the order was sold at,
+        // and a discount the place bears follows the new discount share.
+        $placeBearsDiscount = $group->promo_code_id !== null
+            && PromoCode::query()->find($group->promo_code_id)?->cost_bearer === PromoCostBearer::Restaurant;
+
         foreach ($priced['orders'] as $orderId => $money) {
-            Order::query()->whereKey($orderId)->first()?->forceFill($money)->saveQuietly();
+            $order = Order::query()->whereKey($orderId)->first();
+
+            $order?->forceFill($money + [
+                'commission_amount' => Order::commissionOn((float) $money['subtotal'], (float) $order->commission_rate_snapshot),
+                'place_discount' => $placeBearsDiscount ? $money['discount_share'] : 0,
+            ])->saveQuietly();
 
             // The code's usage row carries the share it took from this sub-order.
             if ($group->promo_code_id !== null) {

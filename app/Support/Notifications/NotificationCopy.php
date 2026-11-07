@@ -321,6 +321,11 @@ class NotificationCopy
             'ar' => ['تم تحويل مستحقاتك', 'حوّلت المنصة {amount} عن الفترة {period}'],
             'en' => ['Your payout was sent', 'The platform sent {amount} for {period}'],
         ],
+        // doc 103 — the other direction: a place whose cash orders left it owing commission.
+        'settlement.collected' => [
+            'ar' => ['تم استلام مستحقات المنصة', 'استلمت المنصة {amount} عن الفترة {period}'],
+            'en' => ['Your payment was received', 'The platform received {amount} for {period}'],
+        ],
         // The deadlines nothing used to enforce (doc 62 §9).
         'payment.due_reminder' => [
             'ar' => ['يتبقّى {minutes} دقائق على التحويل', 'سيُلغى الطلب {order_number} تلقائيًا إن لم يصل التحويل'],

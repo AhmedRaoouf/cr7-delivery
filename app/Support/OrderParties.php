@@ -276,13 +276,22 @@ final class OrderParties
                 : $order->restaurant_amount;
         }
 
+        // doc 103 — the place reads its own commission, the discount it bears, and what
+        // this order adds to its statement (positive: the platform pays it; negative: it
+        // pays the platform — a cash order, where it took the whole food).
+        if (in_array($viewer, ['restaurant', 'admin'], true)) {
+            $money['commission_amount'] = round((float) $order->commission_amount, 2);
+            $money['commission_rate'] = round((float) $order->commission_rate_snapshot, 2);
+            $money['place_discount'] = round((float) $order->place_discount, 2);
+            $money['place_balance'] = $order->isDirect() ? 0.0 : $order->placeBalance();
+        }
+
         if (in_array($viewer, ['driver', 'admin'], true)) {
             $money['driver_earning'] = round((float) $order->driver_earning, 2);
         }
 
         if ($viewer === 'admin') {
             $money['platform_delivery_margin'] = round((float) $order->platform_delivery_margin, 2);
-            $money['commission_amount'] = round((float) $order->commission_amount, 2);
         }
 
         return $money;

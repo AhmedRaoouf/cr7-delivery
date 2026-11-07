@@ -72,7 +72,8 @@ abstract class TestCase extends BaseTestCase
             'phone' => $owner->phone,
             'latitude' => $lat,
             'longitude' => $lng,
-            'commission_rate' => 10,
+            // doc 103 — every place on production is at 0 until its contract is signed.
+            'commission_rate' => 0,
             'min_order_value' => 0,
             'avg_prep_minutes' => 20,
             'is_open_manual' => true,

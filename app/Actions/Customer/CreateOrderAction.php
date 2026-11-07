@@ -4,10 +4,12 @@ namespace App\Actions\Customer;
 
 use App\Enums\OrderStatus;
 use App\Enums\OrderStatusActorType;
+use App\Enums\PromoCostBearer;
 use App\Exceptions\ApiException;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderGroup;
+use App\Models\PromoCode;
 use App\Models\User;
 use App\Support\BusinessTime;
 use App\Support\Catalog\LinePrice;
@@ -114,6 +116,10 @@ class CreateOrderAction
             $groupNumber = OrderNumber::forGroup($group->id);
             $group->update(['group_number' => $groupNumber]);
 
+            // doc 103 — a code whose cost the place agreed to bear.
+            $placeBearsDiscount = $quote['promo_code_id'] !== null
+                && PromoCode::query()->find($quote['promo_code_id'])?->cost_bearer === PromoCostBearer::Restaurant;
+
             $cartItemsByRestaurant = $cart->items()->with(['product', 'restaurant', 'options.productOption.group'])->get()->groupBy('restaurant_id');
 
             foreach ($quote['groups'] as $sequence => $groupQuote) {
@@ -158,17 +164,15 @@ class CreateOrderAction
                     ),
                     'min_order_value_snapshot' => $restaurant->min_order_value,
                     /*
-                     * D-75 — there is no commission on food any more.
-                     *
-                     * Operator, 2026-09-11: «عمولة المنصة اللي هو الأدمن كلها ‪15‬٪ على أي
-                     * order من فلوس الديليفري، مش عايز حاجة غيرها». Every restaurant's rate
-                     * is zeroed by migration, and the snapshot is taken from the setting-free
-                     * constant rather than the column so that a rate typed back into a row by
-                     * hand cannot start charging places again without the decision being
-                     * re-opened. The column and its permission stay for the history.
+                     * doc 103 — the place's commission on its food, at the rate its row
+                     * holds now. D-75 had zeroed every rate and pinned the snapshot to 0;
+                     * the owners now sign a rate per place (قرية الناقر: 5 %), so the row
+                     * is read again. A place with no contract stays on 0.
                      */
-                    'commission_rate_snapshot' => 0,
-                    'commission_amount' => 0,
+                    'commission_rate_snapshot' => round((float) $restaurant->commission_rate, 2),
+                    'commission_amount' => Order::commissionOn((float) $groupQuote['subtotal'], (float) $restaurant->commission_rate),
+                    // doc 103 — the part of the discount the place pays for.
+                    'place_discount' => $placeBearsDiscount ? $groupQuote['discount_share'] : 0,
                     // doc 05 §8 — pickup_otp is generated now; delivery_otp is generated later,
                     // at picked_up, so the customer's code cannot leak before the driver has the food.
                     'pickup_otp' => Otp::orderCode(),

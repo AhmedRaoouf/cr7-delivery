@@ -126,6 +126,24 @@ final class SettingsCatalog
                 ],
             ],
             [
+                // doc 103 — the places' statement, every 14 days from the day the contracts start.
+                'key' => 'settlements',
+                'title_ar' => 'تسوية حسابات الأماكن',
+                'title_en' => 'Place settlements',
+                'fields' => [
+                    ['key' => 'settlements.cycle_days', 'type' => 'int', 'default' => 14, 'min' => 0, 'max' => 90,
+                        'suffix_ar' => 'يوم', 'suffix_en' => 'days',
+                        'label_ar' => 'كشف حساب لكل مكان كل', 'label_en' => 'A statement for every place every',
+                        'helper_ar' => 'يُنشأ الكشف مسودة تلقائيًا في اليوم التالي لنهاية الفترة، وتراجعه الإدارة ثم تسجّل الدفع. صفر يوقفه.',
+                        'helper_en' => 'Written as a draft the day after each period ends; the office reviews it and records the payment. Zero turns it off.'],
+                    ['key' => 'settlements.cycle_start', 'type' => 'string', 'default' => '2026-11-07', 'max' => 10,
+                        'pattern' => '/^\d{4}-\d{2}-\d{2}$/', 'pattern_message_ar' => 'أدخل تاريخًا بالشكل 2026-11-07',
+                        'label_ar' => 'أول يوم في أول فترة', 'label_en' => 'First day of the first period',
+                        'helper_ar' => 'بالشكل سنة-شهر-يوم. الفترات تتوالى منه بالطول المحدد أعلاه.',
+                        'helper_en' => 'As year-month-day. Periods follow on from it at the length above.'],
+                ],
+            ],
+            [
                 'key' => 'ring',
                 'title_ar' => 'رنين الطلب الجديد',
                 'title_en' => 'New-order ring',
@@ -624,7 +642,8 @@ final class SettingsCatalog
                     $value = $field['default'] ?? null;
                 }
 
-                return $field + ['value' => $value];
+                // A server-side check, not something either panel draws.
+                return array_diff_key($field, ['pattern' => true, 'pattern_message_ar' => true]) + ['value' => $value];
             }, $group['fields']);
 
             return $group;
@@ -804,6 +823,10 @@ final class SettingsCatalog
 
         if (isset($field['max']) && mb_strlen($text) > $field['max']) {
             throw new ApiException('validation_failed', 'النص أطول من ‪'.$field['max'].'‬ حرفًا', 422);
+        }
+
+        if (isset($field['pattern']) && ! preg_match($field['pattern'], $text)) {
+            throw new ApiException('validation_failed', (string) ($field['pattern_message_ar'] ?? 'القيمة غير صالحة'), 422);
         }
 
         return $text;

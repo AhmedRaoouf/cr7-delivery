@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Complaint;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\OrderGroup;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\PromoCode;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\BusinessTime;
+use App\Support\Lists\ListParams;
 use App\Support\Lists\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,9 +46,13 @@ class ReportController extends Controller
         $params = $this->listParams($request);
         $sort = $params->sort(['gmv', 'delivered_orders_count', 'name'], '-gmv');
 
+        // doc 103 — the report's columns only: whole `Restaurant` rows put every column of
+        // the table on `ADM-44` as a number. The commission is the platform's per place.
         $restaurants = AdminScope::applyToRestaurants(Restaurant::query(), $request->user())
+            ->select(['restaurants.id', 'restaurants.name_ar', 'restaurants.name_en', 'restaurants.commission_rate'])
             ->withCount(['orders as delivered_orders_count' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])])
-            ->withSum(['orders as gmv' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'subtotal');
+            ->withSum(['orders as gmv' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'subtotal')
+            ->withSum(['orders as commission' => fn ($q) => $q->where('status', 'delivered')->whereBetween('created_at', [$from, $to])], 'commission_amount');
 
         $this->whereInList($restaurants, 'restaurants.city_id', $params->ids('city_id'));
 
@@ -118,7 +124,9 @@ class ReportController extends Controller
             ->selectRaw('service_zone_id, COUNT(*) as orders_count, SUM(subtotal) as gmv')
             ->with('serviceZone:id,name_ar,name_en')
             ->groupBy('service_zone_id')
-            ->get();
+            ->get()
+            // `ADM-44` reads a flat name; the app reads `service_zone`.
+            ->each(fn ($row) => $row->setAttribute('zone_name', $row->serviceZone?->name_ar ?? '—'));
 
         return ApiResponse::success($zones);
     }
@@ -145,29 +153,59 @@ class ReportController extends Controller
         return $this->paginated($page, sort: $sort);
     }
 
+    /**
+     * `ADM-44` «المستردات». doc 103 — the screen draws a table and finds rows only under
+     * `rows`, so this always read «لا توجد بيانات»; and the totals counted by
+     * `processed_at` while the reasons counted by `created_at`. One date now (processed),
+     * and one row per reason.
+     */
     public function refunds(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
 
-        $refunds = fn () => AdminScope::applyToRefunds(Refund::query(), $request->user());
+        $processed = fn () => AdminScope::applyToRefunds(Refund::query(), $request->user())
+            ->where('status', 'processed')
+            ->whereBetween('processed_at', [$from, $to]);
+
+        $rows = $processed()
+            ->selectRaw('reason_code, COUNT(*) as count, SUM(amount) as amount')
+            ->groupBy('reason_code')
+            ->orderByDesc('amount')
+            ->get()
+            ->map(fn ($row) => [
+                'reason' => (string) ($row->reason_code ?? '—'),
+                'orders_count' => (int) $row->count,
+                'refund_amount' => round((float) $row->amount, 2),
+            ])
+            ->values();
 
         return ApiResponse::success([
-            'total_amount' => (float) $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->sum('amount'),
-            'count' => $refunds()->where('status', 'processed')->whereBetween('processed_at', [$from, $to])->count(),
-            'by_reason' => (object) $refunds()->whereBetween('created_at', [$from, $to])->selectRaw('reason_code, COUNT(*) as count')->groupBy('reason_code')->pluck('count', 'reason_code')->all(),
+            'total_amount' => round((float) $processed()->sum('amount'), 2),
+            'count' => $processed()->count(),
+            'by_reason' => (object) $rows->pluck('orders_count', 'reason')->all(),
+            'rows' => $rows,
         ]);
     }
 
+    /** `ADM-44` «الشكاوى» — the same shape: totals, and one row per category. */
     public function complaints(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request);
         $complaints = AdminScope::applyToComplaints(Complaint::query(), $request->user())->whereBetween('created_at', [$from, $to]);
 
+        $byCategory = (clone $complaints)->selectRaw('category, COUNT(*) as count')->groupBy('category')->pluck('count', 'category');
+        $resolvedByCategory = (clone $complaints)->where('status', 'resolved')->selectRaw('category, COUNT(*) as count')->groupBy('category')->pluck('count', 'category');
+
         return ApiResponse::success([
             'total' => (clone $complaints)->count(),
             'resolved' => (clone $complaints)->where('status', 'resolved')->count(),
-            'by_category' => (object) (clone $complaints)->selectRaw('category, COUNT(*) as count')->groupBy('category')->pluck('count', 'category')->all(),
+            'by_category' => (object) $byCategory->all(),
             'avg_resolution_hours' => (clone $complaints)->whereNotNull('resolved_at')->selectRaw('AVG(TIMESTAMPDIFF(HOUR, created_at, resolved_at)) as avg_hours')->value('avg_hours'),
+            'rows' => $byCategory->map(fn ($count, $category) => [
+                'category' => (string) $category,
+                'total' => (int) $count,
+                'resolved' => (int) ($resolvedByCategory[$category] ?? 0),
+            ])->values(),
         ]);
     }
 
@@ -178,6 +216,12 @@ class ReportController extends Controller
         $segment = $params->enum('segment', ['new', 'returning', 'restricted'])[0] ?? null;
 
         $customers = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user());
+
+        // doc 103 — the screen sends a date range and counts «العملاء» under it; it was
+        // never read. Joined in that range, when one is given.
+        [$from, $to] = ListParams::of($request)->dates();
+        $customers->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('created_at', '<=', $to));
 
         $customers = match ($segment) {
             'new' => $customers->where('created_at', '>=', BusinessTime::startOfDaysAgo(30)),
@@ -193,16 +237,49 @@ class ReportController extends Controller
         return $this->paginated($paginated, meta: ['segment' => $segment ?: 'all'], sort: $sort);
     }
 
+    /**
+     * `ADM-44` «الاحتفاظ». doc 103 — the grid reads `cohort`, `size` and `retention` and
+     * this answered `cohort_month` / `customers_count` with no retention, for the six
+     * **oldest** months, by UTC month. Now: the last six Cairo months, and for each, the
+     * share of that month's new customers with a delivered basket in month 0, 1, 2…
+     */
     public function customerCohorts(Request $request): JsonResponse
     {
-        $cohorts = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user())
-            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as cohort_month, COUNT(*) as customers_count")
-            ->groupBy('cohort_month')
-            ->orderBy('cohort_month')
-            ->limit(6)
-            ->get();
+        $tz = BusinessTime::timezone();
+        $firstMonth = BusinessTime::now()->startOfMonth()->subMonths(5);
 
-        return ApiResponse::success($cohorts);
+        $customers = AdminScope::applyToCustomers(User::query()->where('type', 'customer'), $request->user())
+            ->where('created_at', '>=', $firstMonth->copy()->utc())
+            ->get(['id', 'created_at']);
+
+        $active = OrderGroup::query()
+            ->whereIn('user_id', $customers->pluck('id'))
+            ->where('rollup_status', 'delivered')
+            ->get(['user_id', 'created_at'])
+            ->groupBy('user_id')
+            ->map(fn ($groups) => $groups->map(fn ($g) => $g->created_at->copy()->setTimezone($tz)->format('Y-m'))->unique()->values()->all());
+
+        $rows = [];
+        $nowMonth = BusinessTime::now()->startOfMonth();
+
+        for ($month = $firstMonth->copy(); $month->lessThanOrEqualTo($nowMonth); $month->addMonth()) {
+            $key = $month->format('Y-m');
+            $cohort = $customers->filter(fn (User $u) => $u->created_at->copy()->setTimezone($tz)->format('Y-m') === $key);
+            $size = $cohort->count();
+            $retention = [];
+
+            for ($i = 0, $at = $month->copy(); $at->lessThanOrEqualTo($nowMonth); $i++, $at->addMonth()) {
+                $target = $at->format('Y-m');
+                $retention[] = $size === 0 ? 0.0 : round(
+                    $cohort->filter(fn (User $u) => in_array($target, $active->get($u->id, []), true))->count() / $size,
+                    4,
+                );
+            }
+
+            $rows[] = ['cohort' => $key, 'size' => $size, 'retention' => $retention];
+        }
+
+        return ApiResponse::success($rows);
     }
 
     public function opsHealth(Request $request): JsonResponse

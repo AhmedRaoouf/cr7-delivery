@@ -68,7 +68,13 @@ class DashboardController extends Controller
                 + (float) (clone $orders)->where('status', 'delivered')->sum('commission_amount')
                 + (float) (clone $orders)->where('status', 'delivered')->sum('platform_fee_share')
                 + (float) (clone $orders)->sum('cancellation_fee'),
-            'active_orders' => (clone $orders)->whereNotIn('status', ['delivered', 'cancelled'])->count(),
+            // A «now» figure (doc 103): every live order in scope, whenever it was placed —
+            // inside the date range it missed orders from before midnight and read 0 on
+            // a past range.
+            'active_orders' => AdminScope::applyToOrders(Order::query(), $request->user())->whereNotIn('status', ['delivered', 'cancelled'])->count(),
+            // doc 103 — over the place orders only: a direct order carries no food (subtotal
+            // 0) and pulled the average down.
+            'avg_order_value' => round((float) ((clone $orders)->where('status', 'delivered')->where('origin', '!=', 'restaurant_direct')->avg('subtotal') ?? 0), 2),
             'online_drivers' => AdminScope::applyToDrivers(Driver::query(), $request->user())->where('is_online', true)->count(),
             // doc 99 §1 — D-169: prices waiting for the office, now (not in the date range).
             'pending_price_requests' => $this->canReviewPrices($request)
@@ -98,7 +104,9 @@ class DashboardController extends Controller
             ->groupBy('date')->orderBy('date')->get();
 
         $statuses = (clone $orders)->selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status');
-        $paymentMethods = (clone $orders)->selectRaw('payment_method, COUNT(*) as count')->groupBy('payment_method')->pluck('count', 'payment_method');
+        // A direct order is the place's phone order: always cash, and not a customer's
+        // choice of payment, so it is left out of «طرق الدفع» (doc 103).
+        $paymentMethods = (clone $orders)->where('origin', '!=', 'restaurant_direct')->selectRaw('payment_method, COUNT(*) as count')->groupBy('payment_method')->pluck('count', 'payment_method');
         // «ساعات الذروة» is a wall-clock question. In UTC it named 20:00 for a
         // rush the restaurants lived through at 22:00.
         $peakHours = (clone $orders)->selectRaw("HOUR({$localCreatedAt}) as hour, COUNT(*) as count")->groupBy('hour')->orderBy('hour')->pluck('count', 'hour');

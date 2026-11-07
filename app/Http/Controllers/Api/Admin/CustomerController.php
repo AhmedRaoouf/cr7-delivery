@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Enums\UserType;
 use App\Http\Controllers\Concerns\FiltersLists;
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\User;
 use App\Support\AdminScope;
 use App\Support\ApiResponse;
@@ -144,7 +145,12 @@ class CustomerController extends Controller
             'orders_total' => (clone $orderGroups)->count(),
             'orders_delivered' => (clone $orderGroups)->where('rollup_status', 'delivered')->count(),
             'orders_cancelled' => (clone $orderGroups)->where('rollup_status', 'cancelled')->count(),
-            'total_spent' => (float) (clone $orderGroups)->where('rollup_status', 'delivered')->sum('total'),
+            // doc 103 — what was delivered: the delivered sub-orders' totals. A basket's own
+            // total keeps the food of a place that was cancelled out of it.
+            'total_spent' => round((float) Order::query()
+                ->whereIn('order_group_id', (clone $orderGroups)->select('id'))
+                ->where('status', 'delivered')
+                ->sum('total'), 2),
             'complaints_count' => $customer->complaints()->count(),
             'is_active' => $customer->is_active,
             'cash_only_until' => $customer->cash_only_until,

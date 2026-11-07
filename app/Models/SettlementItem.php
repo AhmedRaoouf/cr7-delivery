@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SettlementItem extends Model
 {
     protected $fillable = [
-        'settlement_id', 'order_id', 'type', 'gross', 'commission',
+        'settlement_id', 'order_id', 'type', 'gross', 'commission', 'paid_at_pickup', 'place_discount',
         'delivery_fee', 'platform_delivery_margin', 'platform_fee', 'driver_earning', 'net',
     ];
 
@@ -19,6 +19,8 @@ class SettlementItem extends Model
             'type' => SettlementItemType::class,
             'gross' => 'decimal:2',
             'commission' => 'decimal:2',
+            'paid_at_pickup' => 'decimal:2',
+            'place_discount' => 'decimal:2',
             'delivery_fee' => 'decimal:2',
             'platform_fee' => 'decimal:2',
             'platform_delivery_margin' => 'decimal:2',

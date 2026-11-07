@@ -60,6 +60,8 @@ class SettingsPanelCoverageTest extends TestCase
     private const OVERRIDES = [
         // Must stay below `payment.transfer_deadline_minutes`, which is ‪15‬.
         'payment.reminder_before_minutes' => 9,
+        // A date, as the panel's text field carries it.
+        'settlements.cycle_start' => '2026-11-21',
         // Must stay above `payment.reminder_before_minutes`, which is ‪5‬.
         'payment.transfer_deadline_minutes' => 30,
         // Must stay below `restaurant.prep_minutes_max`, which is ‪120‬.

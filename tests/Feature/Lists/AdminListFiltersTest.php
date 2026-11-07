@@ -451,7 +451,7 @@ class AdminListFiltersTest extends TestCase
             ->assertJsonPath('meta.totals.wallet_balance', 130);
     }
 
-    public function test_the_places_money_is_summed_by_the_database(): void
+    public function test_the_places_money_is_summed_one_way_for_every_screen(): void
     {
         $this->orderFor($this->omar, ['payment_method' => 'instapay', 'subtotal' => 200, 'commission_amount' => 20, 'delivered_at' => now()]);
         $this->orderFor($this->omar, ['payment_method' => 'cash', 'subtotal' => 100, 'commission_amount' => 10, 'delivered_at' => now()]);
@@ -460,7 +460,12 @@ class AdminListFiltersTest extends TestCase
 
         $this->assertEquals(180, $rows[$this->omar->id]['owed_online']);
         $this->assertSame(1, $rows[$this->omar->id]['online_orders']);
-        $this->assertEquals(90, $rows[$this->omar->id]['paid_at_pickup']);
+        // doc 103 — the captain hands the place its whole food on a cash order, and the
+        // place owes the commission back: 180 for, 10 against, 170 net.
+        $this->assertEquals(100, $rows[$this->omar->id]['paid_at_pickup']);
+        $this->assertEquals(10, $rows[$this->omar->id]['owed_by_place']);
+        $this->assertEquals(170, $rows[$this->omar->id]['balance']);
+        $this->assertSame('platform_pays_place', $rows[$this->omar->id]['direction']);
         $this->assertSame(1, $rows[$this->omar->id]['cash_orders']);
         $this->assertNotNull($rows[$this->omar->id]['oldest_unclaimed_at']);
 

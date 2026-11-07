@@ -89,6 +89,12 @@ class RestaurantController extends Controller
         // Without this the validated array still holds the UploadedFile objects and the
         // action would try to persist them as column values.
         $data = $request->validated();
+
+        // doc 103 — a new place starts on a rate only an admin who may set one can type.
+        if ((float) ($data['commission_rate'] ?? 0) > 0 && ! $request->user()->can('restaurants.set_commission')) {
+            throw new ApiException('commission_not_permitted', 'لا تملك صلاحية تعديل نسبة العمولة', 403);
+        }
+
         $data = $this->withPublicUpload($data, $request, 'logo', 'restaurants', media: MediaField::RestaurantLogo);
         $data = $this->withPublicUpload($data, $request, 'cover', 'restaurants', media: MediaField::RestaurantCover);
         $data = $this->withPublicSheets($data, $request, 'menu_sheets', 'menus');

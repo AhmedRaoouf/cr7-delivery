@@ -92,3 +92,11 @@ Schedule::command('cr7:prune-sessions')->hourly()->withoutOverlapping(30);
  * `cr7:tick`.
  */
 Schedule::command('cr7:prune-otp')->daily()->withoutOverlapping(30);
+
+/*
+ * doc 103 — the places' draft statements, once a 14-day period is over. Hourly and
+ * idempotent: an order is claimed by the first statement that takes it, so the next run
+ * writes nothing, and a missed hour is made up by the one after. The expiry is explicit
+ * for the reason written above `cr7:tick`.
+ */
+Schedule::command('cr7:settlement-cycle')->hourly()->withoutOverlapping(30);

@@ -307,6 +307,20 @@ class OrderAmendmentTest extends TestCase
         $this->assertTrue(Notification::query()->where('user_id', $this->place->user_id)->where('type', 'order.amendment_accepted_restaurant')->exists());
     }
 
+    /** doc 103 — the commission follows the new food at the rate the order was sold at. */
+    public function test_an_accepted_change_takes_the_commission_on_the_new_food(): void
+    {
+        $this->place->update(['commission_rate' => 5]);
+        $order = $this->order();
+        $this->assertEquals(12.5, (float) $order->commission_amount, '5 % of 250');
+
+        $this->place->update(['commission_rate' => 20]);
+        $amendmentId = $this->propose($order, $this->standardChange($order))->assertCreated()->json('data.id');
+        $this->accept($order->orderGroup, $amendmentId, 155)->assertOk();
+
+        $this->assertEquals(6.5, (float) $order->fresh()->commission_amount, '5 % of 130, not the new 20 %');
+    }
+
     public function test_single_place_transfer_goes_to_payment_on_the_new_total_without_asking_again(): void
     {
         $order = $this->order(payment: 'vodafone_cash');

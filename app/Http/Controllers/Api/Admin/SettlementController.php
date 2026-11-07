@@ -180,12 +180,15 @@ class SettlementController extends Controller
         // doc 62 §4.4 — the place is told its money was sent, and how much.
         $party = $settlement->party;
 
-        if ($party instanceof Restaurant && $party->owner !== null) {
+        // doc 103 — a statement can run either way; a zero one moved no money.
+        $net = (float) $settlement->net_amount;
+
+        if ($party instanceof Restaurant && $party->owner !== null && abs($net) >= 0.01) {
             app(NotificationDispatcher::class)->send(
                 $party->owner,
-                'settlement.paid',
+                $net > 0 ? 'settlement.paid' : 'settlement.collected',
                 [
-                    'amount' => number_format((float) $settlement->net_amount, 2).' ج.م',
+                    'amount' => number_format(abs($net), 2).' ج.م',
                     'period' => $settlement->period_start?->format('Y-m-d').' — '.$settlement->period_end?->format('Y-m-d'),
                 ],
                 '/settlements/'.$settlement->id,

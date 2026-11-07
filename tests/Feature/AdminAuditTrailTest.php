@@ -37,6 +37,7 @@ class AdminAuditTrailTest extends TestCase
     public function test_an_admin_editing_a_restaurant_leaves_a_row_with_both_sides_of_the_change(): void
     {
         $restaurant = $this->makeRestaurant('سندوتش عمر');
+        $restaurant->update(['commission_rate' => 10]);
         Sanctum::actingAs($this->makeAdmin());
 
         // The commission endpoint, not `update`: `commission_rate` is money, it has its

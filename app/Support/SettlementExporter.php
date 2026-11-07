@@ -49,7 +49,7 @@ class SettlementExporter
             $options = new Options;
             // Arabic labels and money need more than the 8-character default, or
             // every heading opens as «####».
-            $options->setColumnWidth(24, 1, 2, 3, 4, 5, 6, 7);
+            $options->setColumnWidth(24, 1, 2, 3, 4, 5, 6, 7, 8, 9);
 
             $writer = new Writer($options);
             $writer->openToFile('php://output');
@@ -63,7 +63,8 @@ class SettlementExporter
             $writer->addRow(Row::fromValues([]));
             $writer->addRow(Row::fromValues([
                 'رقم الطلب', 'النوع', 'إجمالي الطعام', 'العمولة',
-                'رسوم التوصيل', 'رسوم الخدمة', 'الصافي',
+                'دفعه الكابتن للمكان', 'خصم على المكان',
+                'رسوم التوصيل', 'رسوم الخدمة', 'الصافي (+ للمكان / − على المكان)',
             ], $header));
 
             // `cursor()` rather than `get()`: one order line at a time, so a month
@@ -74,6 +75,8 @@ class SettlementExporter
                     $item->type instanceof \BackedEnum ? $item->type->value : (string) $item->type,
                     (float) $item->gross,
                     (float) $item->commission,
+                    (float) $item->paid_at_pickup,
+                    (float) $item->place_discount,
                     (float) $item->delivery_fee,
                     (float) $item->platform_fee,
                     (float) $item->net,
@@ -92,7 +95,15 @@ class SettlementExporter
     /** @return list<list<string|float>> */
     private static function summaryRows(Settlement $settlement, string $partyName): array
     {
-        return [
+        $b = (array) ($settlement->breakdown ?? []);
+        $net = (float) $settlement->net_amount;
+        $direction = match (true) {
+            $net > 0.004 => 'المنصة تدفع للمكان',
+            $net < -0.004 => 'المكان يدفع للمنصة',
+            default => 'لا شيء مستحق',
+        };
+
+        $rows = [
             ['تسوية رقم', (string) $settlement->id],
             ['الطرف', $partyName],
             ['النوع', $settlement->party_type instanceof \BackedEnum ? $settlement->party_type->value : (string) $settlement->party_type],
@@ -100,15 +111,32 @@ class SettlementExporter
             ['إلى', $settlement->period_end?->format('Y-m-d') ?? ''],
             ['الحالة', $settlement->status instanceof \BackedEnum ? $settlement->status->value : (string) $settlement->status],
             [],
+            ['عدد الطلبات', (float) ($b['orders_count'] ?? 0)],
             ['إجمالي المبيعات', (float) $settlement->gross_sales],
             ['العمولة', (float) $settlement->commission_total],
+        ];
+
+        // doc 103 — the two sides of the counter, for statements that carry them.
+        if (array_key_exists('cash_food_total', $b)) {
+            $rows[] = ['طلبات نقدية — العدد', (float) ($b['cash_orders_count'] ?? 0)];
+            $rows[] = ['طلبات نقدية — قيمة الطعام (استلمها المكان)', (float) ($b['cash_food_total'] ?? 0)];
+            $rows[] = ['طلبات نقدية — على المكان للمنصة', (float) ($b['cash_owed_by_place'] ?? 0)];
+            $rows[] = ['طلبات أونلاين — العدد', (float) ($b['online_orders_count'] ?? 0)];
+            $rows[] = ['طلبات أونلاين — قيمة الطعام (حصّلتها المنصة)', (float) ($b['online_food_total'] ?? 0)];
+            $rows[] = ['طلبات أونلاين — للمكان على المنصة', (float) ($b['online_total'] ?? 0)];
+            $rows[] = ['خصومات يتحمّلها المكان', (float) ($b['place_discount_total'] ?? 0)];
+        }
+
+        return [
+            ...$rows,
             ['المستردات', (float) $settlement->refunds_total],
             ['رسوم التوصيل', (float) $settlement->delivery_fees_total],
             // D-63 — reported, never paid out. It sits outside `net_amount` for both
             // party types because neither the restaurant nor the captain earned it.
             ['رسوم الخدمة (لا تُدفع)', (float) $settlement->platform_fee_total],
-            ['نقدية محصّلة', (float) $settlement->cash_collected],
-            ['الصافي المستحق', (float) $settlement->net_amount],
+            ['دفعه الكباتن للمكان عند الاستلام', (float) $settlement->cash_collected],
+            ['الصافي', abs($net)],
+            ['الاتجاه', $direction],
         ];
     }
 }

@@ -4,10 +4,12 @@ namespace App\Actions\Admin;
 
 use App\Exceptions\ApiException;
 use App\Models\Order;
-use App\Models\Refund;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\BusinessTime;
+use App\Support\PlaceAccount;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -31,13 +33,30 @@ use Illuminate\Support\Facades\DB;
  * and can be on one statement only — two overlapping periods used to pay the same order
  * twice.
  *
+ * doc 103 — a place pays a commission on its food, and on a cash order it takes the
+ * whole food from the captain («يتم دفع قيمة الطلب المدفوع نقدًا بالكامل للتاجر»). Every
+ * order's line is `Order::placeBalance()` — what the place earns on it less what it
+ * already took at the counter — and the statement is their sum:
+ *
+ *     net = Σ (subtotal − commission − place discount) − Σ paid at pickup − refunds
+ *
+ * (`PlaceAccount`, shared with the finance list and the place's reports; a refund is
+ * charged only up to what the place earned on that order)
+ *
+ * Positive, the platform pays the place; negative, the place pays the platform
+ * («يدفع الطرف المدين مديونيته للطرف الدائن»). Days are Cairo days.
+ *
  * A captain is no longer settled here. A period statement summed `driver_earning` and
  * ignored the cash the captain was carrying, which is the one number that matters; a
  * captain is settled from his live ledger (`POST /admin/drivers/{driver}/settle`).
  */
 class GenerateSettlementAction
 {
-    public function execute(User $admin, string $partyType, int $partyId, string $periodStart, string $periodEnd): Settlement
+    /**
+     * @param  User|null  $admin  null when the 14-day cycle writes the statement itself
+     *                            (`cr7:settlement-cycle`).
+     */
+    public function execute(?User $admin, string $partyType, int $partyId, string $periodStart, string $periodEnd): Settlement
     {
         if ($partyType === 'driver') {
             throw new ApiException(
@@ -48,64 +67,58 @@ class GenerateSettlementAction
         }
 
         return DB::transaction(function () use ($admin, $partyType, $partyId, $periodStart, $periodEnd) {
-            $orders = Order::query()
-                ->where('status', 'delivered')
-                ->where('restaurant_id', $partyId)
-                ->whereNull('restaurant_settlement_id')
-                ->whereBetween('delivered_at', [Carbon::parse($periodStart)->startOfDay(), Carbon::parse($periodEnd)->endOfDay()])
-                ->lockForUpdate()
-                ->get();
+            $orders = self::unsettled($partyId, $periodStart, $periodEnd)->lockForUpdate()->get();
 
             if ($orders->isEmpty()) {
                 throw new ApiException('nothing_to_settle', 'لا توجد طلبات مسلّمة غير مسوّاة لهذا المكان في هذه الفترة', 422);
             }
 
+            $account = PlaceAccount::of($orders);
+            $refunds = PlaceAccount::refunds($orders->reject(fn (Order $order) => $order->isDirect()));
             $isCash = fn (Order $order) => $order->payment_method?->value === 'cash';
-            $marketplace = $orders->reject(fn (Order $order) => $order->isDirect());
-            $online = $marketplace->reject($isCash);
-            $cash = $marketplace->filter($isCash);
-
-            $grossSales = (float) $orders->sum('subtotal');
-            $commissionTotal = (float) $orders->sum('commission_amount');
-            $deliveryFeesTotal = (float) $orders->sum('delivery_fee_share');
-            // D-70 — the platform's 15 % of those fees, summed from the per-order
-            // snapshots rather than re-derived, so a rate change after the fact cannot
-            // move a period that has already been settled.
-            $platformDeliveryMarginTotal = (float) $orders->sum('platform_delivery_margin');
-            // D-63 — reported, never paid out.
-            $platformFeeTotal = (float) $orders->sum('platform_fee_share');
-            $refundsTotal = (float) Refund::query()->whereIn('order_id', $orders->pluck('id'))->where('status', 'processed')->sum('amount');
-            $paidAtPickup = round((float) $cash->sum(fn (Order $order) => $order->restaurant_amount), 2);
-
-            $netAmount = round(
-                $grossSales - $commissionTotal - $refundsTotal - $paidAtPickup,
-                2,
-            );
+            $netAmount = $account['balance'];
 
             $settlement = Settlement::create([
                 'party_type' => $partyType,
                 'party_id' => $partyId,
                 'period_start' => $periodStart,
                 'period_end' => $periodEnd,
-                'gross_sales' => $grossSales,
-                'refunds_total' => $refundsTotal,
-                'commission_total' => $commissionTotal,
-                'delivery_fees_total' => $deliveryFeesTotal,
-                'platform_delivery_margin_total' => $platformDeliveryMarginTotal,
-                'platform_fee_total' => $platformFeeTotal,
+                'gross_sales' => $account['food_total'],
+                // doc 103 — each order's refund charged only up to what the place earned on it.
+                'refunds_total' => $account['refunds_total'],
+                'commission_total' => $account['commission_total'],
+                'delivery_fees_total' => (float) $orders->sum('delivery_fee_share'),
+                // D-70 — the platform's 15 % of those fees, summed from the per-order
+                // snapshots rather than re-derived, so a rate change after the fact cannot
+                // move a period that has already been settled.
+                'platform_delivery_margin_total' => (float) $orders->sum('platform_delivery_margin'),
+                // D-63 — reported, never paid out.
+                'platform_fee_total' => (float) $orders->sum('platform_fee_share'),
                 // «دفعه الكباتن عند الاستلام» — the column keeps its name; its meaning is
-                // now what the place already received at the counter.
-                'cash_collected' => $paidAtPickup,
+                // what the place already received at the counter.
+                'cash_collected' => $account['paid_at_pickup_total'],
                 'net_amount' => $netAmount,
                 'breakdown' => [
-                    'online_orders_count' => $online->count(),
-                    'online_total' => round((float) $online->sum(fn (Order $order) => $order->restaurant_amount), 2),
-                    'cash_orders_count' => $cash->count(),
-                    'paid_at_pickup_total' => $paidAtPickup,
-                    'direct_orders_count' => $orders->filter(fn (Order $order) => $order->isDirect())->count(),
+                    'orders_count' => $account['orders_count'],
+                    'online_orders_count' => $account['online_orders_count'],
+                    'online_food_total' => $account['online_food_total'],
+                    // What the platform owes the place on its online orders (the old key).
+                    'online_total' => $account['online_owed_to_place'],
+                    'online_commission_total' => $account['online_commission_total'],
+                    'cash_orders_count' => $account['cash_orders_count'],
+                    'cash_food_total' => $account['cash_food_total'],
+                    'paid_at_pickup_total' => $account['paid_at_pickup_total'],
+                    'cash_commission_total' => $account['cash_commission_total'],
+                    // What the place owes the platform on its cash orders.
+                    'cash_owed_by_place' => $account['cash_owed_by_place'],
+                    'place_discount_total' => $account['place_discount_total'],
+                    'direct_orders_count' => $account['direct_orders_count'],
+                    // Who pays whom, so no screen has to read a sign.
+                    'direction' => $account['direction'],
+                    'automatic' => $admin === null,
                 ],
                 'status' => 'draft',
-                'created_by' => $admin->id,
+                'created_by' => $admin?->id,
             ]);
 
             foreach ($orders as $order) {
@@ -120,20 +133,49 @@ class GenerateSettlementAction
                     'type' => $type,
                     'gross' => $order->subtotal,
                     'commission' => $order->commission_amount,
+                    'paid_at_pickup' => $type === 'cash_paid_at_pickup' ? PlaceAccount::paidAtPickup($order) : 0,
+                    'place_discount' => $order->place_discount,
                     'delivery_fee' => $order->delivery_fee_share,
                     'platform_delivery_margin' => $order->platform_delivery_margin,
                     'platform_fee' => $order->platform_fee_share,
                     'driver_earning' => $order->driver_earning,
-                    // What this order adds to what the platform owes the place.
-                    'net' => $type === 'online' ? $order->restaurant_amount : 0,
+                    // This order's line: positive, the platform owes the place; negative,
+                    // the place owes the platform. A direct order moves no food money.
+                    'net' => $type === 'direct' ? 0 : round($order->placeBalance() - ($refunds[$order->id] ?? 0.0), 2),
                 ]);
             }
 
             Order::query()->whereIn('id', $orders->pluck('id'))->update(['restaurant_settlement_id' => $settlement->id]);
 
-            AuditLogger::record($admin, 'settlements.generate', $settlement, ['party_type' => $partyType, 'party_id' => $partyId]);
+            if ($admin !== null) {
+                AuditLogger::record($admin, 'settlements.generate', $settlement, ['party_type' => $partyType, 'party_id' => $partyId]);
+            }
 
             return $settlement->load('items');
         });
+    }
+
+    /**
+     * A place's delivered orders no statement has claimed, delivered on the Cairo days
+     * `$periodStart`…`$periodEnd` inclusive.
+     *
+     * @return Builder<Order>
+     */
+    public static function unsettled(int $restaurantId, string $periodStart, string $periodEnd): Builder
+    {
+        return Order::query()
+            ->where('status', 'delivered')
+            ->where('restaurant_id', $restaurantId)
+            ->whereNull('restaurant_settlement_id')
+            ->whereBetween('delivered_at', [
+                BusinessTime::fromInput(Carbon::parse($periodStart)->startOfDay()),
+                BusinessTime::fromInput(Carbon::parse($periodEnd)->startOfDay(), true),
+            ]);
+    }
+
+    /** `platform_pays_place` · `place_pays_platform` · `settled` (nothing moves). */
+    public static function direction(float $net): string
+    {
+        return PlaceAccount::direction($net);
     }
 }

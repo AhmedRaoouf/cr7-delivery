@@ -9,6 +9,7 @@ use App\Support\BusinessTime;
 use App\Support\Lists\ListParams;
 use App\Support\PlaceAccount;
 use App\Support\ReportExporter;
+use App\Support\SettlementCycle;
 use Generator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,6 +87,8 @@ class ReportController extends Controller
             'balance' => $open['balance'],
             'balance_direction' => $open['direction'],
             'balance_orders_count' => $open['orders_count'],
+            // doc 104 — the place's statement cycle, null when it is on no commission.
+            'statement_cycle' => SettlementCycle::of($restaurant)?->toArray(),
             // The keys this answered before, for clients that still read them.
             'gross_sales' => $account['food_total'],
             'commission_total' => $account['commission_total'],

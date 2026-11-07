@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Actions\Admin\GenerateSettlementAction;
 use App\Actions\Customer\CreateOrderAction;
-use App\Console\Commands\SettlementCycleCommand;
 use App\Enums\AdminScopeType;
 use App\Enums\OrderStatus;
 use App\Models\Order;
@@ -17,11 +16,11 @@ use App\Models\User;
 use App\Support\DriverLedger;
 use App\Support\OrderParties;
 use App\Support\Settings;
+use App\Support\SettlementCycle;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\BuildsTrips;
 use Tests\TestCase;
@@ -46,7 +45,7 @@ class PlaceCommissionTest extends TestCase
         Settings::set('ring.enabled', false);
 
         $this->naqer = $this->makeRestaurant('قرية الناقر');
-        $this->naqer->update(['commission_rate' => 5]);
+        $this->naqer->update(['commission_rate' => 5, 'settlement_starts_on' => '2026-11-07', 'settlement_every_days' => 14]);
     }
 
     public function test_an_order_carries_its_places_rate_and_the_commission_on_its_food(): void
@@ -187,7 +186,6 @@ class PlaceCommissionTest extends TestCase
     public function test_the_cycle_writes_one_draft_per_place_the_day_after_a_period_ends(): void
     {
         Settings::set('settlements.cycle_days', 14);
-        Settings::set('settlements.cycle_start', '2026-11-07');
 
         $this->delivered($this->order(100), Carbon::parse('2026-11-10 12:00:00', 'UTC'));
         $this->delivered($this->order(200, 'vodafone_cash'), Carbon::parse('2026-11-15 12:00:00', 'UTC'));
@@ -218,19 +216,76 @@ class PlaceCommissionTest extends TestCase
 
     public function test_the_periods_follow_on_from_the_start_and_a_zero_cycle_is_off(): void
     {
-        Settings::set('settlements.cycle_start', '2026-11-07');
-        Settings::set('settlements.cycle_days', 14);
+        $cycle = SettlementCycle::make('2026-11-07', 14);
 
-        $this->assertNull(SettlementCycleCommand::lastCompletedPeriod(Carbon::parse('2026-11-20 12:00', 'Africa/Cairo')));
-        $this->assertSame(['2026-11-07', '2026-11-20'], SettlementCycleCommand::lastCompletedPeriod(Carbon::parse('2026-11-21 00:10', 'Africa/Cairo')));
-        $this->assertSame(['2026-11-21', '2026-12-04'], SettlementCycleCommand::lastCompletedPeriod(Carbon::parse('2026-12-10 12:00', 'Africa/Cairo')));
+        $this->assertNull($cycle->lastCompletedPeriod(Carbon::parse('2026-11-20 12:00', 'Africa/Cairo')));
+        $this->assertSame(['2026-11-07', '2026-11-20'], $cycle->lastCompletedPeriod(Carbon::parse('2026-11-21 00:10', 'Africa/Cairo')));
+        $this->assertSame(['2026-11-21', '2026-12-04'], $cycle->lastCompletedPeriod(Carbon::parse('2026-12-10 12:00', 'Africa/Cairo')));
         $this->assertSame(
             [['2026-11-07', '2026-11-20'], ['2026-11-21', '2026-12-04']],
-            SettlementCycleCommand::completedPeriods(Carbon::parse('2026-12-10 12:00', 'Africa/Cairo')),
+            $cycle->completedPeriods(Carbon::parse('2026-12-10 12:00', 'Africa/Cairo')),
         );
+        $this->assertSame(['2026-11-07', '2026-11-20'], $cycle->currentPeriod(Carbon::parse('2026-11-01', 'Africa/Cairo')), 'before the start: the first period');
+        $this->assertSame('2026-12-05', $cycle->toArray(Carbon::parse('2026-11-25', 'Africa/Cairo'))['next_statement_on']);
 
+        Settings::set('settlements.cycle_days', 14);
+        $this->assertNotNull(SettlementCycle::of($this->naqer->fresh()));
         Settings::set('settlements.cycle_days', 0);
-        $this->assertNull(SettlementCycleCommand::lastCompletedPeriod(Carbon::parse('2027-01-01', 'Africa/Cairo')));
+        $this->assertNull(SettlementCycle::of($this->naqer->fresh()), 'zero stops it for every place');
+    }
+
+    public function test_only_a_place_on_a_commission_gets_an_automatic_statement(): void
+    {
+        Settings::set('settlements.cycle_days', 14);
+        $free = $this->makeRestaurant('مكان بلا عقد');
+
+        $this->delivered($this->order(100, 'vodafone_cash'), Carbon::parse('2026-11-10 12:00:00', 'UTC'));
+        $this->delivered($this->order(300, 'vodafone_cash', $free), Carbon::parse('2026-11-10 12:00:00', 'UTC'));
+
+        $this->travelTo(Carbon::parse('2026-11-21 08:00:00', 'UTC'));
+        $this->artisan('cr7:settlement-cycle')->assertSuccessful();
+
+        $this->assertSame([$this->naqer->id], Settlement::query()->pluck('party_id')->all());
+        $this->assertNull($free->fresh()->settlement_starts_on);
+    }
+
+    public function test_each_place_follows_its_own_start_and_length(): void
+    {
+        Settings::set('settlements.cycle_days', 14);
+        $weekly = $this->makeRestaurant('مكان أسبوعي');
+        $weekly->update(['commission_rate' => 10, 'settlement_starts_on' => '2026-11-09', 'settlement_every_days' => 7]);
+
+        $this->delivered($this->order(100, 'cash', $weekly), Carbon::parse('2026-11-10 12:00:00', 'UTC'));
+        $this->delivered($this->order(100, 'cash', $weekly), Carbon::parse('2026-11-17 12:00:00', 'UTC'));
+        $this->delivered($this->order(100), Carbon::parse('2026-11-10 12:00:00', 'UTC'));
+
+        // 16 November: the weekly place's first week is over, قرية الناقر's fortnight is not.
+        $this->travelTo(Carbon::parse('2026-11-16 08:00:00', 'UTC'));
+        $this->artisan('cr7:settlement-cycle')->assertSuccessful();
+        $first = Settlement::query()->sole();
+        $this->assertSame($weekly->id, $first->party_id);
+        $this->assertSame(['2026-11-09', '2026-11-15'], [$first->period_start->toDateString(), $first->period_end->toDateString()]);
+        $this->assertEqualsWithDelta(-10.0, (float) $first->net_amount, 0.001, 'the place owes its 10 % on a cash order');
+
+        $this->travelTo(Carbon::parse('2026-11-23 08:00:00', 'UTC'));
+        $this->artisan('cr7:settlement-cycle')->assertSuccessful();
+        $this->assertSame(3, Settlement::query()->count(), 'its second week, and قرية الناقر\'s fortnight');
+        $this->assertSame(2, Settlement::query()->where('party_id', $weekly->id)->count());
+    }
+
+    public function test_a_rate_set_again_starts_a_fresh_cycle(): void
+    {
+        $this->travelTo(Carbon::parse('2026-12-01 10:00:00', 'UTC'));
+        $this->naqer->update(['commission_rate' => 0]);
+        $this->assertNull($this->naqer->fresh()->settlement_starts_on);
+        $this->assertNull(SettlementCycle::of($this->naqer->fresh()));
+
+        $this->naqer->update(['commission_rate' => 5]);
+        $this->assertSame('2026-12-01', $this->naqer->fresh()->settlement_starts_on->toDateString());
+
+        // A rate moved, not started: the start stays.
+        $this->naqer->update(['commission_rate' => 7]);
+        $this->assertSame('2026-12-01', $this->naqer->fresh()->settlement_starts_on->toDateString());
     }
 
     public function test_the_place_and_the_office_read_the_same_balance_the_statement_writes(): void
@@ -250,6 +305,7 @@ class PlaceCommissionTest extends TestCase
         $this->assertSame(1, $summary['cash_orders_count']);
         $this->assertEqualsWithDelta(100.0, $summary['cash_food_total'], 0.001);
         $this->assertEqualsWithDelta(150.0, $summary['avg_order_value'], 0.001);
+        $this->assertSame(['starts_on' => '2026-11-07', 'every_days' => 14], array_intersect_key($summary['statement_cycle'], ['starts_on' => 1, 'every_days' => 1]));
 
         Sanctum::actingAs($this->admin());
         $row = collect($this->withHeader('X-App', 'admin')->getJson('/api/v1/admin/finance/restaurants')->assertOk()->json('data'))

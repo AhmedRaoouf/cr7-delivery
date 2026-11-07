@@ -126,21 +126,18 @@ final class SettingsCatalog
                 ],
             ],
             [
-                // doc 103 — the places' statement, every 14 days from the day the contracts start.
+                // doc 103 / doc 104 — the statement of a place on a commission. Each place
+                // carries its own start and may carry its own length (`ADM-12`); this is
+                // the length when it names none.
                 'key' => 'settlements',
                 'title_ar' => 'تسوية حسابات الأماكن',
                 'title_en' => 'Place settlements',
                 'fields' => [
                     ['key' => 'settlements.cycle_days', 'type' => 'int', 'default' => 14, 'min' => 0, 'max' => 90,
                         'suffix_ar' => 'يوم', 'suffix_en' => 'days',
-                        'label_ar' => 'كشف حساب لكل مكان كل', 'label_en' => 'A statement for every place every',
-                        'helper_ar' => 'يُنشأ الكشف مسودة تلقائيًا في اليوم التالي لنهاية الفترة، وتراجعه الإدارة ثم تسجّل الدفع. صفر يوقفه.',
-                        'helper_en' => 'Written as a draft the day after each period ends; the office reviews it and records the payment. Zero turns it off.'],
-                    ['key' => 'settlements.cycle_start', 'type' => 'string', 'default' => '2026-11-07', 'max' => 10,
-                        'pattern' => '/^\d{4}-\d{2}-\d{2}$/', 'pattern_message_ar' => 'أدخل تاريخًا بالشكل 2026-11-07',
-                        'label_ar' => 'أول يوم في أول فترة', 'label_en' => 'First day of the first period',
-                        'helper_ar' => 'بالشكل سنة-شهر-يوم. الفترات تتوالى منه بالطول المحدد أعلاه.',
-                        'helper_en' => 'As year-month-day. Periods follow on from it at the length above.'],
+                        'label_ar' => 'مدة كشف الحساب الافتراضية', 'label_en' => 'Default statement period',
+                        'helper_ar' => 'للأماكن التي عليها نسبة عمولة فقط، ولكل مكان بدايته ومدته من صفحته. يُنشأ الكشف مسودة تلقائيًا في اليوم التالي لنهاية الفترة. صفر يوقف الكشف التلقائي لكل الأماكن.',
+                        'helper_en' => 'Places on a commission only; each place sets its own start and length on its page. Written as a draft the day after each period ends. Zero turns it off for every place.'],
                 ],
             ],
             [

@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\AdminScopeType;
-use App\Models\Restaurant;
 use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -146,5 +146,74 @@ class AdminPlaceEditTest extends TestCase
         $this->postJson("/api/v1/admin/restaurants/{$place->id}/commission", [
             'commission_rate' => 30,
         ])->assertForbidden();
+    }
+
+    public function test_the_office_sets_a_places_statement_start_and_length(): void
+    {
+        $this->actingAsSuperAdmin();
+        $place = $this->makeRestaurant('مكان قديم');
+
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", [
+            'commission_rate' => 3,
+            'settlement_starts_on' => '2026-11-01',
+            'settlement_every_days' => 7,
+        ])->assertOk();
+
+        $place->refresh();
+        $this->assertSame('2026-11-01', $place->settlement_starts_on->toDateString());
+        $this->assertSame(7, $place->settlement_every_days);
+
+        $this->getJson("/api/v1/admin/restaurants/{$place->id}")->assertOk()
+            ->assertJsonPath('data.settlement_starts_on', '2026-11-01')
+            ->assertJsonPath('data.statement_cycle.every_days', 7)
+            ->assertJsonPath('data.default_statement_days', 14);
+
+        // Back to zero ends the cycle.
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", ['commission_rate' => 0])->assertOk();
+        $this->assertNull($place->fresh()->settlement_starts_on);
+        $this->getJson("/api/v1/admin/restaurants/{$place->id}")->assertOk()->assertJsonPath('data.statement_cycle', null);
+    }
+
+    public function test_a_new_place_on_a_rate_starts_its_cycle_the_day_it_is_created(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->travelTo(Carbon::parse('2026-11-09 23:30:00', 'UTC')); // 01:30 on the 10th in Cairo
+        $place = $this->makeRestaurant('مكان جديد');
+        $place->update(['commission_rate' => 5]);
+
+        $this->assertSame('2026-11-10', $place->fresh()->settlement_starts_on->toDateString());
+        $this->assertNull($place->fresh()->settlement_every_days, 'follows the default length');
+    }
+
+    public function test_an_editor_without_the_grant_cannot_move_the_statement_cycle(): void
+    {
+        $this->actingAsEditorWithoutCommission();
+        $place = $this->makeRestaurant('مكان بعقد');
+        $place->forceFill(['commission_rate' => 5, 'settlement_starts_on' => '2026-11-07'])->save();
+
+        // The form posts the same dates back on every save: untouched, accepted.
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", [
+            'commission_rate' => 5,
+            'settlement_starts_on' => '2026-11-07',
+            'settlement_every_days' => null,
+            'phone' => '01000000124',
+        ])->assertOk();
+
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", ['settlement_every_days' => 30])
+            ->assertStatus(403)->assertJsonPath('error', 'commission_not_permitted');
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", ['settlement_starts_on' => '2026-12-01'])
+            ->assertStatus(403)->assertJsonPath('error', 'commission_not_permitted');
+        $this->assertSame('2026-11-07', $place->fresh()->settlement_starts_on->toDateString());
+    }
+
+    public function test_a_statement_length_outside_the_window_is_refused(): void
+    {
+        $this->actingAsSuperAdmin();
+        $place = $this->makeRestaurant('مكان');
+
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", ['settlement_every_days' => 0])
+            ->assertStatus(422)->assertJsonValidationErrors('settlement_every_days');
+        $this->patchJson("/api/v1/admin/restaurants/{$place->id}", ['settlement_starts_on' => '7/11/2026'])
+            ->assertStatus(422)->assertJsonValidationErrors('settlement_starts_on');
     }
 }

@@ -20,6 +20,7 @@ class Restaurant extends Model
         'user_id', 'city_id', 'service_zone_id', 'name_ar', 'name_en',
         'description_ar', 'description_en', 'slug', 'logo', 'cover', 'phone',
         'whatsapp', 'address', 'latitude', 'longitude', 'commission_rate',
+        'settlement_starts_on', 'settlement_every_days',
         'min_order_value', 'delivery_surcharge', 'avg_prep_minutes', 'eta_min_minutes', 'eta_max_minutes',
         'is_open_manual', 'is_active',
         'is_verified', 'is_featured', 'direct_orders_enabled', 'amendments_enabled', 'menu_layout',
@@ -35,6 +36,8 @@ class Restaurant extends Model
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'commission_rate' => 'decimal:2',
+            'settlement_starts_on' => 'date:Y-m-d',
+            'settlement_every_days' => 'integer',
             'min_order_value' => 'decimal:2',
             'delivery_surcharge' => 'decimal:2',
             'rating_avg' => 'decimal:2',
@@ -58,6 +61,27 @@ class Restaurant extends Model
      */
     protected static function booted(): void
     {
+        // doc 104 — a place's statement cycle follows its rate: the day a rate first goes
+        // above zero is the day its first period starts, unless the office named another;
+        // back to zero ends the cycle, so a rate set again later starts a fresh one rather
+        // than sweeping up the months it was free.
+        static::saving(function (Restaurant $restaurant): void {
+            if (! $restaurant->isDirty('commission_rate')) {
+                return;
+            }
+
+            $rate = (float) $restaurant->getAttribute('commission_rate');
+            $before = $restaurant->exists ? (float) $restaurant->getOriginal('commission_rate') : 0.0;
+
+            if ($rate <= 0) {
+                $restaurant->settlement_starts_on = null;
+            } elseif ($before <= 0 && ! $restaurant->isDirty('settlement_starts_on')) {
+                $restaurant->settlement_starts_on = BusinessTime::now()->toDateString();
+            } elseif ($restaurant->getAttribute('settlement_starts_on') === null) {
+                $restaurant->settlement_starts_on = BusinessTime::now()->toDateString();
+            }
+        });
+
         static::saving(function (Restaurant $restaurant): void {
             // A row loaded with a partial select says nothing about either column.
             if ($restaurant->exists && ! array_key_exists('first_published_at', $restaurant->getAttributes())) {

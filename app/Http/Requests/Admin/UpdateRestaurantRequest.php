@@ -38,6 +38,9 @@ class UpdateRestaurantRequest extends FormRequest
             // the rule the field was dropped by `validated()` and every edit from
             // the dashboard answered 200 having changed nothing.
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // doc 104 — the place's statement cycle. Same grant as the rate.
+            'settlement_starts_on' => ['sometimes', 'required', 'date_format:Y-m-d', 'after_or_equal:2026-01-01', 'before_or_equal:2030-12-31'],
+            'settlement_every_days' => ['nullable', 'integer', 'min:1', 'max:90'],
             // The window the customer is shown. Both nullable: a shop that sets
             // neither keeps its zone's estimate, and one that sets them equal
             // publishes a single figure rather than a range — «‎35‎ دقيقة».

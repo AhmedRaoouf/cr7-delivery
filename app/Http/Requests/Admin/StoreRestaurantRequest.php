@@ -58,6 +58,9 @@ class StoreRestaurantRequest extends FormRequest
             // D-75 — no commission on food. The field stays accepted so an older
             // dashboard build does not 422, and defaults to 0 when it is not sent.
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // doc 104 — the place's statement cycle. Same grant as the rate.
+            'settlement_starts_on' => ['sometimes', 'required', 'date_format:Y-m-d', 'after_or_equal:2026-01-01', 'before_or_equal:2030-12-31'],
+            'settlement_every_days' => ['nullable', 'integer', 'min:1', 'max:90'],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
             // doc 97 — added to every area's fee when this place is in the basket.
             'delivery_surcharge' => ['nullable', 'numeric', 'min:0', 'max:1000'],

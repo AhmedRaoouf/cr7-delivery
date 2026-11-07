@@ -17,6 +17,8 @@ use App\Support\AdminScope;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Lists\ListSearch;
+use App\Support\SettingsCatalog;
+use App\Support\SettlementCycle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -81,7 +83,13 @@ class RestaurantController extends Controller
     {
         $this->ensureInScope($request, $restaurant);
 
-        return ApiResponse::success($restaurant->load(['city', 'serviceZone', 'cuisines', 'servedZones', 'openingHours', 'owner']));
+        $restaurant->load(['city', 'serviceZone', 'cuisines', 'servedZones', 'openingHours', 'owner']);
+
+        // doc 104 — the cycle the statements follow, worked out (default length, next date).
+        return ApiResponse::success($restaurant->toArray() + [
+            'statement_cycle' => SettlementCycle::of($restaurant)?->toArray(),
+            'default_statement_days' => SettingsCatalog::int('settlements.cycle_days'),
+        ]);
     }
 
     public function store(StoreRestaurantRequest $request, CreateRestaurantAction $action): JsonResponse
@@ -91,7 +99,11 @@ class RestaurantController extends Controller
         $data = $request->validated();
 
         // doc 103 — a new place starts on a rate only an admin who may set one can type.
-        if ((float) ($data['commission_rate'] ?? 0) > 0 && ! $request->user()->can('restaurants.set_commission')) {
+        // doc 104 — and so is its statement cycle.
+        $contract = (float) ($data['commission_rate'] ?? 0) > 0
+            || isset($data['settlement_starts_on'])
+            || isset($data['settlement_every_days']);
+        if ($contract && ! $request->user()->can('restaurants.set_commission')) {
             throw new ApiException('commission_not_permitted', 'لا تملك صلاحية تعديل نسبة العمولة', 403);
         }
 
@@ -193,7 +205,12 @@ class RestaurantController extends Controller
     {
         $this->ensureInScope($request, $restaurant);
 
-        $validated = $request->validate(['commission_rate' => ['required', 'numeric', 'min:0', 'max:100']]);
+        $validated = $request->validate([
+            'commission_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            // doc 104 — optional: a rate set alone starts the cycle today.
+            'settlement_starts_on' => ['sometimes', 'required', 'date_format:Y-m-d', 'after_or_equal:2026-01-01', 'before_or_equal:2030-12-31'],
+            'settlement_every_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+        ]);
         $restaurant->update($validated);
 
         return ApiResponse::success($restaurant, 'تم تحديث نسبة العمولة بنجاح');
@@ -264,13 +281,26 @@ class RestaurantController extends Controller
      */
     private function guardCommission(Request $request, Restaurant $restaurant, array $data): array
     {
-        if (! array_key_exists('commission_rate', $data)) {
-            return $data;
+        // doc 104 — the statement cycle is part of the same contract, under the same grant.
+        $unchanged = [
+            'commission_rate' => fn ($v) => round((float) $v, 2) === round((float) $restaurant->commission_rate, 2),
+            'settlement_starts_on' => fn ($v) => (string) $v === (string) $restaurant->settlement_starts_on?->toDateString(),
+            'settlement_every_days' => fn ($v) => ($v === null ? null : (int) $v) === $restaurant->settlement_every_days,
+        ];
+
+        $moved = false;
+        foreach ($unchanged as $key => $same) {
+            if (! array_key_exists($key, $data)) {
+                continue;
+            }
+            if ($same($data[$key])) {
+                unset($data[$key]);
+            } else {
+                $moved = true;
+            }
         }
 
-        if (round((float) $data['commission_rate'], 2) === round((float) $restaurant->commission_rate, 2)) {
-            unset($data['commission_rate']);
-
+        if (! $moved) {
             return $data;
         }
 

@@ -11,6 +11,7 @@ use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -257,5 +258,45 @@ class OfferScheduleTest extends TestCase
         Restaurant::query()->whereKey($place->id)->forceDelete();
 
         $this->assertNull($popup->fresh()->restaurant_id);
+    }
+
+    /**
+     * The web dialog posts `multipart/form-data`, so every day arrives as a string. Saved
+     * as `["0","1","2","3"]`, the admin list refused the whole screen («تعذّر تحميل هذه
+     * الشاشة», 2026-11-15) and `JSON_CONTAINS` never matched today's number, so the offer
+     * never reached a phone. The days are stored and answered as whole numbers.
+     */
+    public function test_days_posted_as_form_fields_are_stored_and_answered_as_numbers(): void
+    {
+        $this->actingAsAdmin();
+        $place = $this->makeRestaurant('الوطني السوري');
+
+        $id = $this->post('/api/v1/admin/home-popups', [
+            'title_ar' => 'عرض المعلم',
+            'link_type' => 'restaurant',
+            'restaurant_id' => (string) $place->id,
+            'days_of_week' => ['3', '0', '1', '3', '2'],
+        ])->assertCreated()->assertJsonPath('data.days_of_week', [0, 1, 2, 3])->json('data.id');
+
+        $this->assertSame([0, 1, 2, 3], json_decode(DB::table('home_popups')->where('id', $id)->value('days_of_week'), true));
+        $this->assertSame([0, 1, 2, 3], $this->getJson('/api/v1/admin/home-popups')->json('data.0.days_of_week'));
+    }
+
+    /** A card saved before the fix still holds strings; it is read as numbers and goes on air. */
+    public function test_a_card_stored_with_string_days_is_answered_as_numbers_and_shown_on_its_day(): void
+    {
+        $this->freezeOnThursday();
+        $id = DB::table('home_popups')->insertGetId([
+            'title_ar' => 'عرض قديم', 'link_type' => 'none', 'audience' => 'all',
+            'secondary_action' => 'dismiss', 'frequency' => 'always', 'is_active' => true,
+            'days_of_week' => '["4","5"]', 'sort_order' => 0,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->assertSame([4, 5], HomePopup::query()->findOrFail($id)->days_of_week);
+        $this->assertSame([$id], array_column($this->appSees(), 'id'));
+
+        $this->actingAsAdmin();
+        $this->assertSame([4, 5], $this->getJson('/api/v1/admin/home-popups')->json('data.0.days_of_week'));
     }
 }

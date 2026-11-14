@@ -9,6 +9,7 @@ use App\Enums\HomePopupSecondaryAction;
 use App\Support\BusinessTime;
 use App\Support\FirstOrderPerk;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -41,13 +42,50 @@ class HomePopup extends Model
             'audience' => BannerAudience::class,
             'secondary_action' => HomePopupSecondaryAction::class,
             'frequency' => HomePopupFrequency::class,
-            'days_of_week' => 'array',
             'show_countdown' => 'boolean',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Always whole numbers `0…6`, sorted and unique — on the way in **and** out.
+     *
+     * The web dialog posts `multipart/form-data` (the picture rides with it), so every day
+     * arrives as a string, and Laravel's `integer` rule accepts `"0"` without changing it.
+     * Stored as `["0","1","2","3"]`, the card was refused by the admin list's schema —
+     * «تعذّر تحميل هذه الشاشة» on the whole screen — and `JSON_CONTAINS` never matched
+     * today's number, so the offer never reached a phone on the days it was written for.
+     * A null or empty list stays null: «every day».
+     */
+    protected function daysOfWeek(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => self::normaliseDays($value === null ? null : json_decode($value, true)),
+            set: function ($value) {
+                $days = self::normaliseDays(is_string($value) ? json_decode($value, true) : $value);
+
+                return ['days_of_week' => $days === null ? null : json_encode($days)];
+            },
+        );
+    }
+
+    /** @return list<int>|null */
+    public static function normaliseDays(mixed $days): ?array
+    {
+        if (! is_array($days)) {
+            return null;
+        }
+
+        $clean = array_values(array_unique(array_map('intval', array_filter(
+            $days,
+            fn ($day) => is_numeric($day) && (int) $day >= 0 && (int) $day <= 6,
+        ))));
+        sort($clean);
+
+        return $clean === [] ? null : $clean;
     }
 
     public function restaurant(): BelongsTo
@@ -80,7 +118,10 @@ class HomePopup extends Model
             ->where('is_active', true)
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
-            ->where(fn ($q) => $q->whereNull('days_of_week')->orWhereJsonContains('days_of_week', self::todayIndex()));
+            ->where(fn ($q) => $q->whereNull('days_of_week')
+                // A row saved before the days were normalised holds them as strings.
+                ->orWhereJsonContains('days_of_week', self::todayIndex())
+                ->orWhereJsonContains('days_of_week', (string) self::todayIndex()));
     }
 
     /**

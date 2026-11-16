@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PromoCostBearer;
 use App\Enums\PromoType;
+use App\Support\FreeDeliveryThreshold;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -35,6 +36,15 @@ class PromoCode extends Model
             'ends_at' => 'datetime',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * doc 107 — «أقصى خصم: صفر يعني بلا حد أقصى» on both forms. A cap of 0 would
+     * have taken every discount to nothing, so 0 is stored as null (no cap).
+     */
+    public function setMaxDiscountAttribute(mixed $value): void
+    {
+        $this->attributes['max_discount'] = FreeDeliveryThreshold::of($value);
     }
 
     /**

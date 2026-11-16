@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FreeDeliveryThreshold;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -28,6 +29,12 @@ class ServiceZone extends Model
             'is_active' => 'boolean',
             'is_selectable' => 'boolean',
         ];
+    }
+
+    /** doc 107 — empty or 0 is «no free-delivery offer», stored as null. */
+    public function setFreeDeliveryOverAttribute(mixed $value): void
+    {
+        $this->attributes['free_delivery_over'] = FreeDeliveryThreshold::of($value);
     }
 
     public function city(): BelongsTo

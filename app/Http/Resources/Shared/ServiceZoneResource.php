@@ -28,7 +28,7 @@ class ServiceZoneResource extends JsonResource
             'center_lng' => (float) $this->center_lng,
             'radius_km' => $this->radius_km !== null ? (float) $this->radius_km : null,
             'delivery_fee' => (float) $this->delivery_fee,
-            'free_delivery_over' => $this->free_delivery_over !== null ? (float) $this->free_delivery_over : null,
+            'free_delivery_over' => \App\Support\FreeDeliveryThreshold::of($this->free_delivery_over),
             'min_order_value' => (float) $this->min_order_value,
             'avg_delivery_minutes' => (int) $this->avg_delivery_minutes,
             'is_active' => (bool) $this->is_active,

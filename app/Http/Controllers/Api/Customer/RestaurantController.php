@@ -76,7 +76,7 @@ class RestaurantController extends Controller
             ->when(($filter['min_rating'] ?? null) !== null, fn ($q) => RatingBadge::whereShownAtLeast($q, (float) $filter['min_rating']))
             ->when($filter['free_delivery'] ?? null, fn ($q) => $q->whereHas(
                 'serviceZone',
-                fn ($zq) => $zq->whereNotNull('free_delivery_over'),
+                fn ($zq) => $zq->where('free_delivery_over', '>', 0),
             ))
             // D-60 — the band is the menu's own median, recomputed by the catalogue,
             // never hand-set. A restaurant with no published menu carries null and

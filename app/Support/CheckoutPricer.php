@@ -82,8 +82,10 @@ class CheckoutPricer
         $extraStopFee = (float) (Setting::query()->where('key', 'delivery.extra_stop_fee')->value('value') ?? 10);
         $extraStopFeeTotal = round($extraStopFee * max(0, $restaurantCount - 1), 2);
 
-        $freeDeliveryOver = $pricingRule->free_delivery_over ?? $address->serviceZone->free_delivery_over ?? null;
-        $freeDeliveryApplied = $freeDeliveryOver !== null && $subtotal >= (float) $freeDeliveryOver;
+        // doc 107 — 0 is «no offer», never «free from 0»: it made every basket free.
+        $freeDeliveryOver = FreeDeliveryThreshold::of($pricingRule->free_delivery_over ?? null)
+            ?? FreeDeliveryThreshold::of($address->serviceZone->free_delivery_over ?? null);
+        $freeDeliveryApplied = $freeDeliveryOver !== null && $subtotal >= $freeDeliveryOver;
 
         // «خلي اول اورد للحساب توصيل مجاني» — operator, 2026-09-08. The platform's
         // own welcome offer, so it sits here beside the zone's own threshold and not

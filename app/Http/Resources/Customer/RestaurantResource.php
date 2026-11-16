@@ -45,7 +45,7 @@ class RestaurantResource extends JsonResource
             'delivery_fee' => $zone?->delivery_fee !== null ? (float) $zone->delivery_fee : null,
             // doc 97 — added to the customer's area fee when this place is in the basket.
             'delivery_surcharge' => (float) $this->delivery_surcharge,
-            'free_delivery_over' => $zone?->free_delivery_over !== null ? (float) $zone->free_delivery_over : null,
+            'free_delivery_over' => \App\Support\FreeDeliveryThreshold::of($zone?->free_delivery_over),
             // The shop's own window when it publishes one, the zone's estimate
             // otherwise — see `Restaurant::etaWindow()`.
             'delivery_time_min' => $this->etaWindow()[0],

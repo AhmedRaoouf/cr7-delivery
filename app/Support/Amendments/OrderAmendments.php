@@ -24,6 +24,7 @@ use App\Support\CheckoutPricer;
 use App\Support\Notifications\OrderNotifications;
 use App\Support\Notifications\RingService;
 use App\Support\PaymentMethods;
+use App\Support\RestaurantOrderRef;
 use App\Support\SettingsCatalog;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,8 @@ class OrderAmendments
             if ($locked->hasPendingAmendment()) {
                 throw new ApiException('amendment_pending', 'هناك تعديل مقترح بانتظار رد العميل بالفعل', 409);
             }
+
+            RestaurantOrderRef::assertFree($locked, ($data['restaurant_order_ref'] ?? null) ?: null);
 
             $draft = $this->draft($locked, $data['lines'] ?? [], $data['additions'] ?? []);
             $group = $locked->orderGroup;

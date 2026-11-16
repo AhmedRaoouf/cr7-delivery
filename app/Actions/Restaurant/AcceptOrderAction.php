@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\ConfirmationGateService;
+use App\Support\RestaurantOrderRef;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,7 +34,12 @@ class AcceptOrderAction
 
         self::assertPrepMinutes($prepMinutes);
 
-        return DB::transaction(fn () => $this->commit($user, $order, $prepMinutes, $restaurantOrderRef));
+        RestaurantOrderRef::assertFree($order, $restaurantOrderRef);
+
+        return RestaurantOrderRef::guard(
+            $restaurantOrderRef,
+            fn () => DB::transaction(fn () => $this->commit($user, $order, $prepMinutes, $restaurantOrderRef)),
+        );
     }
 
     /**
@@ -60,7 +66,12 @@ class AcceptOrderAction
             'accepted_at' => now(),
             'accepted_by' => $user->id,
             'prep_minutes' => $prepMinutes,
-            'restaurant_order_ref' => $restaurantOrderRef ?: $order->restaurant_order_ref,
+            // doc 107 §5 — an amendment the customer approved carries the number the place
+            // typed when it proposed; if another order took it meanwhile, the customer's
+            // «موافق» must not fail on it. The place enters a new one at «بدء التحضير».
+            'restaurant_order_ref' => RestaurantOrderRef::takenBy($order, $restaurantOrderRef) === null
+                ? ($restaurantOrderRef ?: $order->restaurant_order_ref)
+                : $order->restaurant_order_ref,
         ]);
 
         $order->statusHistory()->create([

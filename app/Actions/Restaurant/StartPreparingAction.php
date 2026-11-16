@@ -9,7 +9,9 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\AutoAssign;
 use App\Support\EarlyOffer;
+use App\Support\RestaurantOrderRef;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /** doc 08 §6 — POST /restaurant/orders/{id}/start-preparing: confirmed -> preparing, starts the countdown. */
 class StartPreparingAction
@@ -24,7 +26,9 @@ class StartPreparingAction
             throw new ApiException('restaurant_order_ref_required', 'رقم الطلب في نظام المطعم مطلوب', 422);
         }
 
-        $order = DB::transaction(function () use ($user, $order, $restaurantOrderRef) {
+        RestaurantOrderRef::assertFree($order, $restaurantOrderRef);
+
+        $order = RestaurantOrderRef::guard($restaurantOrderRef, fn () => DB::transaction(function () use ($user, $order, $restaurantOrderRef) {
             $preparingAt = now();
 
             $order->update([
@@ -42,7 +46,7 @@ class StartPreparingAction
             ]);
 
             return $order->fresh();
-        });
+        }));
 
         // doc 99 §3 — D-171: with less than the lead left on the countdown the nearest
         // captain is assigned now; otherwise `cr7:tick` does it at `prep_due_at − lead`.
@@ -53,14 +57,14 @@ class StartPreparingAction
             try {
                 app(AutoAssign::class)->run($order);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('auto-assign at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+                Log::warning('auto-assign at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
             }
         } elseif (AutoAssign::offers()) {
             // 2026-11-06 — the same moment, as an offer the captain accepts or refuses.
             try {
                 app(EarlyOffer::class)->run($order);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('early offer at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+                Log::warning('early offer at start-preparing failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
             }
         }
 

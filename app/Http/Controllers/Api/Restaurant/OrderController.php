@@ -20,6 +20,7 @@ use App\Support\ApiResponse;
 use App\Support\BoardQueue;
 use App\Support\Lists\ListSearch;
 use App\Support\OrderParties;
+use App\Support\RestaurantOrderRef;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -154,7 +155,8 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate(['restaurant_order_ref' => ['required', 'string', 'max:32']]);
-        $order->update($validated);
+        RestaurantOrderRef::assertFree($order, $validated['restaurant_order_ref']);
+        RestaurantOrderRef::guard($validated['restaurant_order_ref'], fn () => $order->update($validated));
 
         return ApiResponse::success($order->fresh(), 'تم تحديث رقم الطلب بنجاح');
     }

@@ -20,6 +20,13 @@ final class ClientVersion
     /** The build that understands doc 99's `rating_badge` and stops reading `rating_avg` as the badge. */
     public const RATING_BADGE = '1.0.24';
 
+    /**
+     * doc 108 — the first build whose «مفتوح الآن» starts off. Every build before it sends
+     * `filter[open_now]=1` on each home load as its own default, not as the customer's
+     * choice, so the server does not honour it from them.
+     */
+    public const OPEN_NOW_CHOSEN = '1.0.25';
+
     public static function isBefore(?Request $request, string $version): bool
     {
         if ($request === null || $request->header('X-App') !== 'app' || ! $request->hasHeader('X-App-Version')) {

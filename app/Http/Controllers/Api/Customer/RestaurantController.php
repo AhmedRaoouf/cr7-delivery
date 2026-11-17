@@ -12,6 +12,7 @@ use App\Support\ApiResponse;
 use App\Support\ArabicSearch;
 use App\Support\Catalog\PlaceOrder;
 use App\Support\Catalog\RatingBadge;
+use App\Support\ClientVersion;
 use App\Support\Lists\ListParams;
 use App\Support\Locale;
 use App\Support\MenuCategoryIcon;
@@ -28,6 +29,12 @@ class RestaurantController extends Controller
         $search = ListParams::of($request)->search();
         $lat = $request->float('lat') ?: null;
         $lng = $request->float('lng') ?: null;
+        // doc 108 — «المطعم مش موجود»: an app before 1.0.25 sends `filter[open_now]=1` on
+        // every home load as its own default, so a closed place vanished from the list
+        // instead of showing «مغلق الآن». Only a current app's `open_now` is the
+        // customer's choice.
+        $openOnly = (bool) ($filter['open_now'] ?? null)
+            && ! ClientVersion::isBefore($request, ClientVersion::OPEN_NOW_CHOSEN);
 
         $restaurants = Restaurant::query()
             // `openingHours` too (batch 68): `is_open_now` on every card read today's row
@@ -96,7 +103,10 @@ class RestaurantController extends Controller
             // Batch 68 — in SQL, so the page is full and `meta.total` counts only open
             // places. It used to drop the closed ones from each page after the fact: a page
             // of twenty came back with six and a total that still counted all forty.
-            ->when($filter['open_now'] ?? null, fn ($q) => $q->openNow())
+            ->when($openOnly, fn ($q) => $q->openNow())
+            // doc 108 — a closed place stays on the list, after every open one, whatever
+            // the order below.
+            ->when(! $openOnly, fn ($q) => $q->openFirst())
             // Doc 87 — no sort chosen: the operator's order (pinned places, then the
             // preset on the admin panel). A sort the customer picked is theirs, whole.
             ->when(PlaceOrder::isRequested($request), fn ($q) => PlaceOrder::apply($q), function ($q) use ($request, $lat, $lng) {

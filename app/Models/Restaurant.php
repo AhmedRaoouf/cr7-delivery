@@ -221,6 +221,25 @@ class Restaurant extends Model
     }
 
     /**
+     * doc 108 — open places before closed ones, as the first `ORDER BY` term, so a list
+     * that keeps the closed places (they show «مغلق الآن») never leads with one. The rule
+     * is {@see scopeOpenNow()}'s own, as a subquery.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeOpenFirst(Builder $query): Builder
+    {
+        $table = $this->getTable();
+        $open = static::query()->openNow()->select($table.'.id');
+
+        return $query->orderByRaw(
+            'case when '.$table.'.id in ('.$open->toSql().') then 0 else 1 end',
+            $open->getBindings(),
+        );
+    }
+
+    /**
      * Batch 68 — {@see isOpenNow()} as a `WHERE`, so a list can filter on it and still
      * count and page correctly.
      *

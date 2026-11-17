@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Catalog\LinePrice;
 use App\Support\Catalog\PlaceOrder;
 use App\Support\Catalog\RatingBadge;
+use App\Support\ClientVersion;
 use App\Support\FirstOrderPerk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -117,6 +118,9 @@ final class PublicCache
             // doc 99 §5 — an app before 1.0.24 reads the welcome 5.0 in `rating_avg`; a
             // newer one reads the true average there and the 5.0 in `rating_badge`.
             RatingBadge::isLegacyClient($request) ? 'welcome-in-avg' : 'welcome-in-badge',
+            // doc 108 — an app before 1.0.25 sends `open_now` as its default and is shown
+            // every place; a newer one sending it chose «مفتوح الآن».
+            ClientVersion::isBefore($request, ClientVersion::OPEN_NOW_CHOSEN) ? 'open-now-default' : 'open-now-chosen',
             http_build_query($query),
         ]);
 

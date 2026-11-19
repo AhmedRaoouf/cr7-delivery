@@ -34,7 +34,10 @@ class DriverFinanceController extends Controller
         $sort = $params->sort(['cash_in_hand', 'wallet_balance', 'name'], '-cash_in_hand');
 
         $query = AdminScope::applyToDrivers(Driver::query(), $request->user())
-            ->with(['user:id,name,phone', 'city:id,name_ar,name_en']);
+            // A captain deleted from `ADM-16` soft-deletes the user and keeps the driver
+            // row and its money — so the user is read with the trashed ones, or the whole
+            // page answered 500 on `null->name` (production, 2026-11-18).
+            ->with(['user' => fn ($q) => $q->withTrashed()->select('id', 'name', 'phone'), 'city:id,name_ar,name_en']);
 
         $this->whereInList($query, 'drivers.city_id', $params->ids('city_id'));
 
@@ -70,8 +73,8 @@ class DriverFinanceController extends Controller
 
         $rows = collect($drivers->items())->map(fn (Driver $driver) => [
             'driver_id' => $driver->id,
-            'name' => $driver->user->name,
-            'phone' => $driver->user->phone,
+            'name' => $driver->user?->name,
+            'phone' => $driver->user?->phone,
             'city' => $driver->city?->name_ar,
             'is_online' => (bool) $driver->is_online,
             'is_active' => (bool) $driver->is_active,
@@ -138,8 +141,8 @@ class DriverFinanceController extends Controller
         return $this->paginated($transactions, $rows, [
             'driver' => [
                 'id' => $driver->id,
-                'name' => $driver->user->name,
-                'phone' => $driver->user->phone,
+                'name' => $this->person($driver)?->name,
+                'phone' => $this->person($driver)?->phone,
                 'earning_type' => $driver->earning_type,
                 'earning_value' => (float) $driver->earning_value,
             ],
@@ -156,8 +159,8 @@ class DriverFinanceController extends Controller
         return ApiResponse::success(DriverLedger::unsettled($driver) + [
             'driver' => [
                 'id' => $driver->id,
-                'name' => $driver->user->name,
-                'phone' => $driver->user->phone,
+                'name' => $this->person($driver)?->name,
+                'phone' => $this->person($driver)?->phone,
             ],
         ]);
     }
@@ -258,5 +261,13 @@ class DriverFinanceController extends Controller
             AdminScope::applyToDrivers(Driver::query(), $request->user())->whereKey($driver->id)->exists(),
             404,
         );
+    }
+
+    /** The captain's user, a deleted one included — the money outlives the account. */
+    private function person(Driver $driver): ?User
+    {
+        return $driver->relationLoaded('user') && $driver->user !== null
+            ? $driver->user
+            : User::withTrashed()->find($driver->user_id);
     }
 }

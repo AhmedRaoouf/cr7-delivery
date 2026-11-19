@@ -282,7 +282,13 @@ class LocalGazetteerGeocoder implements Geocoder
             ->get(['name', 'lat', 'lng', 'city'])
             ->map(static fn (object $row): array => [
                 'name' => (string) $row->name,
-                'address' => trim($row->name.($row->city === null ? '' : '، '.$row->city), '، '),
+                // Joined, never trimmed with a charlist: `trim()` works on bytes, so
+                // '، ' strips the lead byte 0xD8 off «ا» / «ج» / «ب» and the whole
+                // `/geo/search` answer failed to encode — 500 on «جم» (2026-11-20).
+                'address' => implode('، ', array_filter(
+                    [trim((string) $row->name), trim((string) ($row->city ?? ''))],
+                    static fn (string $part): bool => $part !== '',
+                )),
                 'lat' => (float) $row->lat,
                 'lng' => (float) $row->lng,
                 'kind' => 'area',

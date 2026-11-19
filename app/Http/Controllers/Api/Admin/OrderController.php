@@ -94,7 +94,7 @@ class OrderController extends Controller
 
         $drivers = $dispatch->eligibleDrivers($order, $radius, $includeOffline)->map(fn ($c) => [
             'driver_id' => $c['driver']->id,
-            'name' => $c['driver']->user->name,
+            'name' => $c['driver']->user?->name,
             'distance_km' => $c['distance_km'] === null ? null : round($c['distance_km'], 2),
             'state' => $c['state'],
             // doc 63 §3.6 — «busy» is «carrying something» now, and carrying something no

@@ -226,6 +226,27 @@ class GeoSearchTest extends TestCase
         $this->assertSame('منطقه الاندلس', $andalus->name_normalized);
     }
 
+    /**
+     * `trim($name, '، ')` cut the lead byte of «ا» off an area with no city, and
+     * `/geo/search?q=جم` answered 500 «Malformed UTF-8» on production.
+     */
+    public function test_every_seeded_area_is_answered_whole_and_encodable(): void
+    {
+        $this->bindChain([new LocalGazetteerGeocoder]);
+
+        $this->getJson('/api/v1/geo/search?q='.urlencode('جم').'&lat=31.4453&lng=31.5344')->assertOk();
+
+        foreach (DB::table('gazetteer_areas')->pluck('name') as $name) {
+            foreach ((new LocalGazetteerGeocoder)->search($name, ...self::GAMASA) as $row) {
+                $this->assertNotFalse(json_encode($row), $name);
+                $this->assertTrue(mb_check_encoding((string) $row['address'], 'UTF-8'), $name);
+                if (($row['kind'] ?? null) === 'area') {
+                    $this->assertStringStartsWith((string) $row['name'], (string) $row['address']);
+                }
+            }
+        }
+    }
+
     // ----------------------------------------------------- our own places
 
     public function test_a_place_we_serve_outranks_a_street_and_carries_its_id(): void

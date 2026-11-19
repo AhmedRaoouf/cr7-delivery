@@ -342,4 +342,20 @@ class DeliveryCommissionAndLedgerTest extends TestCase
         $this->assertSame(3.75, (float) $response->json('meta.balances.net_due_to_platform'));
         $this->assertSame(3.75, (float) $response->json('meta.lifetime.platform_margin'));
     }
+
+    /** Production 2026-11-18: one deleted captain on the page made `/admin/finance/drivers` answer 500. */
+    public function test_a_deleted_captain_still_shows_on_the_money_screens(): void
+    {
+        $this->admin();
+        $gone = $this->driver(['cash_in_hand' => 40, 'is_active' => false]);
+        $gone->user->delete();
+
+        $this->asAdmin()->getJson('/api/v1/admin/finance/drivers')
+            ->assertOk()
+            ->assertJsonFragment(['driver_id' => $gone->id, 'name' => 'كابتن محمود']);
+        $this->asAdmin()->getJson("/api/v1/admin/drivers/{$gone->id}/ledger")->assertOk()
+            ->assertJsonPath('meta.driver.name', 'كابتن محمود');
+        $this->asAdmin()->getJson("/api/v1/admin/drivers/{$gone->id}/unsettled")->assertOk()
+            ->assertJsonPath('data.driver.name', 'كابتن محمود');
+    }
 }

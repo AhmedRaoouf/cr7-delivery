@@ -166,7 +166,7 @@ class CounterSettlementTest extends TestCase
         $this->withHeaders(['X-App' => 'admin'])
             ->postJson('/api/v1/admin/settlements/generate', [
                 'party_type' => 'driver', 'party_id' => $driver->id,
-                'period_start' => now()->subWeek()->toDateString(), 'period_end' => now()->toDateString(),
+                'period_start' => now('Africa/Cairo')->subWeek()->toDateString(), 'period_end' => now('Africa/Cairo')->toDateString(),
             ])
             ->assertStatus(422)
             ->assertJsonPath('error', 'driver_settles_from_ledger');
@@ -206,7 +206,7 @@ class CounterSettlementTest extends TestCase
 
         $response = $this->withHeaders(['X-App' => 'admin'])->postJson('/api/v1/admin/settlements/generate', [
             'party_type' => 'restaurant', 'party_id' => $restaurant->id,
-            'period_start' => now()->subDay()->toDateString(), 'period_end' => now()->toDateString(),
+            'period_start' => now('Africa/Cairo')->subDay()->toDateString(), 'period_end' => now('Africa/Cairo')->toDateString(),
         ])->assertCreated();
 
         // The old formula subtracted the customer's cash **total** — 120 — and left the
@@ -219,7 +219,7 @@ class CounterSettlementTest extends TestCase
         // Claimed: the same orders cannot be paid twice.
         $this->withHeaders(['X-App' => 'admin'])->postJson('/api/v1/admin/settlements/generate', [
             'party_type' => 'restaurant', 'party_id' => $restaurant->id,
-            'period_start' => now()->subDay()->toDateString(), 'period_end' => now()->toDateString(),
+            'period_start' => now('Africa/Cairo')->subDay()->toDateString(), 'period_end' => now('Africa/Cairo')->toDateString(),
         ])->assertStatus(422)->assertJsonPath('error', 'nothing_to_settle');
 
         $this->withHeaders(['X-App' => 'admin'])

@@ -292,7 +292,7 @@ class PlatformFeeTest extends TestCase
         $admin->update(['type' => 'admin']);
 
         $settlement = app(GenerateSettlementAction::class)->execute(
-            $admin, 'restaurant', $restaurant->id, now()->toDateString(), now()->toDateString(),
+            $admin, 'restaurant', $restaurant->id, now('Africa/Cairo')->toDateString(), now('Africa/Cairo')->toDateString(),
         );
 
         $this->assertSame('5.00', (string) $settlement->platform_fee_total);

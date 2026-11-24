@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Support\Amendments\OrderAmendments;
 use App\Support\BasketFees;
+use App\Support\Catalog\SalesCounters;
 use App\Support\DriverTrip;
 use App\Support\Notifications\OrderNotifications;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +54,10 @@ class OrderObserver
             DriverTrip::refresh((int) $order->driver_id);
         }
 
+        if ($order->status === OrderStatus::Delivered) {
+            $this->recountSales($order);
+        }
+
         $this->announce($order, null);
     }
 
@@ -70,6 +75,11 @@ class OrderObserver
 
         $this->rebalanceBasket($order);
 
+        if ($order->wasChanged('status')
+            && ($order->status === OrderStatus::Delivered || $this->statusValue($order->getOriginal('status')) === OrderStatus::Delivered->value)) {
+            $this->recountSales($order);
+        }
+
         $previous = $order->getOriginal('status');
         $previousStatus = match (true) {
             $previous instanceof \BackedEnum => (string) $previous->value,
@@ -78,6 +88,26 @@ class OrderObserver
         };
 
         $this->announce($order, $previousStatus);
+    }
+
+    /** `\BackedEnum` or string, as `getOriginal()` hands it back. */
+    private function statusValue(mixed $status): ?string
+    {
+        return $status instanceof \BackedEnum ? (string) $status->value : ($status === null ? null : (string) $status);
+    }
+
+    /**
+     * doc 110 — an order entering or leaving `delivered` moves its dishes' «مرات البيع» and
+     * its place's order count ({@see SalesCounters}). Wrapped: a delivery is never refused
+     * because a report counter could not be written; the nightly recount repairs it.
+     */
+    private function recountSales(Order $order): void
+    {
+        try {
+            SalesCounters::refreshForOrder($order);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     public function deleted(Order $order): void

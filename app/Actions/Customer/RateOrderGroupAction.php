@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Models\OrderGroup;
 use App\Models\Rating;
 use App\Models\User;
+use App\Support\Catalog\SalesCounters;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -67,6 +68,11 @@ class RateOrderGroupAction
                 );
 
                 $this->recomputeRatingAverage($order->restaurant);
+
+                // doc 110 — a dish's rating is its place's stars on the orders that carried it.
+                SalesCounters::refreshProducts(
+                    $order->items()->whereNotNull('product_id')->pluck('product_id')->all(),
+                );
             }
 
             foreach ($driverEntries as $driverId => $driverEntry) {

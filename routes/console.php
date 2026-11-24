@@ -100,3 +100,9 @@ Schedule::command('cr7:prune-otp')->daily()->withoutOverlapping(30);
  * for the reason written above `cr7:tick`.
  */
 Schedule::command('cr7:settlement-cycle')->hourly()->withoutOverlapping(30);
+
+/*
+ * doc 110 — the catalogue's sales and rating counters are recounted on every delivery by
+ * `OrderObserver`; this nightly pass repairs anything a write outside the model moved.
+ */
+Schedule::command('cr7:recount-sales')->dailyAt('04:30')->withoutOverlapping(30);
